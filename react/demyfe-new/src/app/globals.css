@@ -1,0 +1,194 @@
+@import "tailwindcss";
+
+:root {
+  /* Brand palette from design */
+  --deep-navy: #0b132b;
+  --charcoal: #0f172a;
+  --insight-gold: #f5c542;
+  --electric-blue: #2c7be5;
+  --electric-blue-soft: #4fd1c5;
+  --cyan-teal: #6bc4b8;
+  --cool-gray: #ffffff;
+
+  /* Semantic tokens - light mode */
+  --background: #ffffff;
+  --foreground: var(--charcoal);
+  --foreground-subtle: #334155;
+  --surface: #ffffff;
+  --surface-subtle: #f4f8ff;
+  --muted: #64748b;
+  --border: #d7e3f4;
+  --border-strong: #8fb3ea;
+  --brand: var(--electric-blue);
+  --brand-contrast: #ffffff;
+  --accent-gold: var(--insight-gold);
+  --accent-teal: var(--cyan-teal);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Semantic tokens - dark mode */
+    --background: var(--deep-navy);
+    --foreground: #eef4ff;
+    --foreground-subtle: #b2c3e3;
+    --surface: var(--charcoal);
+    --surface-subtle: #16213d;
+    --muted: #8da2c8;
+    --border: #1e2f53;
+    --border-strong: #2c7be5;
+    --brand: var(--electric-blue-soft);
+    --brand-contrast: var(--deep-navy);
+    --accent-gold: var(--insight-gold);
+    --accent-teal: var(--cyan-teal);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-brand: var(--brand);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-accent-gold: var(--accent-gold);
+  --color-accent-teal: var(--accent-teal);
+  --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Consolas", monospace;
+}
+
+html {
+  color-scheme: light dark;
+  font-size: 18px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+.field-input {
+  height: 5.5rem;
+  width: 100%;
+  border-radius: 1.1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  padding: 0 1.25rem;
+  font-size: 2.55rem;
+  line-height: 1;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.field-input::placeholder {
+  color: var(--muted);
+}
+
+.field-input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--brand) 30%, transparent);
+}
+
+@media (min-width: 768px) {
+  .field-input {
+    height: 4.2rem;
+    font-size: 2rem;
+  }
+}
+
+.signup-input {
+  height: 2rem;
+  width: 100%;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  padding: 0 0.65rem;
+  font-size: 0.75rem;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.signup-input::placeholder {
+  color: var(--muted);
+}
+
+.signup-input:focus {
+  border-color: var(--electric-blue);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--electric-blue) 26%, transparent);
+}
+
+.onboarding-input {
+  height: 2.75rem;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.onboarding-input::placeholder {
+  color: var(--muted);
+}
+
+.onboarding-input:focus {
+  border-color: var(--electric-blue);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--electric-blue) 24%, transparent);
+}
+
+@keyframes ornament-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes ornament-spin {
+  from {
+    transform: rotate(45deg);
+  }
+  to {
+    transform: rotate(405deg);
+  }
+}
+
+@keyframes ornament-twinkle {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+.ornament-float {
+  animation: ornament-float 3.1s ease-in-out infinite;
+}
+
+.ornament-float-delayed {
+  animation: ornament-float 3.8s ease-in-out infinite;
+  animation-delay: 0.6s;
+}
+
+.ornament-spin {
+  animation: ornament-spin 9s linear infinite;
+}
+
+.ornament-twinkle {
+  animation: ornament-twinkle 2.2s ease-in-out infinite;
+}
