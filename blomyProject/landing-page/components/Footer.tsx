@@ -12,7 +12,7 @@ const links: Record<string, { label: string; href: string }[]> = {
   Company: [
     { label: "Blog", href: "#" },
     { label: "Press", href: "#" },
-    { label: "Contact", href: "#" },
+    { label: "Contact", href: "/contact" },
   ],
   Support: [
     { label: "Privacy policy", href: "/privacy" },

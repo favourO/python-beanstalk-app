@@ -1,81 +1,38 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-} from "recharts";
-import { api, getToken, ApiError, type OverviewData } from "@/lib/api";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import { api, getToken, ApiError, type OverviewData, type ContactListOut, type ContactMessageItem } from "@/lib/api";
 import TopBar from "@/components/TopBar";
 
-// ── Colour palette ────────────────────────────────────────────────────────────
-const ORANGE = "#FF7A33";
-const ORANGE_LIGHT = "#FFD9C2";
 const PIE_COLORS = ["#FF7A33", "#1E0C16", "#A06A52", "#FFB38A"];
 
-// ── Static demo data for charts (replaced with real data when API has it) ─────
-const userGrowthData = [
-  { date: "May 12", users: 238 }, { date: "May 13", users: 265 },
-  { date: "May 14", users: 252 }, { date: "May 15", users: 289 },
-  { date: "May 16", users: 310 }, { date: "May 17", users: 297 },
-  { date: "May 18", users: 345 },
-];
+function fmt(n: number) {
+  return n.toLocaleString("en-GB");
+}
 
-const wearableData = [
-  { name: "Vyla Band",    value: 32600, pct: 60, color: "#FF7A33" },
-  { name: "Apple Watch",  value: 10275, pct: 19, color: "#1E0C16" },
-  { name: "Fitbit",       value: 7100,  pct: 13, color: "#A06A52" },
-  { name: "Other",        value: 4634,  pct: 8,  color: "#FFD9C2" },
-];
+function fmtGbp(n: number) {
+  return "£" + n.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
 
-const referralData = [
-  { campaign: "Tech Mom",          users: 12830, conv: "38.2%" },
-  { campaign: "Vyla Month Launch", users: 4930,  conv: "29.8%" },
-  { campaign: "Better Health",     users: 3,     conv: "37.2%" },
-  { campaign: "Student Special",   users: 4501,  conv: "23.4%" },
-];
-
-const systemAlerts = [
-  { msg: "Wearable sync issues detected",      time: "2 min ago",  type: "warn" },
-  { msg: "AI insight generation paused",        time: "15 min ago", type: "info" },
-  { msg: "High volume of failed payments",      time: "1 hr ago",   type: "error" },
-  { msg: "Scheduled maintenance — May 23",      time: "3 hr ago",   type: "info" },
-];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function fmt(n: number) { return n.toLocaleString(); }
-function fmtGbp(n: number) { return "£" + n.toLocaleString("en-GB", { minimumFractionDigits: 0 }); }
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-function KpiCard({
-  label, value, sub, trend, trendUp, icon,
-}: {
-  label: string; value: string; sub?: string; trend?: string; trendUp?: boolean; icon: React.ReactNode;
-}) {
+function KpiCard({ label, value, sub, icon }: { label: string; value: string; sub?: string; icon: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-[#F0E8E4] p-4 flex flex-col gap-2">
+    <div className="flex flex-col gap-2 rounded-2xl border border-[#F0E8E4] bg-white p-4">
       <div className="flex items-start justify-between">
-        <span className="text-[11px] font-medium text-[#9E7B6E] uppercase tracking-wide">{label}</span>
-        <span className="w-8 h-8 rounded-xl bg-[#FFF0E8] flex items-center justify-center text-[#FF7A33]">{icon}</span>
+        <span className="text-[11px] font-medium uppercase tracking-wide text-[#9E7B6E]">{label}</span>
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FFF0E8] text-[#FF7A33]">{icon}</span>
       </div>
-      <p className="text-[24px] font-bold text-[#1E0C16] leading-none">{value}</p>
-      <div className="flex items-center gap-1.5">
-        {trend && (
-          <span className={`flex items-center gap-0.5 text-[11px] font-semibold ${trendUp ? "text-emerald-500" : "text-red-400"}`}>
-            {trendUp ? <ArrowUp /> : <ArrowDown />}
-            {trend}
-          </span>
-        )}
-        {sub && <span className="text-[11px] text-[#B0938A]">{sub}</span>}
-      </div>
+      <p className="text-[24px] font-bold leading-none text-[#1E0C16]">{value}</p>
+      {sub && <span className="text-[11px] text-[#B0938A]">{sub}</span>}
     </div>
   );
 }
 
 function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-[#F0E8E4] p-5 flex flex-col">
-      <div className="flex items-center justify-between mb-4">
+    <div className="flex flex-col rounded-2xl border border-[#F0E8E4] bg-white p-5">
+      <div className="mb-4 flex items-center justify-between">
         <p className="text-[13px] font-bold text-[#1E0C16]">{title}</p>
         {action}
       </div>
@@ -85,295 +42,244 @@ function SectionCard({ title, action, children }: { title: string; action?: Reac
 }
 
 function ViewAll({ href }: { href: string }) {
+  return <a href={href} className="text-[11px] font-medium text-[#FF7A33] hover:text-[#e86a22]">View all</a>;
+}
+
+function DataNotice({ children }: { children: React.ReactNode }) {
   return (
-    <a href={href} className="text-[11px] text-[#FF7A33] hover:text-[#e86a22] font-medium">
-      View all
-    </a>
+    <div className="rounded-xl border border-[#FFD9C2] bg-[#FFF6F0] px-4 py-3 text-[12px] leading-5 text-[#7C4E3B]">
+      {children}
+    </div>
   );
 }
 
-function AlertDot({ type }: { type: string }) {
-  const color = type === "error" ? "bg-red-400" : type === "warn" ? "bg-amber-400" : "bg-blue-400";
-  return <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${color}`} />;
+function ContactMessagesPanel({ token }: { token: string }) {
+  const [data, setData] = useState<ContactListOut | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get<ContactListOut>("/admin/contacts", token).then(setData).catch(() => {});
+  }, [token]);
+
+  const markRead = async (msg: ContactMessageItem) => {
+    if (msg.read) return;
+    await api.post(`/admin/contacts/${msg.id}/read`, token).catch(() => {});
+    setData(d => d ? {
+      ...d,
+      unread: Math.max(0, d.unread - 1),
+      items: d.items.map(m => m.id === msg.id ? { ...m, read: true } : m),
+    } : d);
+  };
+
+  return (
+    <SectionCard
+      title={`Contact Messages${data && data.unread > 0 ? ` (${data.unread} unread)` : ""}`}
+      action={<span className="text-[11px] text-[#B0938A]">{data ? `${data.total} total` : ""}</span>}
+    >
+      {!data ? (
+        <p className="text-[12px] text-[#B0938A]">Loading…</p>
+      ) : data.items.length === 0 ? (
+        <p className="text-[12px] text-[#B0938A]">No messages yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {data.items.slice(0, 8).map(msg => (
+            <div
+              key={msg.id}
+              className={`cursor-pointer rounded-xl border p-3 transition-colors ${msg.read ? "border-[#F0E8E4] bg-white" : "border-[#FFD9C2] bg-[#FFF6F0]"}`}
+              onClick={() => { setExpanded(expanded === msg.id ? null : msg.id); markRead(msg); }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    {!msg.read && <span className="h-2 w-2 shrink-0 rounded-full bg-[#FF7A33]" />}
+                    <p className="truncate text-[12px] font-semibold text-[#1E0C16]">{msg.name}</p>
+                    <span className="truncate text-[11px] text-[#B0938A]">{msg.email}</span>
+                  </div>
+                  <p className="mt-0.5 truncate text-[11px] text-[#7A4A32]">{msg.subject}</p>
+                </div>
+                <span className="shrink-0 text-[10px] text-[#B0938A]">{new Date(msg.created_at).toLocaleDateString()}</span>
+              </div>
+              {expanded === msg.id && (
+                <p className="mt-2 whitespace-pre-wrap border-t border-[#FFD9C2] pt-2 text-[12px] leading-relaxed text-[#3D1F2E]">{msg.message}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter();
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getToken();
-    if (!token) { router.push("/login"); return; }
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+    setToken(token);
     api.get<OverviewData>("/admin/overview", token)
       .then(setOverview)
-      .catch(e => {
+      .catch((e) => {
         if (e instanceof ApiError && (e.status === 401 || e.status === 403)) router.push("/login");
+        setError(e instanceof Error ? e.message : "Failed to load overview");
       })
       .finally(() => setLoading(false));
   }, [router]);
 
   const ov = overview;
+  const userDistribution = useMemo(() => ov ? [
+    { name: "Free", value: ov.free_users },
+    { name: "Premium", value: ov.premium_users },
+    { name: "Trialing", value: ov.trialing_users },
+    { name: "Anonymous", value: ov.anonymous_users },
+  ] : [], [ov]);
 
-  // Build distribution data from real values when available
-  const distData = ov ? [
-    { name: "Free Users",    value: ov.free_users },
-    { name: "Premium",       value: ov.premium_users },
-    { name: "Trialing",      value: ov.trialing_users },
-    { name: "Anonymous",     value: ov.anonymous_users },
-  ] : [
-    { name: "Free Users",    value: 180000 },
-    { name: "Premium",       value: 52000 },
-    { name: "Trialing",      value: 18000 },
-    { name: "Anonymous",     value: 6890 },
-  ];
+  const totalPaymentErrors = ov ? ov.flutterwave_errors_30d + ov.stripe_errors_30d : 0;
 
   return (
     <div className="space-y-5">
-      <TopBar
-        title="Overview"
-        subtitle="Welcome back. Here's what's happening with Vyla today."
-      />
+      <TopBar title="Overview" subtitle="Live Vyla admin metrics from the backend overview endpoint." />
 
-      {/* ── KPI Row 1 ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <KpiCard
-          label="Active Users"
-          value={loading || !ov ? "—" : fmt(ov.active_users)}
-          trend="+4.5%"
-          trendUp
-          sub="vs last week"
-          icon={<UsersIcon />}
-        />
-        <KpiCard
-          label="New Signups"
-          value={loading || !ov ? "—" : fmt(ov.signups_this_week)}
-          trend="+2.1%"
-          trendUp
-          sub="vs last week"
-          icon={<SignupIcon />}
-        />
-        <KpiCard
-          label="Revenue"
-          value={loading || !ov ? "—" : fmtGbp(ov.total_invoiced_gbp)}
-          trend="+8%"
-          trendUp
-          sub="vs last week"
-          icon={<RevenueIcon />}
-        />
-        <KpiCard
-          label="Total Payments"
-          value={loading ? "—" : "1,243"}
-          sub="this week"
-          icon={<PaymentIcon />}
-        />
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+          <span className="font-semibold">Error: </span>{error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <KpiCard label="Total Users" value={loading || !ov ? "-" : fmt(ov.total_users)} sub="All accounts" icon={<UsersIcon />} />
+        <KpiCard label="Active Users" value={loading || !ov ? "-" : fmt(ov.active_users)} sub="Backend total" icon={<UsersIcon />} />
+        <KpiCard label="Signups Today" value={loading || !ov ? "-" : fmt(ov.signups_today)} sub="Created today" icon={<SignupIcon />} />
+        <KpiCard label="Signups This Week" value={loading || !ov ? "-" : fmt(ov.signups_this_week)} sub="Backend total" icon={<SignupIcon />} />
       </div>
 
-      {/* ── KPI Row 2 ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <KpiCard
-          label="Wearable Connected"
-          value={loading || !ov ? "—" : fmt(ov.wearable_connected_users)}
-          trend="+1.2%"
-          trendUp
-          sub="vs last week"
-          icon={<WearableIcon />}
-        />
-        <KpiCard
-          label="Daily Logs Submitted"
-          value={loading || !ov ? "—" : fmt(ov.daily_logs_today)}
-          trend="+3.8%"
-          trendUp
-          sub="vs last week"
-          icon={<LogIcon />}
-        />
-        <KpiCard
-          label="Cycle Predictions"
-          value={loading || !ov ? "—" : fmt(ov.predictions_today)}
-          trend="+5.2%"
-          trendUp
-          sub="vs last week"
-          icon={<CycleIcon />}
-        />
-        <KpiCard
-          label="AI Insights Generated"
-          value={loading || !ov ? "—" : fmt(ov.ai_threads_total)}
-          trend="+7.4%"
-          trendUp
-          sub="vs last week"
-          icon={<AIIcon />}
-        />
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <KpiCard label="Premium Users" value={loading || !ov ? "-" : fmt(ov.premium_users)} sub="Current entitlement" icon={<RevenueIcon />} />
+        <KpiCard label="Total Invoiced" value={loading || !ov ? "-" : fmtGbp(ov.total_invoiced_gbp)} sub="Backend invoice sum" icon={<PaymentIcon />} />
+        <KpiCard label="Payment Errors" value={loading || !ov ? "-" : fmt(totalPaymentErrors)} sub="Last 30 days" icon={<PaymentIcon />} />
+        <KpiCard label="Deleted Users" value={loading || !ov ? "-" : fmt(ov.deleted_users)} sub="Soft-deleted accounts" icon={<UsersIcon />} />
       </div>
 
-      {/* ── Middle row ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* User Growth chart */}
-        <SectionCard title="User Growth" action={<ViewAll href="/users" />}>
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={userGrowthData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-              <defs>
-                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={ORANGE} stopOpacity={0.2} />
-                  <stop offset="95%" stopColor={ORANGE} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#B0938A" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: "#B0938A" }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: "#fff", border: "1px solid #F0E8E4", borderRadius: 8, fontSize: 11 }}
-                labelStyle={{ color: "#1E0C16", fontWeight: 600 }}
-              />
-              <Area type="monotone" dataKey="users" stroke={ORANGE} strokeWidth={2} fill="url(#areaGrad)" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </SectionCard>
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <KpiCard label="Wearable Connected" value={loading || !ov ? "-" : fmt(ov.wearable_connected_users)} sub="Connected profiles" icon={<WearableIcon />} />
+        <KpiCard label="Daily Logs Today" value={loading || !ov ? "-" : fmt(ov.daily_logs_today)} sub="Submitted today" icon={<LogIcon />} />
+        <KpiCard label="Predictions Today" value={loading || !ov ? "-" : fmt(ov.predictions_today)} sub="Generated today" icon={<CycleIcon />} />
+        <KpiCard label="AI Threads" value={loading || !ov ? "-" : fmt(ov.ai_threads_total)} sub="All conversations" icon={<AIIcon />} />
+      </div>
 
-        {/* User Distribution donut */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <SectionCard title="User Distribution" action={<ViewAll href="/users" />}>
-          <div className="flex items-center gap-2">
-            <ResponsiveContainer width="55%" height={180}>
-              <PieChart>
-                <Pie
-                  data={distData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={52}
-                  outerRadius={78}
-                  paddingAngle={2}
-                  dataKey="value"
-                  startAngle={90}
-                  endAngle={-270}
-                >
-                  {distData.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex-1 space-y-2">
-              {distData.map((d, i) => (
-                <div key={d.name} className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: PIE_COLORS[i] }} />
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-[#9E7B6E] truncate">{d.name}</p>
-                    <p className="text-[12px] font-semibold text-[#1E0C16]">{d.value.toLocaleString()}</p>
+          {ov ? (
+            <div className="flex items-center gap-2">
+              <ResponsiveContainer width="55%" height={180}>
+                <PieChart>
+                  <Pie data={userDistribution} cx="50%" cy="50%" innerRadius={52} outerRadius={78} paddingAngle={2} dataKey="value" startAngle={90} endAngle={-270}>
+                    {userDistribution.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-2">
+                {userDistribution.map((item, i) => (
+                  <div key={item.name} className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: PIE_COLORS[i] }} />
+                    <div className="min-w-0">
+                      <p className="truncate text-[10px] text-[#9E7B6E]">{item.name}</p>
+                      <p className="text-[12px] font-semibold text-[#1E0C16]">{fmt(item.value)}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </SectionCard>
-
-        {/* Wearable Connections */}
-        <SectionCard title="Wearable Connections" action={<ViewAll href="/wearables" />}>
-          <div className="space-y-4">
-            {wearableData.map(w => (
-              <div key={w.name}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[12px] text-[#3D1F2E] font-medium">{w.name}</span>
-                  <span className="text-[12px] text-[#9E7B6E]">{w.value.toLocaleString()}</span>
-                </div>
-                <div className="h-1.5 bg-[#F5EDE8] rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{ width: `${w.pct}%`, background: w.color }}
-                  />
-                </div>
-                <p className="text-[10px] text-[#B0938A] mt-0.5">{w.pct}%</p>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      </div>
-
-      {/* ── Bottom row ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Top Referral Campaigns */}
-        <SectionCard title="Top Referral Campaigns" action={<ViewAll href="/referrals" />}>
-          <table className="w-full text-left">
-            <thead>
-              <tr>
-                {["Campaign", "Users", "Conversion"].map(h => (
-                  <th key={h} className="pb-2 text-[10px] font-semibold uppercase tracking-wider text-[#B0938A]">{h}</th>
                 ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#F5EDE8]">
-              {referralData.map(r => (
-                <tr key={r.campaign}>
-                  <td className="py-2 text-[12px] text-[#1E0C16] font-medium">{r.campaign}</td>
-                  <td className="py-2 text-[12px] text-[#3D1F2E]">{r.users.toLocaleString()}</td>
-                  <td className="py-2">
-                    <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FFF0E8] text-[#FF7A33]">
-                      {r.conv}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </div>
+            </div>
+          ) : <DataNotice>Waiting for live overview data.</DataNotice>}
         </SectionCard>
 
-        {/* Support Tickets */}
-        <SectionCard title="Support Tickets" action={<ViewAll href="/support" />}>
+        <SectionCard title="Activity Today" action={<ViewAll href="/notifications" />}>
           <div className="space-y-3">
             {[
-              { label: "In Progress",     value: 128, color: "bg-amber-400" },
-              { label: "Pending",         value: 48,  color: "bg-blue-400" },
-              { label: "Resolved Today",  value: 6,   color: "bg-emerald-400" },
-              { label: "AI Breakdown",    value: 24,  color: "bg-[#FF7A33]" },
-            ].map(t => (
-              <div key={t.label} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${t.color}`} />
-                  <span className="text-[12px] text-[#3D1F2E]">{t.label}</span>
-                </div>
-                <span className="text-[13px] font-bold text-[#1E0C16]">{t.value}</span>
+              ["Daily logs", ov?.daily_logs_today],
+              ["Predictions", ov?.predictions_today],
+              ["New signups", ov?.signups_today],
+              ["Onboarding completed", ov?.onboarding_completed_users],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between border-b border-[#F5EDE8] pb-2 last:border-0">
+                <span className="text-[12px] text-[#3D1F2E]">{label}</span>
+                <span className="text-[13px] font-bold text-[#1E0C16]">{loading || value == null ? "-" : fmt(Number(value))}</span>
               </div>
             ))}
           </div>
-          <div className="mt-4 pt-3 border-t border-[#F5EDE8]">
-            <div className="flex items-center justify-between text-[11px] text-[#9E7B6E]">
-              <span>Avg. resolution time</span>
-              <span className="font-semibold text-[#1E0C16]">4.2 hrs</span>
+        </SectionCard>
+
+        <SectionCard title="Billing And Errors" action={<ViewAll href="/webhook-errors" />}>
+          <div className="space-y-3">
+            {[
+              ["Total invoiced", ov ? fmtGbp(ov.total_invoiced_gbp) : "-"],
+              ["Stripe webhook errors", ov ? fmt(ov.stripe_errors_30d) : "-"],
+              ["Flutterwave webhook errors", ov ? fmt(ov.flutterwave_errors_30d) : "-"],
+              ["Active premium grants", ov ? fmt(ov.active_premium_grants) : "-"],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between border-b border-[#F5EDE8] pb-2 last:border-0">
+                <span className="text-[12px] text-[#3D1F2E]">{label}</span>
+                <span className="text-[13px] font-bold text-[#1E0C16]">{loading ? "-" : value}</span>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <SectionCard title="Referrals" action={<ViewAll href="/referrals" />}>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-[#F5EDE8] pb-2">
+              <span className="text-[12px] text-[#3D1F2E]">Total referrals</span>
+              <span className="text-[13px] font-bold text-[#1E0C16]">{loading || !ov ? "-" : fmt(ov.referrals_total)}</span>
+            </div>
+            <div className="flex items-center justify-between border-b border-[#F5EDE8] pb-2">
+              <span className="text-[12px] text-[#3D1F2E]">Qualified referrals</span>
+              <span className="text-[13px] font-bold text-[#1E0C16]">{loading || !ov ? "-" : fmt(ov.referrals_qualified)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] text-[#3D1F2E]">Active premium grants</span>
+              <span className="text-[13px] font-bold text-[#1E0C16]">{loading || !ov ? "-" : fmt(ov.active_premium_grants)}</span>
             </div>
           </div>
         </SectionCard>
 
-        {/* Recent System Alerts */}
-        <SectionCard title="Recent System Alerts" action={<ViewAll href="/audit-log" />}>
+        <SectionCard title="Data Coverage" action={<ViewAll href="/health-data" />}>
           <div className="space-y-3">
-            {systemAlerts.map((a, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <AlertDot type={a.type} />
-                <div className="min-w-0">
-                  <p className="text-[12px] text-[#1E0C16] leading-snug">{a.msg}</p>
-                  <p className="text-[10px] text-[#B0938A] mt-0.5">{a.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 pt-3 border-t border-[#F5EDE8]">
-            <a href="/audit-log" className="text-[11px] text-[#FF7A33] hover:text-[#e86a22] font-medium">
-              View audit log →
-            </a>
+            <div className="flex items-center justify-between border-b border-[#F5EDE8] pb-2">
+              <span className="text-[12px] text-[#3D1F2E]">Wearable connected users</span>
+              <span className="text-[13px] font-bold text-[#1E0C16]">{loading || !ov ? "-" : fmt(ov.wearable_connected_users)}</span>
+            </div>
+            <div className="flex items-center justify-between border-b border-[#F5EDE8] pb-2">
+              <span className="text-[12px] text-[#3D1F2E]">Onboarding completed</span>
+              <span className="text-[13px] font-bold text-[#1E0C16]">{loading || !ov ? "-" : fmt(ov.onboarding_completed_users)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] text-[#3D1F2E]">Anonymous users</span>
+              <span className="text-[13px] font-bold text-[#1E0C16]">{loading || !ov ? "-" : fmt(ov.anonymous_users)}</span>
+            </div>
           </div>
         </SectionCard>
+
+        <SectionCard title="Unavailable Metrics">
+          <DataNotice>
+            Growth charts, support ticket counts, campaign conversion rates, live system alerts, and payment counts are not shown because the backend does not currently expose those datasets.
+          </DataNotice>
+        </SectionCard>
       </div>
+
+      {token && <ContactMessagesPanel token={token} />}
     </div>
   );
 }
 
-// ── Arrow helpers ─────────────────────────────────────────────────────────────
-function ArrowUp() {
-  return <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M5 2l4 4H1z"/></svg>;
-}
-function ArrowDown() {
-  return <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M5 8l4-4H1z"/></svg>;
-}
-
-// ── KPI Icons ─────────────────────────────────────────────────────────────────
 function UsersIcon() {
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="6" cy="5" r="2.5"/><path d="M1 14c0-3 2-4.5 5-4.5s5 1.5 5 4.5"/><circle cx="12" cy="5" r="2"/><path d="M12 9c1.5.3 3 1.2 3 3.5"/></svg>;
 }

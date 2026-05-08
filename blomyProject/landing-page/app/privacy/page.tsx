@@ -116,7 +116,7 @@ export default function PrivacyPage() {
               ["Legal entity", "DemyCorp Ltd, trading as Vyla"],
               ["Email", "privacy@vyla.health"],
               ["Support", "support@vyla.health"],
-              ["Address", "[Postal Address]"],
+              ["Address", "6 Giles Avenue, London RM13"],
               ["Website", "https://vyla.health"],
             ].map(([k, v]) => (
               <div key={k} className="flex gap-3 text-[14px]">
@@ -732,7 +732,7 @@ export default function PrivacyPage() {
               ["Legal entity", "DemyCorp Ltd, trading as Vyla"],
               ["Email", "privacy@vyla.health"],
               ["Support", "support@vyla.health"],
-              ["Address", "[Postal Address]"],
+              ["Address", "6 Giles Avenue, London RM13"],
               ["Website", "https://vyla.health"],
             ].map(([k, v]) => (
               <div key={k} className="flex gap-3 text-[14px]">

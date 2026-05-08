@@ -24,6 +24,7 @@ from phora.models.growth import PremiumGrant, ReferralAttribution, ReferralProfi
 from phora.models.notification import NotificationDevice, NotificationHistory
 from phora.models.prediction import PredictionSnapshot
 from phora.models.timeseries import WearableMetric
+from phora.models.contact import ContactMessage
 from phora.models.user import OnboardingProgress, User, UserProfile
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -1059,6 +1060,59 @@ def list_ai_threads(
         for t in threads
     ]
     return AiThreadListOut(items=items, total=total, page=page, page_size=page_size)
+
+
+# ---------------------------------------------------------------------------
+# Contact messages
+# ---------------------------------------------------------------------------
+
+class ContactMessageItem(BaseModel):
+    id: str
+    name: str
+    email: str
+    subject: str
+    message: str
+    read: bool
+    created_at: str
+
+class ContactListOut(BaseModel):
+    items: list[ContactMessageItem]
+    total: int
+    unread: int
+
+@router.get("/contacts", response_model=ContactListOut)
+def list_contacts(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> ContactListOut:
+    stmt = select(ContactMessage)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    unread = db.scalar(select(func.count()).where(ContactMessage.read == False)) or 0  # noqa: E712
+    rows = db.scalars(stmt.order_by(ContactMessage.created_at.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+    items = [
+        ContactMessageItem(
+            id=r.id, name=r.name, email=r.email, subject=r.subject,
+            message=r.message, read=r.read, created_at=r.created_at.isoformat(),
+        )
+        for r in rows
+    ]
+    return ContactListOut(items=items, total=total, unread=unread)
+
+
+@router.patch("/contacts/{contact_id}/read", response_model=ActionResponse)
+def mark_contact_read(
+    contact_id: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> ActionResponse:
+    msg = db.get(ContactMessage, contact_id)
+    if not msg:
+        raise HTTPException(status_code=404, detail="Contact message not found")
+    msg.read = True
+    db.commit()
+    return ActionResponse(ok=True, message="Marked as read")
 
 
 @router.get("/audit-events", response_model=AuditEventListOut)

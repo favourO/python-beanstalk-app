@@ -354,7 +354,7 @@ export default function TermsPage() {
               ["Website", "https://vyla.health"],
               ["Email", "legal@vyla.health"],
               ["Support", "support@vyla.health"],
-              ["Address", "[Postal Address]"],
+              ["Address", "6 Giles Avenue, London RM13"],
             ].map(([k, v]) => (
               <div key={k} className="flex gap-3 text-[14px]">
                 <span className="font-medium text-[#1E0C16] w-28 shrink-0">{k}</span>
