@@ -648,10 +648,13 @@ def list_subscriptions(
     tier: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     provider: str | None = Query(default=None),
+    user_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ) -> SubListOut:
     stmt = select(Subscription)
+    if user_id:
+        stmt = stmt.where(Subscription.user_id == user_id)
     if tier:
         stmt = stmt.where(Subscription.tier == tier)
     if status_filter:
@@ -721,10 +724,14 @@ def list_invoices(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     status_filter: str | None = Query(default=None, alias="status"),
+    user_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ) -> InvoiceListOut:
     stmt = select(Invoice)
+    if user_id:
+        user_sub_ids = db.scalars(select(Subscription.id).where(Subscription.user_id == user_id)).all()
+        stmt = stmt.where(Invoice.subscription_id.in_(user_sub_ids))
     if status_filter:
         stmt = stmt.where(Invoice.status == status_filter)
 

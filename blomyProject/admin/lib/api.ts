@@ -81,6 +81,17 @@ export type UserItem = {
 
 export type UserListOut = { items: UserItem[]; total: number; page: number; page_size: number };
 
+export type UserDetailOut = {
+  id: string; email: string | null; account_mode: string; email_verified: boolean;
+  is_admin: boolean; deleted_at: string | null; created_at: string;
+  full_name: string | null; date_of_birth: string | null; goal: string | null;
+  wearable_type: string | null; timezone: string | null;
+  onboarding_completed: boolean; onboarding_step: number | null;
+  subscription_tier: string | null; subscription_status: string | null;
+  subscription_provider: string | null; subscription_period_end: string | null;
+  cycle_records_count: number; daily_logs_count: number; ai_threads_count: number;
+};
+
 export type SubItem = {
   id: string; user_id: string; user_email: string | null; tier: string; status: string;
   provider: string | null; billing_interval: string | null; amount: number | null;

@@ -26,9 +26,9 @@ export function Tbody({ children }: { children: React.ReactNode }) {
   return <tbody>{children}</tbody>;
 }
 
-export function Tr({ children }: { children: React.ReactNode }) {
+export function Tr({ children, onClick, className }: { children: React.ReactNode; onClick?: () => void; className?: string }) {
   return (
-    <tr className="border-b border-[#FFD9C2]/60 last:border-0 hover:bg-[#FFF6F0]/60 transition-colors">
+    <tr onClick={onClick} className={`border-b border-[#FFD9C2]/60 last:border-0 hover:bg-[#FFF6F0]/60 transition-colors ${className ?? ""}`}>
       {children}
     </tr>
   );
