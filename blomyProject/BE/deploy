@@ -1,0 +1,138 @@
+#!/bin/zsh
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: ./deploy <prod>"
+  exit 1
+fi
+
+ENVIRONMENT="$1"
+if [[ "$ENVIRONMENT" != "prod" ]]; then
+  cat <<'EOF'
+AWS app deploys are now prod-only.
+Stage has been removed from the AWS Terraform path and is expected to run on Lightsail in a separate flow.
+EOF
+  exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TF_DIR="$ROOT_DIR/infra/terraform/app"
+TFVARS_FILE="$TF_DIR/envs/${ENVIRONMENT}.tfvars"
+PYTHONPATH_ROOT="$ROOT_DIR"
+
+if [[ "$ENVIRONMENT" == "prod" && ! -f "$TFVARS_FILE" ]]; then
+  echo "missing $TFVARS_FILE; copy envs/prod.tfvars.example to envs/prod.tfvars first"
+  exit 1
+fi
+
+command -v aws >/dev/null
+command -v docker >/dev/null
+command -v terraform >/dev/null
+
+REGION="$(awk -F' *= *' '/^aws_region/ {gsub(/"/, "", $2); print $2}' "$TFVARS_FILE")"
+if [[ -z "$REGION" ]]; then
+  echo "failed to read aws_region from $TFVARS_FILE"
+  exit 1
+fi
+
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+EXPECTED_ACCOUNT_ID="$(awk -F' *= *' '/^aws_account_id/ {gsub(/"/, "", $2); print $2}' "$TFVARS_FILE")"
+if [[ -z "$EXPECTED_ACCOUNT_ID" ]]; then
+  echo "failed to read aws_account_id from $TFVARS_FILE"
+  exit 1
+fi
+if [[ "$ACCOUNT_ID" != "$EXPECTED_ACCOUNT_ID" ]]; then
+  echo "refusing deploy: authenticated AWS account ${ACCOUNT_ID} does not match expected ${EXPECTED_ACCOUNT_ID}"
+  exit 1
+fi
+
+STATE_BUCKET="${TF_STATE_BUCKET:-vyla-terraform-state-${ACCOUNT_ID}-${REGION}}"
+LOCK_TABLE="${TF_LOCK_TABLE:-vyla-terraform-locks}"
+
+cd "$TF_DIR"
+
+if ! aws s3api head-bucket --bucket "$STATE_BUCKET" >/dev/null 2>&1; then
+  aws s3api create-bucket \
+    --bucket "$STATE_BUCKET" \
+    --region "$REGION" \
+    --create-bucket-configuration "LocationConstraint=${REGION}" >/dev/null
+fi
+
+aws s3api put-bucket-versioning \
+  --bucket "$STATE_BUCKET" \
+  --versioning-configuration Status=Enabled >/dev/null
+
+if ! aws dynamodb describe-table --table-name "$LOCK_TABLE" --region "$REGION" >/dev/null 2>&1; then
+  aws dynamodb create-table \
+    --table-name "$LOCK_TABLE" \
+    --attribute-definitions AttributeName=LockID,AttributeType=S \
+    --key-schema AttributeName=LockID,KeyType=HASH \
+    --billing-mode PAY_PER_REQUEST \
+    --region "$REGION" >/dev/null
+fi
+
+SECRET_ID="vyla-${ENVIRONMENT}/app-config"
+CURRENT_SECRET_JSON="$(
+  aws secretsmanager get-secret-value \
+    --secret-id "$SECRET_ID" \
+    --region "$REGION" \
+    --query SecretString \
+    --output text 2>/dev/null || echo '{}'
+)"
+TF_VAR_extra_secret_environment="$(
+  PYTHONPATH="$PYTHONPATH_ROOT" \
+  CURRENT_SECRET_JSON="$CURRENT_SECRET_JSON" \
+  EXTRA_SECRET_JSON="${TF_VAR_extra_secret_environment:-}" \
+  DEPLOY_GUARD_COMMAND="merge-secret-json" \
+  python3 -m phora.core.deploy_guard
+)"
+export TF_VAR_extra_secret_environment
+
+PYTHONPATH="$PYTHONPATH_ROOT" \
+TFVARS_FILE="$TFVARS_FILE" \
+TF_VAR_extra_secret_environment="$TF_VAR_extra_secret_environment" \
+DEPLOY_GUARD_COMMAND="validate-desired-smtp" \
+python3 -m phora.core.deploy_guard
+
+terraform init \
+  -reconfigure \
+  -backend-config="bucket=${STATE_BUCKET}" \
+  -backend-config="key=vyla/${ENVIRONMENT}/app.tfstate" \
+  -backend-config="region=${REGION}" \
+  -backend-config="dynamodb_table=${LOCK_TABLE}" \
+  -backend-config="encrypt=true"
+
+terraform apply -auto-approve -target=aws_ecr_repository.app -var-file="$TFVARS_FILE"
+
+REPOSITORY_URL="$(terraform output -raw ecr_repository_url)"
+ACCOUNT_REGISTRY="${REPOSITORY_URL%/*}"
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo local)"
+IMAGE_TAG="${ENVIRONMENT}-${GIT_SHA}-$(date +%Y%m%d%H%M%S)"
+IMAGE_URI="${REPOSITORY_URL}:${IMAGE_TAG}"
+
+aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$ACCOUNT_REGISTRY"
+docker buildx build --platform linux/amd64 -t "$IMAGE_URI" --push "$ROOT_DIR"
+
+terraform apply -auto-approve -var-file="$TFVARS_FILE" -var="container_image=${IMAGE_URI}"
+
+CURRENT_SECRET_JSON="$(
+  aws secretsmanager get-secret-value \
+    --secret-id "$SECRET_ID" \
+    --region "$REGION" \
+    --query SecretString \
+    --output text
+)"
+TASK_DEFINITION_JSON="$(
+  aws ecs describe-task-definition \
+    --task-definition "vyla-${ENVIRONMENT}-api" \
+    --region "$REGION" \
+    --output json
+)"
+CURRENT_SECRET_JSON="$CURRENT_SECRET_JSON" \
+TASK_DEFINITION_JSON="$TASK_DEFINITION_JSON" \
+PYTHONPATH="$PYTHONPATH_ROOT" \
+DEPLOY_GUARD_COMMAND="validate-deployed-smtp" \
+python3 -m phora.core.deploy_guard
+
+APP_URL="$(terraform output -raw app_url)"
+echo "Deployed ${ENVIRONMENT} to ${APP_URL}"

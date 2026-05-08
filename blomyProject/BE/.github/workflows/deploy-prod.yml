@@ -1,0 +1,103 @@
+name: Deploy Prod
+
+on:
+  push:
+    branches:
+      - prod
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    env:
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      TF_LOCK_TABLE: ${{ secrets.TF_LOCK_TABLE }}
+      AWS_ACCOUNT_ID: "329937296512"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: eu-west-2
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Verify AWS account
+        run: |
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "$account_id" != "$AWS_ACCOUNT_ID" ]]; then
+            echo "Refusing deploy: expected account $AWS_ACCOUNT_ID but got $account_id"
+            exit 1
+          fi
+
+      - name: Build app secret overrides
+        run: |
+          extra_secret_json="$(jq -nc \
+            --arg app_secret_key "${{ secrets.PHORA_SECRET_KEY }}" \
+            --arg llm_api_key "${{ secrets.PHORA_LLM_API_KEY }}" \
+            --arg smtp_host "${{ secrets.PHORA_SMTP_HOST }}" \
+            --arg smtp_port "${{ secrets.PHORA_SMTP_PORT }}" \
+            --arg smtp_username "${{ secrets.PHORA_SMTP_USERNAME }}" \
+            --arg smtp_password "${{ secrets.PHORA_SMTP_PASSWORD }}" \
+            --arg smtp_from_email "${{ secrets.PHORA_SMTP_FROM_EMAIL }}" \
+            --arg smtp_from_name "${{ secrets.PHORA_SMTP_FROM_NAME }}" \
+            --arg smtp_use_tls "${{ secrets.PHORA_SMTP_USE_TLS }}" \
+            --arg smtp_use_ssl "${{ secrets.PHORA_SMTP_USE_SSL }}" \
+            --arg stripe_secret_key "${{ secrets.PHORA_STRIPE_SECRET_KEY }}" \
+            --arg stripe_publishable_key "${{ secrets.PHORA_STRIPE_PUBLISHABLE_KEY }}" \
+            --arg stripe_webhook_secret "${{ secrets.PHORA_STRIPE_WEBHOOK_SECRET }}" \
+            --arg flutterwave_secret_key "${{ secrets.PHORA_FLUTTERWAVE_SECRET_KEY }}" \
+            --arg flutterwave_public_key "${{ secrets.PHORA_FLUTTERWAVE_PUBLIC_KEY }}" \
+            --arg flutterwave_encryption_key "${{ secrets.PHORA_FLUTTERWAVE_ENCRYPTION_KEY }}" \
+            --arg flutterwave_redirect_url "${{ secrets.PHORA_FLUTTERWAVE_REDIRECT_URL }}" \
+            --arg flutterwave_webhook_secret_hash "${{ secrets.PHORA_FLUTTERWAVE_WEBHOOK_SECRET_HASH }}" \
+            '{
+              PHORA_SECRET_KEY: $app_secret_key,
+              PHORA_LLM_API_KEY: $llm_api_key,
+              PHORA_SMTP_HOST: $smtp_host,
+              PHORA_SMTP_PORT: $smtp_port,
+              PHORA_SMTP_USERNAME: $smtp_username,
+              PHORA_SMTP_PASSWORD: $smtp_password,
+              PHORA_SMTP_FROM_EMAIL: $smtp_from_email,
+              PHORA_SMTP_FROM_NAME: $smtp_from_name,
+              PHORA_SMTP_USE_TLS: $smtp_use_tls,
+              PHORA_SMTP_USE_SSL: $smtp_use_ssl,
+              PHORA_STRIPE_SECRET_KEY: $stripe_secret_key,
+              PHORA_STRIPE_PUBLISHABLE_KEY: $stripe_publishable_key,
+              PHORA_STRIPE_WEBHOOK_SECRET: $stripe_webhook_secret,
+              PHORA_FLUTTERWAVE_SECRET_KEY: $flutterwave_secret_key,
+              PHORA_FLUTTERWAVE_PUBLIC_KEY: $flutterwave_public_key,
+              PHORA_FLUTTERWAVE_ENCRYPTION_KEY: $flutterwave_encryption_key,
+              PHORA_FLUTTERWAVE_REDIRECT_URL: $flutterwave_redirect_url,
+              PHORA_FLUTTERWAVE_WEBHOOK_SECRET_HASH: $flutterwave_webhook_secret_hash
+            } | with_entries(select(.value != ""))')"
+          echo "TF_VAR_extra_secret_environment=$extra_secret_json" >> "$GITHUB_ENV"
+
+      - name: Enforce backend naming
+        run: |
+          if [[ -n "${TF_STATE_BUCKET}" && "${TF_STATE_BUCKET}" != "vyla-terraform-state-${AWS_ACCOUNT_ID}-eu-west-2" ]]; then
+            echo "TF_STATE_BUCKET must be vyla-terraform-state-${AWS_ACCOUNT_ID}-eu-west-2"
+            exit 1
+          fi
+          if [[ -n "${TF_LOCK_TABLE}" && "${TF_LOCK_TABLE}" != "vyla-terraform-locks" ]]; then
+            echo "TF_LOCK_TABLE must be vyla-terraform-locks"
+            exit 1
+          fi
+
+      - name: Deploy
+        run: |
+          chmod +x ./deploy
+          ./deploy prod

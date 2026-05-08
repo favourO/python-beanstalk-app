@@ -1,0 +1,23 @@
+name: Deploy Stage
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-stage
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  stage-disabled:
+    runs-on: ubuntu-latest
+    environment: stage
+    steps:
+      - name: Stage Deploy Disabled
+        run: |
+          echo "Stage is no longer deployed through the AWS Terraform/ECS path."
+          echo "Target architecture is Lightsail container service + Lightsail PostgreSQL for stage."
+          echo "Keep stage isolated from prod and use a separate Lightsail deployment flow."
+          exit 1
