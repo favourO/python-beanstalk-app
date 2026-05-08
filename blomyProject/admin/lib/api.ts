@@ -43,7 +43,7 @@ export const api = {
 };
 
 export async function adminLogin(email: string, password: string): Promise<string> {
-  const res = await fetch(`${BASE}${PREFIX}/auth/login`, {
+  const res = await fetch(`${BASE}${PREFIX}/admin/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -53,7 +53,7 @@ export async function adminLogin(email: string, password: string): Promise<strin
     throw new ApiError(res.status, text);
   }
   const data = await res.json();
-  const token: string = data.access_token ?? data.token ?? data.tokens?.access_token;
+  const token: string = data.access_token ?? data.token;
   if (!token) throw new ApiError(401, "No access token in response");
   return token;
 }
