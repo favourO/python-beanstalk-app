@@ -14,6 +14,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from phora.api.deps import get_current_admin_user, get_db
+from phora.core.config import get_settings
+from phora.core.security import create_token, new_ulid, verify_password
 from phora.models.ai import MedicalChatMessage, MedicalChatThread
 from phora.models.audit import AuditEvent
 from phora.models.billing import FlutterwaveWebhookErrorLog, Invoice, Subscription, StripeWebhookErrorLog
@@ -25,6 +27,35 @@ from phora.models.timeseries import WearableMetric
 from phora.models.user import OnboardingProgress, User, UserProfile
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+# ---------------------------------------------------------------------------
+# Admin login (validates is_admin before issuing token)
+# ---------------------------------------------------------------------------
+
+class AdminLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class AdminLoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+@router.post("/login", response_model=AdminLoginResponse)
+def admin_login(payload: AdminLoginRequest, db: Session = Depends(get_db)) -> AdminLoginResponse:
+    user = db.query(User).filter(User.email == payload.email.lower().strip()).first()
+    if not user or not user.password_hash or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    if user.deleted_at:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended")
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    settings = get_settings()
+    token = create_token(
+        user.id, "access", settings.access_token_exp_minutes,
+        user.token_generation, {"jti": new_ulid()},
+    )
+    return AdminLoginResponse(access_token=token)
 
 
 # ---------------------------------------------------------------------------
