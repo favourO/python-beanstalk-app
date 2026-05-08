@@ -1,0 +1,13 @@
+aws_region     = "eu-west-2"
+aws_account_id = "329937296512"
+project        = "vyla"
+environment    = "prod"
+
+vpc_cidr             = "10.42.0.0/16"
+availability_zones   = ["eu-west-2a", "eu-west-2b"]
+public_subnet_cidrs  = ["10.42.0.0/20", "10.42.16.0/20"]
+private_subnet_cidrs = ["10.42.128.0/20", "10.42.144.0/20"]
+
+tags = {
+  Owner = "backend"
+}

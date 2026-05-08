@@ -1,0 +1,19 @@
+aws_region          = "eu-west-2"
+aws_account_id      = "329937296512"
+project             = "vyla"
+environment         = "prod"
+dns_name            = "prod.vyla.health"
+route53_zone_id     = "Z08324621C212Q3UVET6I"
+certificate_arn     = "arn:aws:acm:eu-west-2:329937296512:certificate/REPLACE_ME"
+vpc_id              = "vpc-REPLACE_ME"
+public_subnet_ids   = ["subnet-REPLACE_ME_A", "subnet-REPLACE_ME_B"]
+db_security_group_id = "sg-REPLACE_ME"
+db_secret_arn       = "arn:aws:secretsmanager:eu-west-2:329937296512:secret:vyla-prod/rds/postgres-REPLACE_ME"
+
+desired_count = 1
+cpu           = 256
+memory        = 512
+
+tags = {
+  Owner = "backend"
+}

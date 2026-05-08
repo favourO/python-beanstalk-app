@@ -1,0 +1,218 @@
+from collections.abc import Generator
+from functools import lru_cache
+
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from phora.core.config import get_settings
+from phora.db.base import AUDIT_SCHEMA, BILLING_SCHEMA, HEALTH_SCHEMA
+
+
+@lru_cache(maxsize=1)
+def get_engine() -> Engine:
+    settings = get_settings()
+    connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+    return create_engine(settings.database_url, future=True, connect_args=connect_args)
+
+
+@lru_cache(maxsize=1)
+def get_session_factory() -> sessionmaker:
+    return sessionmaker(bind=get_engine(), autoflush=False, autocommit=False, expire_on_commit=False)
+
+
+def reset_db_state() -> None:
+    get_engine.cache_clear()
+    get_session_factory.cache_clear()
+
+
+def ensure_postgres_schemas() -> None:
+    settings = get_settings()
+    with get_engine().begin() as connection:
+        if not settings.database_url.startswith("sqlite"):
+            for schema in (HEALTH_SCHEMA, BILLING_SCHEMA, AUDIT_SCHEMA):
+                if schema:
+                    connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
+            _ensure_postgres_enum_value(connection, enum_name="wearabletype", enum_value="GTL1")
+        _ensure_compat_columns(connection, sqlite=settings.database_url.startswith("sqlite"))
+
+
+def _ensure_postgres_enum_value(connection, *, enum_name: str, enum_value: str) -> None:
+    enum_schema = connection.execute(
+        text(
+            """
+            SELECT ns.nspname
+            FROM pg_type t
+            JOIN pg_namespace ns ON ns.oid = t.typnamespace
+            WHERE t.typname = :enum_name
+            ORDER BY CASE WHEN ns.nspname = :preferred_schema THEN 0 ELSE 1 END, ns.nspname
+            LIMIT 1
+            """
+        ),
+        {"enum_name": enum_name, "preferred_schema": HEALTH_SCHEMA or "public"},
+    ).scalar_one_or_none()
+    if not enum_schema:
+        return
+
+    connection.execute(text(f'ALTER TYPE "{enum_schema}"."{enum_name}" ADD VALUE IF NOT EXISTS \'{enum_value}\''))
+
+
+def _ensure_compat_columns(connection, *, sqlite: bool) -> None:
+    inspector = inspect(connection)
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
+        schema=None if sqlite else HEALTH_SCHEMA,
+        table_name="users",
+        missing_column_sql={
+            "account_mode": "VARCHAR(32) NOT NULL DEFAULT 'registered'",
+            "token_generation": "INTEGER NOT NULL DEFAULT 0",
+            "email_verified": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "is_admin": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "deleted_at": "TIMESTAMP WITH TIME ZONE",
+            "created_at": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        },
+        new_indexes=("account_mode",),
+    )
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
+        schema=None if sqlite else HEALTH_SCHEMA,
+        table_name="onboarding_progress",
+        missing_column_sql={
+            "current_step": "INTEGER",
+            "completed": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "period_length": "INTEGER",
+            "last_period_start": "DATE",
+            "last_period_end": "DATE",
+            "goal": "VARCHAR(16)",
+            "health_conditions": "JSON NOT NULL DEFAULT '[]'",
+            "updated_at": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        },
+    )
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
+        schema=None if sqlite else BILLING_SCHEMA,
+        table_name="subscriptions",
+        missing_column_sql={
+            "provider_subscription_id": "VARCHAR(255)",
+            "provider_customer_id": "VARCHAR(255)",
+            "provider_price_id": "VARCHAR(255)",
+            "currency": "VARCHAR(8)",
+            "billing_interval": "VARCHAR(16)",
+            "current_period_end": "TIMESTAMP WITH TIME ZONE",
+            "updated_at": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        },
+        new_indexes=("provider_subscription_id", "provider_customer_id"),
+    )
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
+        schema=None if sqlite else BILLING_SCHEMA,
+        table_name="invoices",
+        missing_column_sql={
+            "provider_invoice_id": "VARCHAR(255)",
+            "provider_customer_id": "VARCHAR(255)",
+            "provider_payment_intent_id": "VARCHAR(255)",
+            "updated_at": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        },
+        new_indexes=("provider_invoice_id", "provider_customer_id"),
+    )
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
+        schema=None if sqlite else HEALTH_SCHEMA,
+        table_name="notification_preferences",
+        missing_column_sql={
+            "all_notifications": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "period_detected": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "cycle_delay_alert": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "cycle_pattern_change": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "unusual_symptom": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "stress_alert": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "sleep_alert": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "daily_symptom_reminder": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "bangle_sync_reminder": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "temperature_logging_reminder": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "weekly_summary": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "feature_tips": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "quiet_hours_enabled": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "quiet_hours_start": "VARCHAR(5) NOT NULL DEFAULT '22:00'",
+            "quiet_hours_end": "VARCHAR(5) NOT NULL DEFAULT '08:00'",
+            "allow_critical_in_quiet_hours": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "lock_screen_preview": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "push_enabled": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "in_app_enabled": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "email_enabled": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "sms_enabled": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "created_at": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        },
+    )
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
+        schema=None if sqlite else HEALTH_SCHEMA,
+        table_name="notification_history",
+        missing_column_sql={
+            "category": "VARCHAR(32) NOT NULL DEFAULT 'general'",
+            "channel": "VARCHAR(16) NOT NULL DEFAULT 'in_app'",
+            "title": "VARCHAR(120) NOT NULL DEFAULT ''",
+            "body": "TEXT NOT NULL DEFAULT ''",
+            "lock_screen_title": "VARCHAR(120) NOT NULL DEFAULT 'Vyla update'",
+            "lock_screen_body": "VARCHAR(120) NOT NULL DEFAULT ''",
+            "status": "VARCHAR(32) NOT NULL DEFAULT 'pending'",
+            "priority": "VARCHAR(16) NOT NULL DEFAULT 'low'",
+            "batch_key": "VARCHAR(64)",
+            "dedupe_key": "VARCHAR(128)",
+            "action_url": "VARCHAR(255)",
+            "action_labels": "JSON NOT NULL DEFAULT '[]'",
+            "scheduled_for": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            "delivered_at": "TIMESTAMP WITH TIME ZONE",
+            "metadata": "JSON NOT NULL DEFAULT '{}'",
+            "delivery_attempts": "INTEGER NOT NULL DEFAULT 0",
+        },
+        new_indexes=("batch_key", "dedupe_key", "scheduled_for"),
+    )
+
+
+def _ensure_missing_columns(
+    connection,
+    *,
+    inspector,
+    sqlite: bool,
+    schema: str | None,
+    table_name: str,
+    missing_column_sql: dict[str, str],
+    new_indexes: tuple[str, ...] = (),
+) -> None:
+    if not inspector.has_table(table_name, schema=schema):
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns(table_name, schema=schema)}
+    qualified_table = table_name if sqlite or not schema else f'"{schema}"."{table_name}"'
+
+    for column_name, column_sql in missing_column_sql.items():
+        if column_name not in existing_columns:
+            connection.execute(text(f"ALTER TABLE {qualified_table} ADD COLUMN {column_name} {column_sql}"))
+
+    for column_name in new_indexes:
+        if column_name in existing_columns:
+            continue
+        index_name = f"ix_{table_name}_{column_name}" if sqlite or not schema else f"ix_{schema}_{table_name}_{column_name}"
+        connection.execute(text(f"CREATE INDEX IF NOT EXISTS {index_name} ON {qualified_table} ({column_name})"))
+
+
+def get_db() -> Generator[Session, None, None]:
+    session = get_session_factory()()
+    try:
+        yield session
+    finally:
+        session.close()

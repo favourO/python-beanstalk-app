@@ -1,0 +1,24 @@
+aws_region                = "eu-west-2"
+aws_account_id            = "329937296512"
+project                   = "vyla"
+environment               = "dev"
+vpc_id                    = "vpc-0123456789abcdef0"
+private_subnet_ids        = ["subnet-0123456789abcdef0", "subnet-abcdef01234567890"]
+allowed_security_group_ids = ["sg-0123456789abcdef0"]
+
+db_name                   = "vyla"
+db_username               = "vyla_admin"
+engine_version            = "16.13"
+instance_class            = "db.t4g.micro"
+allocated_storage         = 20
+max_allocated_storage     = 100
+multi_az                  = false
+backup_retention_period   = 1
+deletion_protection       = false
+skip_final_snapshot       = true
+performance_insights_enabled = false
+monitoring_interval       = 0
+
+tags = {
+  Owner = "backend"
+}
