@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -9,9 +10,10 @@ from phora.api.app import create_app
 from phora.core.config import Settings
 from phora.core.security import create_token
 from phora.db.session import get_session_factory
-from phora.models import Invoice, Subscription
+from phora.models import FlutterwaveWebhookErrorLog, Invoice, Subscription, User
+from phora.services import billing_catalog
 from phora.services.email import EmailService
-from phora.services.flutterwave_billing import FlutterwaveBillingService
+from phora.services.flutterwave_billing import FlutterwaveBillingError, FlutterwaveBillingService
 
 
 def test_plan_offers_uses_stripe_for_united_kingdom(tmp_path, monkeypatch):
@@ -31,27 +33,28 @@ def test_plan_offers_uses_stripe_for_united_kingdom(tmp_path, monkeypatch):
     assert body["supported"] is True
     assert body["primary_provider"] == "stripe"
     assert body["provider_configured"] is True
-    assert body["checkout_endpoint"] == "/api/v1/billing/stripe/checkout-sessions"
+    assert body["checkout_endpoint"] == "/api/v1/billing/stripe/payment-sheet"
     assert body["checkout_public_key"] == "pk_test_123"
     assert body["currency"] == "GBP"
     assert len(body["plans"]) == 2
     assert body["plans"][1]["id"] == "premium_plus"
+    assert body["plans"][1]["name"] == "Premium"
     assert body["plans"][1]["display_price"] == "£3.99"
     assert body["plans"][1]["billing_period"] == "month"
-    assert body["plans"][1]["provider_product_id"] == "prod_UHWvRGMUhkpAy5"
-    assert body["plans"][1]["provider_price_id"] == "price_1TIxtDGRl5Hb5Dey7Bpnk3V6"
+    assert body["plans"][1]["provider_product_id"] == "prod_UHWvb0SEUJR4Hk"
+    assert body["plans"][1]["provider_price_id"] == "price_1TTR20GRl5Hb5Deyw0zaAes6"
     assert body["plans"][1]["price_options"] == [
         {
             "interval": "month",
-            "provider_price_id": "price_1TIxtDGRl5Hb5Dey7Bpnk3V6",
+            "provider_price_id": "price_1TTR20GRl5Hb5Deyw0zaAes6",
             "price_minor": 399,
             "display_price": "£3.99",
         },
         {
             "interval": "year",
-            "provider_price_id": "price_1TIxtWGRl5Hb5DeyAghzRf6X",
-            "price_minor": 3200,
-            "display_price": "£32",
+            "provider_price_id": "price_1TTR20GRl5Hb5DeyR2UCLkOX",
+            "price_minor": 3500,
+            "display_price": "£35",
         },
     ]
     assert body["plans"][1]["badge"] == "POPULAR"
@@ -64,6 +67,8 @@ def test_plan_offers_use_live_stripe_catalog_when_live_keys_are_configured(tmp_p
     monkeypatch.setenv("PHORA_ENVIRONMENT", "stage")
     monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_live_123")
     monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_live_123")
+    monkeypatch.setenv("PHORA_STRIPE_PREMIUM_GBP_MONTH_PRICE_ID", "price_live_gbp_month_399")
+    monkeypatch.setenv("PHORA_STRIPE_PREMIUM_GBP_YEAR_PRICE_ID", "price_live_gbp_year_3500")
 
     app = create_app()
     client = TestClient(app)
@@ -73,8 +78,9 @@ def test_plan_offers_use_live_stripe_catalog_when_live_keys_are_configured(tmp_p
     assert response.status_code == 200
     body = response.json()
     assert body["primary_provider"] == "stripe"
-    assert body["plans"][1]["provider_product_id"] == "prod_UHVB0yzeM3MbZU"
-    assert body["plans"][1]["provider_price_id"] == "price_1TIwFQGRl5Hb5DeygcA8938Y"
+    assert body["plans"][1]["provider_product_id"] == "prod_UHVBHeX529Udc0"
+    assert body["plans"][1]["provider_price_id"] == "price_live_gbp_month_399"
+    assert body["plans"][1]["price_options"][1]["provider_price_id"] == "price_live_gbp_year_3500"
 
 
 def test_plan_offers_uses_flutterwave_for_nigeria(tmp_path, monkeypatch):
@@ -138,7 +144,7 @@ def test_plan_offers_uses_usd_for_united_states(tmp_path, monkeypatch):
     assert body["currency"] == "USD"
     assert len(body["plans"]) == 2
     assert body["plans"][1]["display_price"] == "$4.99"
-    assert body["plans"][1]["provider_product_id"] == "prod_UHVB0yzeM3MbZU"
+    assert body["plans"][1]["provider_product_id"] == "prod_UHVBHeX529Udc0"
     assert body["plans"][1]["provider_price_id"] == "price_1TIwFOGRl5Hb5DeyGaYnuDP0"
     assert body["plans"][1]["price_options"] == [
         {
@@ -154,6 +160,61 @@ def test_plan_offers_uses_usd_for_united_states(tmp_path, monkeypatch):
             "display_price": "$40",
         },
     ]
+
+
+def test_plan_offers_uses_czk_for_czech_republic_in_test_catalog(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-cz.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get("/api/v1/billing/plan-offers", params={"country": "Czech Republic"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["primary_provider"] == "stripe"
+    assert body["provider_configured"] is True
+    assert body["currency"] == "CZK"
+    assert body["plans"][1]["provider_product_id"] == "prod_UHWvb0SEUJR4Hk"
+    assert body["plans"][1]["provider_price_id"] == "price_1TKz69GRl5Hb5DeyCXknTQ8p"
+    assert body["plans"][1]["price_options"] == [
+        {
+            "interval": "month",
+            "provider_price_id": "price_1TKz69GRl5Hb5DeyCXknTQ8p",
+            "price_minor": 11477,
+            "display_price": "Kc114.77",
+        },
+        {
+            "interval": "year",
+            "provider_price_id": "price_1TKz69GRl5Hb5DeyFWY3R8qU",
+            "price_minor": 92000,
+            "display_price": "Kc920",
+        },
+    ]
+
+
+def test_test_stripe_catalog_covers_all_stripe_country_currencies():
+    stripe_currencies = {currency for _, currency in billing_catalog._STRIPE_COUNTRIES.values()}
+    test_currencies = {currency for currency, _, _ in billing_catalog._STRIPE_PRICE_IDS_TEST}
+
+    assert test_currencies == stripe_currencies
+    for currency in stripe_currencies:
+        assert (currency, "premium_plus", "month") in billing_catalog._STRIPE_PRICE_IDS_TEST
+        assert (currency, "premium_plus", "year") in billing_catalog._STRIPE_PRICE_IDS_TEST
+
+
+def test_live_stripe_catalog_covers_all_stripe_country_currencies():
+    stripe_currencies = {currency for _, currency in billing_catalog._STRIPE_COUNTRIES.values()}
+    live_currencies = {currency for currency, _, _ in billing_catalog._STRIPE_PRICE_IDS_LIVE}
+
+    assert live_currencies == stripe_currencies
+    for currency in stripe_currencies:
+        assert (currency, "premium_plus", "month") in billing_catalog._STRIPE_PRICE_IDS_LIVE
+        assert (currency, "premium_plus", "year") in billing_catalog._STRIPE_PRICE_IDS_LIVE
 
 
 def test_plan_offers_falls_back_for_unsupported_country(tmp_path, monkeypatch):
@@ -217,18 +278,18 @@ def test_create_stripe_checkout_session_returns_checkout_url(tmp_path, monkeypat
 
     def fake_stripe_post(self, path: str, *, data: dict[str, str]) -> dict[str, str]:
         assert path == "/v1/checkout/sessions"
-        assert data["line_items[0][price]"] == "price_1TIxtDGRl5Hb5Dey7Bpnk3V6"
+        assert data["line_items[0][price]"] == "price_1TTR20GRl5Hb5Deyw0zaAes6"
         assert data["metadata[plan_id]"] == "premium_plus"
         assert data["subscription_data[metadata][interval]"] == "month"
         assert (
             data["success_url"]
             == "http://testserver/api/v1/billing/stripe/return/success"
-            "?target=phora%3A%2F%2Fbilling%2Fsuccess%3Fsession_id%3D%7BCHECKOUT_SESSION_ID%7D"
+            "?target=vyla%3A%2F%2Fbilling%2Fsuccess%3Fsession_id%3D%7BCHECKOUT_SESSION_ID%7D"
             "&session_id=%7BCHECKOUT_SESSION_ID%7D"
         )
         assert (
             data["cancel_url"]
-            == "http://testserver/api/v1/billing/stripe/return/cancel?target=phora%3A%2F%2Fbilling%2Fcancel"
+            == "http://testserver/api/v1/billing/stripe/return/cancel?target=vyla%3A%2F%2Fbilling%2Fcancel"
         )
         return {"id": "cs_test_123", "url": "https://checkout.stripe.com/c/pay/cs_test_123"}
 
@@ -241,8 +302,8 @@ def test_create_stripe_checkout_session_returns_checkout_url(tmp_path, monkeypat
             "country": "United Kingdom",
             "plan_id": "premium_plus",
             "interval": "month",
-            "success_url": "phora://billing/success?session_id={CHECKOUT_SESSION_ID}",
-            "cancel_url": "phora://billing/cancel",
+            "success_url": "vyla://billing/success?session_id={CHECKOUT_SESSION_ID}",
+            "cancel_url": "vyla://billing/cancel",
         },
     )
 
@@ -252,8 +313,222 @@ def test_create_stripe_checkout_session_returns_checkout_url(tmp_path, monkeypat
     assert body["checkout_session_id"] == "cs_test_123"
     assert body["checkout_url"] == "https://checkout.stripe.com/c/pay/cs_test_123"
     assert body["publishable_key"] == "pk_test_123"
-    assert body["provider_product_id"] == "prod_UHWvRGMUhkpAy5"
-    assert body["provider_price_id"] == "price_1TIxtDGRl5Hb5Dey7Bpnk3V6"
+    assert body["provider_product_id"] == "prod_UHWvb0SEUJR4Hk"
+    assert body["provider_price_id"] == "price_1TTR20GRl5Hb5Deyw0zaAes6"
+
+
+def test_create_stripe_payment_sheet_returns_native_payment_details(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-payment-sheet.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+    monkeypatch.setenv("PHORA_SMTP_ENABLED", "false")
+
+    sent_codes: dict[str, str] = {}
+
+    def capture(self, recipient: str, code: str) -> None:
+        sent_codes[recipient] = code
+
+    monkeypatch.setattr(EmailService, "send_signup_otp", capture)
+
+    app = create_app()
+    client = TestClient(app)
+
+    signup = client.post(
+        "/api/0.1.0/auth/signup",
+        json={
+            "email": "payment-sheet@example.com",
+            "password": "password123",
+            "first_name": "Payment",
+            "last_name": "Sheet",
+            "country": "United Kingdom",
+            "account_type": "individual",
+        },
+    )
+    assert signup.status_code == 200
+
+    verify = client.post(
+        "/api/0.1.0/auth/verify",
+        json={"email": "payment-sheet@example.com", "code": sent_codes["payment-sheet@example.com"]},
+    )
+    assert verify.status_code == 200
+    user_id = verify.json()["user"]["id"]
+    headers = {"Authorization": f"Bearer {verify.json()['access_token']}"}
+
+    calls: list[tuple[str, dict[str, object], str | None]] = []
+
+    def fake_stripe_post(
+        self,
+        path: str,
+        *,
+        data: dict[str, object],
+        stripe_version: str | None = None,
+    ) -> dict[str, object]:
+        calls.append((path, data, stripe_version))
+        if path == "/v1/customers":
+            assert data["email"] == "payment-sheet@example.com"
+            assert data["metadata[user_id]"] == user_id
+            return {"id": "cus_payment_sheet"}
+        if path == "/v1/subscriptions":
+            assert data["customer"] == "cus_payment_sheet"
+            assert data["items[0][price]"] == "price_1TTR20GRl5Hb5Deyw0zaAes6"
+            assert data["payment_behavior"] == "default_incomplete"
+            assert data["payment_settings[save_default_payment_method]"] == "on_subscription"
+            assert data["metadata[plan_id]"] == "premium_plus"
+            assert data["metadata[interval]"] == "month"
+            return {
+                "id": "sub_payment_sheet",
+                "status": "incomplete",
+                "current_period_end": int(datetime(2026, 6, 1, tzinfo=UTC).timestamp()),
+                "latest_invoice": {
+                    "payment_intent": {
+                        "id": "pi_payment_sheet",
+                        "client_secret": "pi_payment_sheet_secret_123",
+                    },
+                },
+            }
+        if path == "/v1/ephemeral_keys":
+            assert stripe_version == "2026-02-25.clover"
+            assert data["customer"] == "cus_payment_sheet"
+            return {"id": "ephkey_payment_sheet", "secret": "ek_test_secret_123"}
+        raise AssertionError(f"Unexpected Stripe path: {path}")
+
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_post", fake_stripe_post)
+
+    response = client.post(
+        "/api/v1/billing/stripe/payment-sheet",
+        headers=headers,
+        json={
+            "country": "United Kingdom",
+            "plan_id": "premium_plus",
+            "interval": "month",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "stripe"
+    assert body["payment_intent_client_secret"] == "pi_payment_sheet_secret_123"
+    assert body["customer_id"] == "cus_payment_sheet"
+    assert body["customer_ephemeral_key_secret"] == "ek_test_secret_123"
+    assert body["publishable_key"] == "pk_test_123"
+    assert body["provider_subscription_id"] == "sub_payment_sheet"
+    assert body["provider_product_id"] == "prod_UHWvb0SEUJR4Hk"
+    assert body["provider_price_id"] == "price_1TTR20GRl5Hb5Deyw0zaAes6"
+    assert body["amount_minor"] == 399
+    assert body["display_price"] == "£3.99"
+    assert [call[0] for call in calls] == [
+        "/v1/customers",
+        "/v1/subscriptions",
+        "/v1/ephemeral_keys",
+    ]
+
+    with get_session_factory()() as db:
+        subscription = db.query(Subscription).filter(Subscription.user_id == user_id).one()
+        assert subscription.provider == "stripe"
+        assert subscription.provider_customer_id == "cus_payment_sheet"
+        assert subscription.provider_subscription_id == "sub_payment_sheet"
+        assert subscription.provider_price_id == "price_1TTR20GRl5Hb5Deyw0zaAes6"
+        assert subscription.tier == "premium_plus"
+        assert subscription.status == "incomplete"
+        assert subscription.amount == 3.99
+        assert subscription.billing_interval == "month"
+
+
+def test_sync_stripe_payment_sheet_subscription_marks_subscription_active(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-payment-sheet-sync.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+
+    app = create_app()
+    client = TestClient(app)
+    user_id = "01PAYMENTSHEETSYNCUSER000000"
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id=user_id,
+                email="payment-sheet-sync@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        db.add(
+            Subscription(
+                user_id=user_id,
+                provider="stripe",
+                provider_customer_id="cus_payment_sheet_sync",
+                provider_subscription_id="sub_payment_sheet_sync",
+                provider_price_id="price_1TTR20GRl5Hb5Deyw0zaAes6",
+                tier="premium_plus",
+                status="incomplete",
+                billing_interval="month",
+            )
+        )
+        db.commit()
+
+    token = create_token(user_id, "access", 30)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    def fake_stripe_get(self, path: str, *, params: dict[str, object] | None = None) -> dict[str, object]:
+        assert path == "/v1/subscriptions/sub_payment_sheet_sync"
+        assert params == {"expand[]": "latest_invoice.payment_intent"}
+        return {
+            "id": "sub_payment_sheet_sync",
+            "customer": "cus_payment_sheet_sync",
+            "status": "active",
+            "currency": "gbp",
+            "current_period_end": int(datetime(2026, 6, 1, tzinfo=UTC).timestamp()),
+            "metadata": {
+                "user_id": user_id,
+                "plan_id": "premium_plus",
+                "interval": "month",
+            },
+            "items": {
+                "data": [
+                    {
+                        "price": {
+                            "id": "price_1TTR20GRl5Hb5Deyw0zaAes6",
+                            "currency": "gbp",
+                            "unit_amount": 399,
+                            "recurring": {"interval": "month"},
+                        }
+                    }
+                ]
+            },
+            "latest_invoice": {
+                "payment_intent": {
+                    "id": "pi_payment_sheet_sync",
+                    "status": "succeeded",
+                }
+            },
+        }
+
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_get", fake_stripe_get)
+
+    response = client.post(
+        "/api/v1/billing/stripe/payment-sheet/sync",
+        headers=headers,
+        json={"provider_subscription_id": "sub_payment_sheet_sync"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "stripe"
+    assert body["tier"] == "premium_plus"
+    assert body["status"] == "active"
+    assert body["is_active"] is True
+    assert body["redirect_to_home"] is True
+    assert body["provider_price_id"] == "price_1TTR20GRl5Hb5Deyw0zaAes6"
+
+    with get_session_factory()() as db:
+        subscription = db.query(Subscription).filter(Subscription.user_id == user_id).one()
+        assert subscription.status == "active"
+        assert subscription.currency == "GBP"
+        assert subscription.amount == 3.99
+        assert subscription.current_period_end.replace(tzinfo=UTC) == datetime(2026, 6, 1, tzinfo=UTC)
 
 
 def test_stripe_checkout_return_success_redirects_back_to_app(tmp_path, monkeypatch):
@@ -267,14 +542,14 @@ def test_stripe_checkout_return_success_redirects_back_to_app(tmp_path, monkeypa
     response = client.get(
         "/api/v1/billing/stripe/return/success",
         params={
-            "target": "phora://billing/success?foo=bar",
+            "target": "vyla://billing/success?foo=bar",
             "session_id": "cs_test_123",
         },
         follow_redirects=False,
     )
 
     assert response.status_code == 307
-    assert response.headers["location"] == "phora://billing/success?foo=bar&session_id=cs_test_123"
+    assert response.headers["location"] == "vyla://billing/success?foo=bar&session_id=cs_test_123"
 
 
 def test_stripe_checkout_return_success_replaces_placeholder_session_id(tmp_path, monkeypatch):
@@ -288,14 +563,14 @@ def test_stripe_checkout_return_success_replaces_placeholder_session_id(tmp_path
     response = client.get(
         "/api/v1/billing/stripe/return/success",
         params={
-            "target": "phora://billing/success?session_id={CHECKOUT_SESSION_ID}",
+            "target": "vyla://billing/success?session_id={CHECKOUT_SESSION_ID}",
             "session_id": "cs_test_123",
         },
         follow_redirects=False,
     )
 
     assert response.status_code == 307
-    assert response.headers["location"] == "phora://billing/success?session_id=cs_test_123"
+    assert response.headers["location"] == "vyla://billing/success?session_id=cs_test_123"
 
 
 def test_stripe_checkout_return_cancel_redirects_back_to_app(tmp_path, monkeypatch):
@@ -308,12 +583,12 @@ def test_stripe_checkout_return_cancel_redirects_back_to_app(tmp_path, monkeypat
 
     response = client.get(
         "/api/v1/billing/stripe/return/cancel",
-        params={"target": "phora://billing/cancel"},
+        params={"target": "vyla://billing/cancel"},
         follow_redirects=False,
     )
 
     assert response.status_code == 307
-    assert response.headers["location"] == "phora://billing/cancel"
+    assert response.headers["location"] == "vyla://billing/cancel"
 
 
 def test_create_flutterwave_checkout_session_returns_checkout_url(tmp_path, monkeypatch):
@@ -372,6 +647,10 @@ def test_create_flutterwave_checkout_session_returns_checkout_url(tmp_path, monk
         assert path == "/v3/payments"
         assert json["currency"] == "NGN"
         assert json["amount"] == "3000.0"
+        assert (
+            json["redirect_url"]
+            == "http://testserver/api/v1/billing/flutterwave/return?target=vyla%3A%2F%2Fbilling%2Fflutterwave-callback"
+        )
         assert json["payment_plan"] == 3807
         assert json["payment_options"] == "card"
         assert json["customer"]["email"] == "flutterwave@example.com"
@@ -397,7 +676,7 @@ def test_create_flutterwave_checkout_session_returns_checkout_url(tmp_path, monk
             "country": "Nigeria",
             "plan_id": "premium_plus",
             "interval": "month",
-            "redirect_url": "phora://billing/flutterwave-callback",
+            "redirect_url": "vyla://billing/flutterwave-callback",
         },
     )
 
@@ -420,6 +699,107 @@ def test_create_flutterwave_checkout_session_returns_checkout_url(tmp_path, monk
         assert subscription.status == "pending_checkout"
         assert subscription.provider_subscription_id == body["tx_ref"]
         assert subscription.provider_price_id == "3807"
+
+
+def test_flutterwave_checkout_return_redirects_back_to_app(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-flutterwave-return.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/v1/billing/flutterwave/return",
+        params={"target": "vyla://billing/flutterwave-callback?status=successful&tx_ref=abc123"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "vyla://billing/flutterwave-callback?status=successful&tx_ref=abc123"
+
+
+def test_flutterwave_checkout_return_confirms_successful_transaction(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-flutterwave-return-confirm.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_FLUTTERWAVE_SECRET_KEY", "FLWSECK_TEST-123")
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        from phora.models import User
+
+        user = User(
+            id="01TESTUSERFLWRETURN0000000",
+            email="flutterwave-return@example.com",
+            password_hash="!phora-unusable-password$test",
+            email_verified=True,
+        )
+        db.add(user)
+        db.add(
+            Subscription(
+                user_id=user.id,
+                provider="flutterwave",
+                provider_subscription_id="phora-return-ref",
+                provider_customer_id="flutterwave-return@example.com",
+                provider_price_id="991",
+                tier="premium_plus",
+                status="pending_checkout",
+                billing_interval="month",
+            )
+        )
+        db.commit()
+
+    def fake_verify_transaction(self, transaction_id: str | int) -> dict[str, object]:
+        assert str(transaction_id) == "77788"
+        return {
+            "status": "success",
+            "data": {
+                "id": 77788,
+                "tx_ref": "phora-return-ref",
+                "flw_ref": "flw_ref_return",
+                "amount": 12.0,
+                "charged_amount": 12.0,
+                "currency": "XOF",
+                "status": "successful",
+                "plan": 991,
+                "customer": {
+                    "email": "ravesb_demo_flutterwave-return@example.com",
+                },
+                "meta": {
+                    "user_id": "01TESTUSERFLWRETURN0000000",
+                    "plan_id": "premium_plus",
+                    "interval": "month",
+                    "country": "Ivory Coast",
+                },
+            },
+        }
+
+    monkeypatch.setattr(
+        "phora.services.flutterwave_billing.FlutterwaveBillingService._verify_transaction",
+        fake_verify_transaction,
+    )
+
+    response = client.get(
+        "/api/v1/billing/flutterwave/return",
+        params={
+            "target": "vyla://billing/flutterwave-callback",
+            "status": "successful",
+            "tx_ref": "phora-return-ref",
+            "transaction_id": "77788",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "vyla://billing/flutterwave-callback"
+
+    with get_session_factory()() as db:
+        subscription = db.query(Subscription).filter(Subscription.provider_subscription_id == "phora-return-ref").one()
+        assert subscription.status == "active"
+        assert subscription.current_period_end is not None
 
 
 def test_create_flutterwave_checkout_session_requires_flutterwave_country(tmp_path, monkeypatch):
@@ -465,12 +845,84 @@ def test_create_flutterwave_checkout_session_requires_flutterwave_country(tmp_pa
             "country": "United Kingdom",
             "plan_id": "premium_plus",
             "interval": "month",
-            "redirect_url": "phora://billing/flutterwave-callback",
+            "redirect_url": "vyla://billing/flutterwave-callback",
         },
     )
 
     assert response.status_code == 400
-    assert "not available" in response.json()["detail"].lower()
+    detail = response.json()["detail"].lower()
+    assert (
+        "not configured" in detail
+        or "not available" in detail
+        or "no stripe price is configured" in detail
+    )
+
+
+def test_create_flutterwave_checkout_session_hides_expired_key_provider_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-flutterwave-expired-key.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_FLUTTERWAVE_SECRET_KEY", "FLWSECK_TEST-123")
+    monkeypatch.setenv("PHORA_FLUTTERWAVE_PUBLIC_KEY", "FLWPUBK_TEST-123")
+    monkeypatch.setenv("PHORA_SMTP_ENABLED", "false")
+
+    sent_codes: dict[str, str] = {}
+
+    def capture(self, recipient: str, code: str) -> None:
+        sent_codes[recipient] = code
+
+    monkeypatch.setattr(EmailService, "send_signup_otp", capture)
+
+    app = create_app()
+    client = TestClient(app)
+
+    signup = client.post(
+        "/api/0.1.0/auth/signup",
+        json={
+            "email": "flutterwave-expired@example.com",
+            "password": "password123",
+            "first_name": "Flutterwave",
+            "last_name": "Expired",
+            "country": "Nigeria",
+            "account_type": "individual",
+        },
+    )
+    assert signup.status_code == 200
+
+    verify = client.post(
+        "/api/0.1.0/auth/verify",
+        json={"email": "flutterwave-expired@example.com", "code": sent_codes["flutterwave-expired@example.com"]},
+    )
+    assert verify.status_code == 200
+
+    selection = client.post(
+        "/api/v1/billing/subscription-selection",
+        headers={"Authorization": f"Bearer {verify.json()['access_token']}"},
+        json={"tier": "premium_plus", "interval": "month", "country": "Nigeria"},
+    )
+    assert selection.status_code == 200
+
+    def fail_create_checkout_session(self, *, user_id: str, country: str, plan_id: str, interval: str, redirect_url: str | None = None) -> dict[str, object]:
+        raise FlutterwaveBillingError("Flutterwave checkout failed: Key has expired")
+
+    monkeypatch.setattr(
+        "phora.services.flutterwave_billing.FlutterwaveBillingService.create_checkout_session",
+        fail_create_checkout_session,
+    )
+
+    response = client.post(
+        "/api/v1/billing/flutterwave/checkout-sessions",
+        headers={"Authorization": f"Bearer {verify.json()['access_token']}"},
+        json={
+            "country": "Nigeria",
+            "plan_id": "premium_plus",
+            "interval": "month",
+            "redirect_url": "vyla://billing/flutterwave-callback",
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Payment is temporarily unavailable in this region."}
 
 
 def test_flutterwave_ensure_payment_plan_reuses_existing_active_plan(tmp_path, monkeypatch):
@@ -489,7 +941,7 @@ def test_flutterwave_ensure_payment_plan_reuses_existing_active_plan(tmp_path, m
             "data": [
                 {
                     "id": 3807,
-                    "name": "Phora Premium+ Nigeria NGN month",
+                    "name": "Vyla Premium Nigeria NGN month",
                     "currency": "NGN",
                     "interval": "monthly",
                     "amount": 3000,
@@ -543,7 +995,7 @@ def test_flutterwave_ensure_payment_plan_creates_new_plan_when_missing(tmp_path,
     assert plan_id == 4812
     assert calls["pages"] == [1, 2]
     assert calls["created"] == {
-        "name": "Phora Premium+ Ghana GHS year",
+        "name": "Vyla Premium Ghana GHS year",
         "interval": "yearly",
         "currency": "GHS",
         "amount": 270.0,
@@ -674,7 +1126,7 @@ def test_stripe_webhook_persists_subscription_and_invoice(tmp_path, monkeypatch)
         "redirect_to_home": True,
         "show_subscription_screen": False,
         "provider_configured": False,
-        "checkout_endpoint": "/api/v1/billing/stripe/checkout-sessions",
+        "checkout_endpoint": "/api/v1/billing/stripe/payment-sheet",
         "checkout_public_key": None,
         "currency": "GBP",
         "amount": 3.99,
@@ -682,6 +1134,112 @@ def test_stripe_webhook_persists_subscription_and_invoice(tmp_path, monkeypatch)
         "provider_price_id": "price_1TIwFQGRl5Hb5DeygcA8938Y",
         "current_period_end": "2026-05-05T00:00:00",
     }
+
+
+def test_stripe_invoice_paid_creates_new_subscription_from_modern_invoice_payload(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-webhook-modern-invoice.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_WEBHOOK_SECRET", "whsec_test_123")
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        user = User(
+            id="01TESTUSERMODERNINVOICE",
+            email="modern-invoice@example.com",
+            password_hash="!phora-unusable-password$test",
+            email_verified=True,
+        )
+        old_subscription = Subscription(
+            user_id=user.id,
+            tier="premium_plus",
+            status="incomplete",
+            provider="stripe",
+            provider_subscription_id="sub_old",
+            provider_customer_id="cus_old",
+            provider_price_id="price_old",
+        )
+        db.add_all([user, old_subscription])
+        db.commit()
+
+    invoice_event = {
+        "id": "evt_modern_invoice_paid",
+        "type": "invoice.paid",
+        "data": {
+            "object": {
+                "id": "in_modern",
+                "customer": "cus_new",
+                "payment_intent": "pi_new",
+                "total": 1104,
+                "currency": "eur",
+                "status": "paid",
+                "parent": {
+                    "subscription_details": {
+                        "subscription": "sub_new",
+                        "metadata": {
+                            "user_id": "01TESTUSERMODERNINVOICE",
+                            "plan_id": "premium_plus",
+                            "interval": "month",
+                        },
+                    }
+                },
+                "subscription_details": {
+                    "metadata": {
+                        "user_id": "01TESTUSERMODERNINVOICE",
+                        "plan_id": "premium_plus",
+                        "interval": "month",
+                    }
+                },
+                "lines": {
+                    "data": [
+                        {
+                            "subscription": "sub_new",
+                            "period": {
+                                "end": int(datetime(2026, 5, 15, tzinfo=UTC).timestamp()),
+                            },
+                            "price": {
+                                "id": "price_1TIxtDGRl5Hb5DeygKFNxDKV",
+                                "currency": "eur",
+                                "unit_amount": 1104,
+                                "recurring": {"interval": "month"},
+                            },
+                            "metadata": {
+                                "user_id": "01TESTUSERMODERNINVOICE",
+                                "plan_id": "premium_plus",
+                                "interval": "month",
+                            },
+                        }
+                    ]
+                },
+            }
+        },
+    }
+
+    response = _post_signed_webhook(client, "whsec_test_123", invoice_event)
+    assert response.status_code == 200
+
+    with get_session_factory()() as db:
+        old_subscription = db.query(Subscription).filter(Subscription.provider_subscription_id == "sub_old").one()
+        assert old_subscription.provider_customer_id == "cus_old"
+        assert old_subscription.status == "incomplete"
+
+        new_subscription = db.query(Subscription).filter(Subscription.provider_subscription_id == "sub_new").one()
+        assert new_subscription.user_id == "01TESTUSERMODERNINVOICE"
+        assert new_subscription.provider_customer_id == "cus_new"
+        assert new_subscription.provider_price_id == "price_1TIxtDGRl5Hb5DeygKFNxDKV"
+        assert new_subscription.tier == "premium_plus"
+        assert new_subscription.status == "active"
+        assert new_subscription.amount == 11.04
+        assert new_subscription.currency == "EUR"
+        assert new_subscription.billing_interval == "month"
+        assert new_subscription.current_period_end.replace(tzinfo=UTC) == datetime(2026, 5, 15, tzinfo=UTC)
+
+        invoice = db.query(Invoice).filter(Invoice.provider_invoice_id == "in_modern").one()
+        assert invoice.subscription_id == new_subscription.id
+        assert invoice.provider_customer_id == "cus_new"
+        assert invoice.status == "paid"
 
 
 def test_stripe_webhook_rejects_invalid_signature(tmp_path, monkeypatch):
@@ -703,6 +1261,26 @@ def test_stripe_webhook_rejects_invalid_signature(tmp_path, monkeypatch):
 
     assert response.status_code == 400
     assert "signature" in response.json()["detail"].lower()
+
+
+def test_stripe_webhook_accepts_any_configured_secret(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-webhook-multi-secret.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_WEBHOOK_SECRET", "whsec_old_123, whsec_live_456")
+
+    app = create_app()
+    client = TestClient(app)
+
+    payload = {
+        "id": "evt_multi_secret",
+        "type": "invoice.paid",
+        "data": {"object": {"id": "in_multi_secret", "currency": "eur", "status": "paid", "total": 459}},
+    }
+
+    response = _post_signed_webhook(client, "whsec_live_456", payload)
+
+    assert response.status_code == 200
 
 
 def test_stripe_invoice_payment_failed_keeps_subscription_on_paywall(tmp_path, monkeypatch):
@@ -1127,7 +1705,7 @@ def test_flutterwave_subscription_cancelled_webhook_marks_subscription_canceled(
                 billing_interval="month",
                 currency="NGN",
                 amount=3000.0,
-                current_period_end=datetime(2026, 5, 1, tzinfo=UTC),
+                current_period_end=datetime(2026, 6, 1, tzinfo=UTC),
             )
         )
         db.commit()
@@ -1194,6 +1772,176 @@ def test_flutterwave_webhook_rejects_invalid_signature(tmp_path, monkeypatch):
     assert response.status_code == 400
     assert "signature" in response.json()["detail"].lower()
 
+    with get_session_factory()() as db:
+        row = db.query(FlutterwaveWebhookErrorLog).one()
+        assert row.error_message == "Invalid Flutterwave webhook signature."
+        assert row.signature_present is True
+        assert row.legacy_hash_present is False
+        assert row.event_type == "charge.completed"
+        assert row.transaction_id == "1"
+
+
+def test_flutterwave_webhook_accepts_base64_signature(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-flutterwave-webhook-base64.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_FLUTTERWAVE_SECRET_KEY", "FLWSECK_TEST-123")
+    monkeypatch.setenv("PHORA_FLUTTERWAVE_WEBHOOK_SECRET_HASH", "flw-whsec-123")
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        from phora.models import User
+
+        user = User(
+            id="01TESTUSERFLWBASE640000000",
+            email="flutterwave-base64@example.com",
+            password_hash="!phora-unusable-password$test",
+            email_verified=True,
+        )
+        db.add(user)
+        db.add(
+            Subscription(
+                user_id=user.id,
+                provider="flutterwave",
+                provider_subscription_id="phora-base64-ref",
+                provider_customer_id="flutterwave-base64@example.com",
+                provider_price_id="991",
+                tier="premium_plus",
+                status="pending_checkout",
+                billing_interval="month",
+            )
+        )
+        db.commit()
+
+    def fake_verify_transaction(self, transaction_id: str | int) -> dict[str, object]:
+        assert str(transaction_id) == "77777"
+        return {
+            "status": "success",
+            "data": {
+                "id": 77777,
+                "tx_ref": "phora-base64-ref",
+                "flw_ref": "flw_ref_base64",
+                "amount": 20.0,
+                "charged_amount": 20.0,
+                "currency": "XOF",
+                "status": "successful",
+                "payment_plan": 991,
+                "customer": {
+                    "email": "flutterwave-base64@example.com",
+                },
+                "meta": {
+                    "user_id": "01TESTUSERFLWBASE640000000",
+                    "plan_id": "premium_plus",
+                    "interval": "month",
+                    "country": "Ivory Coast",
+                },
+            },
+        }
+
+    monkeypatch.setattr(
+        "phora.services.flutterwave_billing.FlutterwaveBillingService._verify_transaction",
+        fake_verify_transaction,
+    )
+
+    event = {
+        "event": "charge.completed",
+        "data": {
+            "id": 77777,
+            "tx_ref": "phora-base64-ref",
+        },
+    }
+    payload = json.dumps(event).encode("utf-8")
+    signature = base64.b64encode(
+        hmac.new(b"flw-whsec-123", payload, hashlib.sha256).digest()
+    ).decode("utf-8")
+
+    response = client.post(
+        "/api/v1/billing/flutterwave/webhook",
+        content=payload,
+        headers={"flutterwave-signature": signature},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_admin_can_list_flutterwave_webhook_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-flutterwave-webhook-errors-admin.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id="01TESTADMINFLWERRORS0000000",
+                email="admin@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+                is_admin=True,
+            )
+        )
+        db.add(
+            FlutterwaveWebhookErrorLog(
+                event_type="charge.completed",
+                transaction_id="12345",
+                tx_ref="tx-ref-123",
+                provider_customer_id="customer@example.com",
+                provider_plan_id="8801",
+                user_id="01TESTUSERFLW00000000000000",
+                error_message="Invalid Flutterwave webhook signature.",
+                signature_present=True,
+                legacy_hash_present=False,
+                payload_summary={"event": "charge.completed"},
+            )
+        )
+        db.commit()
+
+    response = client.get(
+        "/api/v1/admin/billing/flutterwave/webhook-errors",
+        headers={"Authorization": f"Bearer {create_token('01TESTADMINFLWERRORS0000000', 'access', 30)}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["limit"] == 50
+    assert len(body["items"]) == 1
+    assert body["items"][0]["transaction_id"] == "12345"
+    assert body["items"][0]["error_message"] == "Invalid Flutterwave webhook signature."
+
+
+def test_non_admin_cannot_list_flutterwave_webhook_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-flutterwave-webhook-errors-non-admin.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id="01TESTNONADMINFLWERRORS00000",
+                email="user@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+                is_admin=False,
+            )
+        )
+        db.commit()
+
+    response = client.get(
+        "/api/v1/admin/billing/flutterwave/webhook-errors",
+        headers={"Authorization": f"Bearer {create_token('01TESTNONADMINFLWERRORS00000', 'access', 30)}"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Admin access required"
+
 
 def test_subscription_selection_can_save_free_choice(tmp_path, monkeypatch):
     monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-selection-free.db'}")
@@ -1255,6 +2003,66 @@ def test_subscription_selection_can_save_free_choice(tmp_path, monkeypatch):
         "provider_price_id": None,
         "current_period_end": None,
     }
+
+
+def test_subscription_selection_does_not_overwrite_existing_active_paid_subscription_with_free(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-selection-free-guard.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_SMTP_ENABLED", "false")
+    monkeypatch.setenv("PHORA_FLUTTERWAVE_SECRET_KEY", "FLWSECK_TEST-123")
+    monkeypatch.setenv("PHORA_FLUTTERWAVE_PUBLIC_KEY", "FLWPUBK_TEST-123")
+
+    app = create_app()
+    client = TestClient(app)
+
+    user_id = "01TESTUSERFREEGUARD000000000"
+
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id=user_id,
+                email="free-guard@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        db.add(
+            Subscription(
+                user_id=user_id,
+                tier="premium_plus",
+                status="active",
+                provider="flutterwave",
+                currency="XOF",
+                amount=12.0,
+                billing_interval="month",
+                provider_price_id="plan_month_xof",
+                provider_customer_id="customer_123",
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/billing/subscription-selection",
+        headers={"Authorization": f"Bearer {create_token(user_id, 'access', 30)}"},
+        json={"tier": "free"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tier"] == "premium_plus"
+    assert response.json()["status"] == "active"
+    assert response.json()["provider"] == "flutterwave"
+    assert response.json()["show_subscription_screen"] is False
+    assert response.json()["redirect_to_home"] is True
+
+    with get_session_factory()() as db:
+        subscription = db.query(Subscription).filter(Subscription.user_id == user_id).one()
+        assert subscription.tier == "premium_plus"
+        assert subscription.status == "active"
+        assert subscription.provider == "flutterwave"
+        assert subscription.provider_customer_id == "customer_123"
 
 
 def test_subscription_selection_requires_country_and_interval_for_premium_plus(tmp_path, monkeypatch):
@@ -1366,7 +2174,7 @@ def test_subscription_selection_exposes_stripe_checkout_metadata(tmp_path, monke
     assert response.status_code == 200
     assert response.json()["provider"] == "stripe"
     assert response.json()["provider_configured"] is True
-    assert response.json()["checkout_endpoint"] == "/api/v1/billing/stripe/checkout-sessions"
+    assert response.json()["checkout_endpoint"] == "/api/v1/billing/stripe/payment-sheet"
     assert response.json()["checkout_public_key"] == "pk_test_123"
     assert response.json()["redirect_to_home"] is False
     assert response.json()["show_subscription_screen"] is True
@@ -1418,7 +2226,185 @@ def test_subscription_selection_accepts_live_stripe_price_for_germany(tmp_path, 
     assert response.status_code == 200
     assert response.json()["provider"] == "stripe"
     assert response.json()["provider_configured"] is True
-    assert response.json()["checkout_endpoint"] == "/api/v1/billing/stripe/checkout-sessions"
+    assert response.json()["checkout_endpoint"] == "/api/v1/billing/stripe/payment-sheet"
+
+
+def test_cancel_subscription_rejects_missing_paid_subscription(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-cancel-none.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+
+    from phora.db.session import get_session_factory
+    from phora.models import User
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id="01TESTUSERCANCELNONE0000000",
+                email="cancel-none@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/billing/subscription/cancel",
+        headers={"Authorization": f"Bearer {create_token('01TESTUSERCANCELNONE0000000', 'access', 30)}"},
+        json={"immediate": True},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "No paid subscription to cancel."
+
+
+def test_cancel_stripe_subscription_calls_provider_and_updates_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-cancel-stripe.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+
+    from phora.db.session import get_session_factory
+    from phora.models import User
+
+    updated_calls: list[tuple[str, dict[str, str]]] = []
+
+    def fake_stripe_post(self, path: str, *, data: dict[str, str]) -> dict[str, object]:
+        updated_calls.append((path, data))
+        return {
+            "id": "sub_123",
+            "status": "active",
+            "cancel_at_period_end": True,
+            "current_period_end": int(datetime(2026, 6, 1, tzinfo=UTC).timestamp()),
+        }
+
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_post", fake_stripe_post)
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        user = User(
+            id="01TESTUSERCANCELSTRIPE0000",
+            email="cancel-stripe@example.com",
+            password_hash="!phora-unusable-password$test",
+            email_verified=True,
+        )
+        db.add(user)
+        db.add(
+            Subscription(
+                user_id=user.id,
+                provider="stripe",
+                provider_subscription_id="sub_123",
+                provider_customer_id="cus_123",
+                provider_price_id="price_123",
+                tier="premium_plus",
+                status="active",
+                billing_interval="month",
+                currency="EUR",
+                amount=4.59,
+                current_period_end=datetime(2026, 6, 1, tzinfo=UTC),
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/billing/subscription/cancel",
+        headers={"Authorization": f"Bearer {create_token('01TESTUSERCANCELSTRIPE0000', 'access', 30)}"},
+        json={"immediate": False},
+    )
+
+    assert response.status_code == 200
+    assert updated_calls == [
+        ("/v1/subscriptions/sub_123", {"cancel_at_period_end": "true"})
+    ]
+    assert response.json()["status"] == "active"
+    assert response.json()["is_active"] is True
+    assert response.json()["redirect_to_home"] is True
+    assert response.json()["show_subscription_screen"] is False
+    assert response.json()["current_period_end"] in {
+        "2026-06-01T00:00:00+00:00",
+        "2026-06-01T00:00:00",
+    }
+
+
+def test_cancel_flutterwave_subscription_calls_provider_and_updates_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-cancel-flutterwave.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_FLUTTERWAVE_SECRET_KEY", "FLWSECK_TEST-123")
+    monkeypatch.setenv("PHORA_FLUTTERWAVE_PUBLIC_KEY", "FLWPUBK_TEST-123")
+
+    from phora.db.session import get_session_factory
+    from phora.models import User
+
+    get_calls: list[tuple[str, dict[str, object] | None]] = []
+    put_calls: list[str] = []
+
+    def fake_flutterwave_get(self, path: str, *, params: dict[str, object] | None = None) -> dict[str, object]:
+        get_calls.append((path, params))
+        return {"status": "success", "data": [{"id": 991}]}
+
+    def fake_flutterwave_put(self, path: str, *, json: dict[str, object] | None = None) -> dict[str, object]:
+        put_calls.append(path)
+        return {"status": "success", "message": "Subscription cancelled"}
+
+    monkeypatch.setattr("phora.services.flutterwave_billing.FlutterwaveBillingService._flutterwave_get", fake_flutterwave_get)
+    monkeypatch.setattr("phora.services.flutterwave_billing.FlutterwaveBillingService._flutterwave_put", fake_flutterwave_put)
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        user = User(
+            id="01TESTUSERCANCELFLW0000000",
+            email="cancel-flw@example.com",
+            password_hash="!phora-unusable-password$test",
+            email_verified=True,
+        )
+        db.add(user)
+        db.add(
+            Subscription(
+                user_id=user.id,
+                provider="flutterwave",
+                provider_subscription_id="phora-ref-123",
+                provider_customer_id="cancel-flw@example.com",
+                provider_price_id="8801",
+                tier="premium_plus",
+                status="active",
+                billing_interval="month",
+                currency="NGN",
+                amount=3000.0,
+                current_period_end=datetime(2026, 6, 1, tzinfo=UTC),
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/billing/subscription/cancel",
+        headers={"Authorization": f"Bearer {create_token('01TESTUSERCANCELFLW0000000', 'access', 30)}"},
+        json={"immediate": False},
+    )
+
+    assert response.status_code == 200
+    assert get_calls == [
+        (
+            "/v3/subscriptions",
+            {"email": "cancel-flw@example.com", "plan": "8801", "status": "active", "page": 1},
+        )
+    ]
+    assert put_calls == ["/v3/subscriptions/991/cancel"]
+    assert response.json()["status"] == "canceled"
+    assert response.json()["is_active"] is True
+    assert response.json()["show_subscription_screen"] is False
+    assert response.json()["current_period_end"] in {
+        "2026-06-01T00:00:00+00:00",
+        "2026-06-01T00:00:00",
+    }
 
 
 def _post_signed_webhook(client: TestClient, secret: str, event: dict) -> object:
