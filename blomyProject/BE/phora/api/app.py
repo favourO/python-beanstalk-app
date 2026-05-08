@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from phora.api.routes import ai, auth, billing, cycle, growth, health, home, log, notifications, onboarding, predictions, sensor, user, watch
-from phora.api.routes import admin
+from phora.api.routes import admin, public
 from phora.core.config import get_settings
 from phora.core.logging import configure_logging
 from phora.db.base import Base
@@ -53,5 +53,6 @@ def create_app() -> FastAPI:
     app.include_router(user.router, prefix=settings.api_prefix)
     app.include_router(ai.router, prefix=settings.api_prefix)
     app.include_router(admin.router, prefix=settings.api_prefix)
+    app.include_router(public.router, prefix=settings.api_prefix)
     app.include_router(auth.router, prefix=settings.api_prefix_legacy)
     return app

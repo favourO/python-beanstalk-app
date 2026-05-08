@@ -124,3 +124,48 @@ export type AuditEvent = {
   id: string; actor_user_id: string | null; action: string; payload: Record<string, unknown>; created_at: string;
 };
 export type AuditEventListOut = { items: AuditEvent[]; total: number; page: number; page_size: number };
+export type PredictionItem = {
+  id: string; user_id: string; user_email: string | null; current_phase: string;
+  confidence: number; warning_flags: unknown[]; models_used: unknown[];
+  model_version: string | null; source: string; generated_at: string;
+};
+export type PredictionListOut = { items: PredictionItem[]; total: number; page: number; page_size: number };
+
+export type WearableUserItem = {
+  user_id: string; user_email: string | null; wearable_type: string;
+  latest_sync: string | null; metrics_count: number;
+};
+export type WearableListOut = { items: WearableUserItem[]; total: number };
+
+export type NotificationItem = {
+  id: string; user_id: string; notification_type: string; category: string;
+  channel: string; title: string; status: string; priority: string;
+  delivery_attempts: number; scheduled_for: string; delivered_at: string | null;
+};
+export type NotificationListOut = { items: NotificationItem[]; total: number; page: number; page_size: number };
+
+export type ReferralItem = {
+  id: string; inviter_user_id: string; inviter_email: string | null;
+  invited_user_id: string | null; referral_code: string; source: string | null;
+  status: string; created_at: string; qualified_at: string | null;
+};
+export type ReferralListOut = { items: ReferralItem[]; total: number; page: number; page_size: number };
+
+export type GrantItem = {
+  id: string; user_id: string; user_email: string | null; tier: string;
+  source_type: string; days_granted: number; starts_at: string; ends_at: string;
+  active: boolean; created_at: string;
+};
+export type GrantListOut = { items: GrantItem[]; total: number; page: number; page_size: number };
+
+export type AiThreadItem = {
+  id: string; user_id: string; user_email: string | null; title: string | null;
+  message_count: number; created_at: string; updated_at: string;
+};
+export type AiThreadListOut = { items: AiThreadItem[]; total: number; page: number; page_size: number };
+
+export type ContactMessageItem = {
+  id: string; name: string; email: string; subject: string; message: string;
+  read: boolean; created_at: string;
+};
+export type ContactListOut = { items: ContactMessageItem[]; total: number; unread: number };
