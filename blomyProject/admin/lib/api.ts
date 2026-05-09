@@ -40,6 +40,13 @@ export const api = {
   get: <T>(path: string, token: string) => request<T>(path, token),
   post: <T>(path: string, token: string, body?: unknown) =>
     request<T>(path, token, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
+  put: <T>(path: string, token: string, body?: unknown) =>
+    request<T>(path, token, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+  del: (path: string, token: string) =>
+    fetch(`${BASE}${PREFIX}${path}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(res => { if (!res.ok && res.status !== 204) throw new ApiError(res.status, res.statusText); }),
 };
 
 export async function adminLogin(email: string, password: string): Promise<string> {
@@ -169,3 +176,27 @@ export type ContactMessageItem = {
   read: boolean; created_at: string;
 };
 export type ContactListOut = { items: ContactMessageItem[]; total: number; unread: number };
+
+export type BlogPostItem = {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  body: string;
+  cover_image_url: string | null;
+  category: string | null;
+  tags: string[];
+  author_name: string;
+  published: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type BlogPostListOut = { items: BlogPostItem[]; total: number };
+
+export type BlogPostCreate = {
+  title: string; slug: string; excerpt: string; body: string;
+  cover_image_url: string | null; category: string | null;
+  tags: string[]; author_name: string; published: boolean;
+};
+export type BlogPostUpdate = Partial<BlogPostCreate>;

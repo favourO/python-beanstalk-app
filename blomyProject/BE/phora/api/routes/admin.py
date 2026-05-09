@@ -24,8 +24,10 @@ from phora.models.growth import PremiumGrant, ReferralAttribution, ReferralProfi
 from phora.models.notification import NotificationDevice, NotificationHistory
 from phora.models.prediction import PredictionSnapshot
 from phora.models.timeseries import WearableMetric
+from phora.models.blog import BlogPost
 from phora.models.contact import ContactMessage
 from phora.models.user import OnboardingProgress, User, UserProfile
+from phora.schemas.blog import BlogPostCreate, BlogPostListOut, BlogPostOut, BlogPostUpdate
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -1144,3 +1146,123 @@ def list_audit_events(
         for r in rows
     ]
     return AuditEventListOut(items=items, total=total, page=page, page_size=page_size)
+
+
+# ---------------------------------------------------------------------------
+# Blog management
+# ---------------------------------------------------------------------------
+
+@router.get("/blog", response_model=BlogPostListOut)
+def admin_list_blog_posts(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> BlogPostListOut:
+    stmt = select(BlogPost)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = db.scalars(
+        stmt.order_by(BlogPost.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return BlogPostListOut(items=[BlogPostOut.from_model(r) for r in rows], total=total)
+
+
+@router.post("/blog", response_model=BlogPostOut, status_code=status.HTTP_201_CREATED)
+def admin_create_blog_post(
+    payload: BlogPostCreate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> BlogPostOut:
+    if db.scalar(select(BlogPost).where(BlogPost.slug == payload.slug)):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Slug already exists")
+    now = datetime.now(UTC)
+    post = BlogPost(
+        id=str(uuid.uuid4()),
+        slug=payload.slug,
+        title=payload.title,
+        excerpt=payload.excerpt,
+        body=payload.body,
+        cover_image_url=payload.cover_image_url,
+        category=payload.category,
+        tags=",".join(payload.tags) if payload.tags else None,
+        author_name=payload.author_name,
+        published=payload.published,
+        published_at=now if payload.published else None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(post)
+    _audit(db, admin.id, "blog.post.create", {"slug": payload.slug, "title": payload.title})
+    db.commit()
+    db.refresh(post)
+    return BlogPostOut.from_model(post)
+
+
+@router.get("/blog/{post_id}", response_model=BlogPostOut)
+def admin_get_blog_post(
+    post_id: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> BlogPostOut:
+    post = db.get(BlogPost, post_id)
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    return BlogPostOut.from_model(post)
+
+
+@router.put("/blog/{post_id}", response_model=BlogPostOut)
+def admin_update_blog_post(
+    post_id: str,
+    payload: BlogPostUpdate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> BlogPostOut:
+    post = db.get(BlogPost, post_id)
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+
+    if payload.title is not None:
+        post.title = payload.title
+    if payload.slug is not None:
+        existing = db.scalar(select(BlogPost).where(BlogPost.slug == payload.slug, BlogPost.id != post_id))
+        if existing:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Slug already exists")
+        post.slug = payload.slug
+    if payload.excerpt is not None:
+        post.excerpt = payload.excerpt
+    if payload.body is not None:
+        post.body = payload.body
+    if payload.cover_image_url is not None:
+        post.cover_image_url = payload.cover_image_url
+    if payload.category is not None:
+        post.category = payload.category
+    if payload.tags is not None:
+        post.tags = ",".join(payload.tags) if payload.tags else None
+    if payload.author_name is not None:
+        post.author_name = payload.author_name
+    if payload.published is not None:
+        if payload.published and not post.published:
+            post.published_at = datetime.now(UTC)
+        post.published = payload.published
+
+    post.updated_at = datetime.now(UTC)
+    _audit(db, admin.id, "blog.post.update", {"id": post_id, "slug": post.slug})
+    db.commit()
+    db.refresh(post)
+    return BlogPostOut.from_model(post)
+
+
+@router.delete("/blog/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_blog_post(
+    post_id: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> None:
+    post = db.get(BlogPost, post_id)
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    _audit(db, admin.id, "blog.post.delete", {"id": post_id, "slug": post.slug})
+    db.delete(post)
+    db.commit()

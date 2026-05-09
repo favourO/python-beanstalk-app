@@ -12,6 +12,7 @@ const mainNav = [
   { label: "Subscriptions", href: "/subscriptions",   icon: <SubIcon /> },
   { label: "Orders",        href: "/billing",         icon: <OrdersIcon /> },
   { label: "Notifications", href: "/notifications",   icon: <BellIcon /> },
+  { label: "Blog",          href: "/blog",            icon: <BlogIcon /> },
   { label: "Content",       href: "/content",         icon: <ContentIcon /> },
   { label: "AI Threads",    href: "/ai-threads",      icon: <AIIcon /> },
   { label: "Referrals",     href: "/referrals",       icon: <ReferralIcon /> },
@@ -129,6 +130,9 @@ function SubIcon() {
 }
 function OrdersIcon() {
   return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2 2h2l2 7h6l2-5H6"/><circle cx="7" cy="13" r="1"/><circle cx="12" cy="13" r="1"/></svg>;
+}
+function BlogIcon() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2 2h12v12H2z" rx="1.5"/><path d="M5 5h6M5 8h6M5 11h4"/></svg>;
 }
 function BellIcon() {
   return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 1a5 5 0 015 5v3l1 2H2l1-2V6a5 5 0 015-5z"/><path d="M6.5 13a1.5 1.5 0 003 0"/></svg>;
