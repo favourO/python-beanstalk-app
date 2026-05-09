@@ -47,7 +47,7 @@ export default function PrivacySection() {
               {privacyCards.map((card, i) => (
                 <FadeIn key={card.title} delay={i * 0.08}>
                   <div className="bg-white/5 border border-white/10 rounded-[16px] p-5 hover:bg-white/8 transition-colors">
-                    <div className="text-2xl mb-3">{card.icon}</div>
+                    <div className="text-2xl mb-3" aria-hidden="true">{card.icon}</div>
                     <h3 className="text-[15px] font-semibold text-white mb-2">{card.title}</h3>
                     <p className="text-sm font-light text-white/50 leading-relaxed">{card.body}</p>
                   </div>

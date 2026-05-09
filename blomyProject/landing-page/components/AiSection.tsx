@@ -46,8 +46,9 @@ export default function AiSection() {
                 Vyla AI helps explain patterns in your logs using general health information and the cycle data you choose to record.
               </p>
               <a
-                href="#"
-                className="inline-flex items-center gap-2 bg-[#FF7A33] text-white text-sm font-medium px-6 py-3 rounded-full hover:bg-[#e86a22] transition-colors mb-12"
+                href="#pricing"
+                className="inline-flex items-center gap-2 bg-[#FF7A33] text-white text-sm font-medium px-6 py-3 rounded-full hover:bg-[#e86a22] transition-colors mb-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A33] focus-visible:ring-offset-2"
+                aria-label="Explore Vyla AI — see Premium pricing"
               >
                 Explore Vyla AI →
               </a>
@@ -61,7 +62,7 @@ export default function AiSection() {
                       className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
                       style={{ backgroundColor: f.bg }}
                     >
-                      <Image src={f.icon} alt={f.title} width={22} height={22} unoptimized />
+                      <Image src={f.icon} alt="" width={22} height={22} unoptimized aria-hidden="true" />
                     </div>
                     <div>
                       <p className="text-[14px] font-medium text-[#1E0C16] mb-1">{f.title}</p>
