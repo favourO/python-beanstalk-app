@@ -60,3 +60,107 @@ body {
     animation: none;
   }
 }
+
+/* Blog article body prose */
+.blog-body p {
+  font-size: 16px;
+  line-height: 1.85;
+  color: #4A2E1E;
+  margin-bottom: 1.25rem;
+}
+.blog-body h2 {
+  font-family: var(--font-cormorant), Georgia, serif;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: #1E0C16;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+}
+.blog-body h3 {
+  font-family: var(--font-cormorant), Georgia, serif;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #1E0C16;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+.blog-body h4 {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1E0C16;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+.blog-body ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+.blog-body ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+.blog-body li {
+  font-size: 16px;
+  line-height: 1.75;
+  color: #4A2E1E;
+  margin-bottom: 0.35rem;
+}
+.blog-body blockquote {
+  border-left: 3px solid #FF7A33;
+  padding: 0.75rem 1.25rem;
+  margin: 1.75rem 0;
+  background: #FFF6F0;
+  border-radius: 0 12px 12px 0;
+  font-style: italic;
+  color: #7A4A32;
+  font-size: 16px;
+  line-height: 1.75;
+}
+.blog-body code {
+  background: #FFF0E8;
+  color: #FF7A33;
+  padding: 0.15em 0.45em;
+  border-radius: 5px;
+  font-size: 14px;
+  font-family: ui-monospace, monospace;
+}
+.blog-body pre {
+  background: #1E0C16;
+  color: #FFF6F0;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  margin: 1.75rem 0;
+}
+.blog-body pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: 13px;
+}
+.blog-body hr {
+  border: none;
+  border-top: 1px solid #FFD9C2;
+  margin: 2.5rem 0;
+}
+.blog-body a {
+  color: #FF7A33;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.blog-body a:hover {
+  color: #e86a22;
+}
+.blog-body strong {
+  font-weight: 600;
+  color: #1E0C16;
+}
+.blog-body br {
+  display: block;
+  margin-bottom: 0.5rem;
+}
