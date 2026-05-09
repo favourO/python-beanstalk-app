@@ -60,7 +60,7 @@ export default function PrivacyPage() {
       <header className="bg-white border-b border-[#FFD9C2]">
         <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/">
-            <Image src="/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-26 w-auto" unoptimized />
+            <Image src="https://vyla.health/assets/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-26 w-auto" unoptimized />
           </Link>
           <Link href="/" className="text-sm font-medium text-[#A06A52] hover:text-[#1E0C16] transition-colors">
             ← Back to home
@@ -116,7 +116,7 @@ export default function PrivacyPage() {
               ["Legal entity", "DemyCorp Ltd, trading as Vyla"],
               ["Email", "privacy@vyla.health"],
               ["Support", "support@vyla.health"],
-              ["Address", "[Postal Address]"],
+              ["Address", "6 Giles Avenue, London RM13"],
               ["Website", "https://vyla.health"],
             ].map(([k, v]) => (
               <div key={k} className="flex gap-3 text-[14px]">
@@ -732,7 +732,7 @@ export default function PrivacyPage() {
               ["Legal entity", "DemyCorp Ltd, trading as Vyla"],
               ["Email", "privacy@vyla.health"],
               ["Support", "support@vyla.health"],
-              ["Address", "[Postal Address]"],
+              ["Address", "6 Giles Avenue, London RM13"],
               ["Website", "https://vyla.health"],
             ].map(([k, v]) => (
               <div key={k} className="flex gap-3 text-[14px]">

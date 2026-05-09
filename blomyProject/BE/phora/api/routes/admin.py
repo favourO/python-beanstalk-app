@@ -14,6 +14,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from phora.api.deps import get_current_admin_user, get_db
+from phora.core.config import get_settings
+from phora.core.security import create_token, new_ulid, verify_password
 from phora.models.ai import MedicalChatMessage, MedicalChatThread
 from phora.models.audit import AuditEvent
 from phora.models.billing import FlutterwaveWebhookErrorLog, Invoice, Subscription, StripeWebhookErrorLog
@@ -22,9 +24,39 @@ from phora.models.growth import PremiumGrant, ReferralAttribution, ReferralProfi
 from phora.models.notification import NotificationDevice, NotificationHistory
 from phora.models.prediction import PredictionSnapshot
 from phora.models.timeseries import WearableMetric
+from phora.models.contact import ContactMessage
 from phora.models.user import OnboardingProgress, User, UserProfile
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+# ---------------------------------------------------------------------------
+# Admin login (validates is_admin before issuing token)
+# ---------------------------------------------------------------------------
+
+class AdminLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class AdminLoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+@router.post("/login", response_model=AdminLoginResponse)
+def admin_login(payload: AdminLoginRequest, db: Session = Depends(get_db)) -> AdminLoginResponse:
+    user = db.query(User).filter(User.email == payload.email.lower().strip()).first()
+    if not user or not user.password_hash or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    if user.deleted_at:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended")
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    settings = get_settings()
+    token = create_token(
+        user.id, "access", settings.access_token_exp_minutes,
+        user.token_generation, {"jti": new_ulid()},
+    )
+    return AdminLoginResponse(access_token=token)
 
 
 # ---------------------------------------------------------------------------
@@ -617,10 +649,13 @@ def list_subscriptions(
     tier: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     provider: str | None = Query(default=None),
+    user_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ) -> SubListOut:
     stmt = select(Subscription)
+    if user_id:
+        stmt = stmt.where(Subscription.user_id == user_id)
     if tier:
         stmt = stmt.where(Subscription.tier == tier)
     if status_filter:
@@ -690,10 +725,14 @@ def list_invoices(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     status_filter: str | None = Query(default=None, alias="status"),
+    user_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ) -> InvoiceListOut:
     stmt = select(Invoice)
+    if user_id:
+        user_sub_ids = db.scalars(select(Subscription.id).where(Subscription.user_id == user_id)).all()
+        stmt = stmt.where(Invoice.subscription_id.in_(user_sub_ids))
     if status_filter:
         stmt = stmt.where(Invoice.status == status_filter)
 
@@ -1021,6 +1060,59 @@ def list_ai_threads(
         for t in threads
     ]
     return AiThreadListOut(items=items, total=total, page=page, page_size=page_size)
+
+
+# ---------------------------------------------------------------------------
+# Contact messages
+# ---------------------------------------------------------------------------
+
+class ContactMessageItem(BaseModel):
+    id: str
+    name: str
+    email: str
+    subject: str
+    message: str
+    read: bool
+    created_at: str
+
+class ContactListOut(BaseModel):
+    items: list[ContactMessageItem]
+    total: int
+    unread: int
+
+@router.get("/contacts", response_model=ContactListOut)
+def list_contacts(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> ContactListOut:
+    stmt = select(ContactMessage)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    unread = db.scalar(select(func.count()).where(ContactMessage.read == False)) or 0  # noqa: E712
+    rows = db.scalars(stmt.order_by(ContactMessage.created_at.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+    items = [
+        ContactMessageItem(
+            id=r.id, name=r.name, email=r.email, subject=r.subject,
+            message=r.message, read=r.read, created_at=r.created_at.isoformat(),
+        )
+        for r in rows
+    ]
+    return ContactListOut(items=items, total=total, unread=unread)
+
+
+@router.patch("/contacts/{contact_id}/read", response_model=ActionResponse)
+def mark_contact_read(
+    contact_id: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> ActionResponse:
+    msg = db.get(ContactMessage, contact_id)
+    if not msg:
+        raise HTTPException(status_code=404, detail="Contact message not found")
+    msg.read = True
+    db.commit()
+    return ActionResponse(ok=True, message="Marked as read")
 
 
 @router.get("/audit-events", response_model=AuditEventListOut)

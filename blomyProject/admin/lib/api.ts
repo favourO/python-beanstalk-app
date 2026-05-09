@@ -43,7 +43,7 @@ export const api = {
 };
 
 export async function adminLogin(email: string, password: string): Promise<string> {
-  const res = await fetch(`${BASE}${PREFIX}/auth/login`, {
+  const res = await fetch(`${BASE}${PREFIX}/admin/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -53,7 +53,7 @@ export async function adminLogin(email: string, password: string): Promise<strin
     throw new ApiError(res.status, text);
   }
   const data = await res.json();
-  const token: string = data.access_token ?? data.token ?? data.tokens?.access_token;
+  const token: string = data.access_token ?? data.token;
   if (!token) throw new ApiError(401, "No access token in response");
   return token;
 }
@@ -80,6 +80,17 @@ export type UserItem = {
 };
 
 export type UserListOut = { items: UserItem[]; total: number; page: number; page_size: number };
+
+export type UserDetailOut = {
+  id: string; email: string | null; account_mode: string; email_verified: boolean;
+  is_admin: boolean; deleted_at: string | null; created_at: string;
+  full_name: string | null; date_of_birth: string | null; goal: string | null;
+  wearable_type: string | null; timezone: string | null;
+  onboarding_completed: boolean; onboarding_step: number | null;
+  subscription_tier: string | null; subscription_status: string | null;
+  subscription_provider: string | null; subscription_period_end: string | null;
+  cycle_records_count: number; daily_logs_count: number; ai_threads_count: number;
+};
 
 export type SubItem = {
   id: string; user_id: string; user_email: string | null; tier: string; status: string;
@@ -113,3 +124,48 @@ export type AuditEvent = {
   id: string; actor_user_id: string | null; action: string; payload: Record<string, unknown>; created_at: string;
 };
 export type AuditEventListOut = { items: AuditEvent[]; total: number; page: number; page_size: number };
+export type PredictionItem = {
+  id: string; user_id: string; user_email: string | null; current_phase: string;
+  confidence: number; warning_flags: unknown[]; models_used: unknown[];
+  model_version: string | null; source: string; generated_at: string;
+};
+export type PredictionListOut = { items: PredictionItem[]; total: number; page: number; page_size: number };
+
+export type WearableUserItem = {
+  user_id: string; user_email: string | null; wearable_type: string;
+  latest_sync: string | null; metrics_count: number;
+};
+export type WearableListOut = { items: WearableUserItem[]; total: number };
+
+export type NotificationItem = {
+  id: string; user_id: string; notification_type: string; category: string;
+  channel: string; title: string; status: string; priority: string;
+  delivery_attempts: number; scheduled_for: string; delivered_at: string | null;
+};
+export type NotificationListOut = { items: NotificationItem[]; total: number; page: number; page_size: number };
+
+export type ReferralItem = {
+  id: string; inviter_user_id: string; inviter_email: string | null;
+  invited_user_id: string | null; referral_code: string; source: string | null;
+  status: string; created_at: string; qualified_at: string | null;
+};
+export type ReferralListOut = { items: ReferralItem[]; total: number; page: number; page_size: number };
+
+export type GrantItem = {
+  id: string; user_id: string; user_email: string | null; tier: string;
+  source_type: string; days_granted: number; starts_at: string; ends_at: string;
+  active: boolean; created_at: string;
+};
+export type GrantListOut = { items: GrantItem[]; total: number; page: number; page_size: number };
+
+export type AiThreadItem = {
+  id: string; user_id: string; user_email: string | null; title: string | null;
+  message_count: number; created_at: string; updated_at: string;
+};
+export type AiThreadListOut = { items: AiThreadItem[]; total: number; page: number; page_size: number };
+
+export type ContactMessageItem = {
+  id: string; name: string; email: string; subject: string; message: string;
+  read: boolean; created_at: string;
+};
+export type ContactListOut = { items: ContactMessageItem[]; total: number; unread: number };
