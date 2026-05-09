@@ -30,7 +30,7 @@ export default function Footer() {
           <div className="flex flex-col lg:flex-row items-start gap-12 lg:gap-20">
             {/* Logo */}
             <a href="#" className="block shrink-0">
-              <Image src="/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-30 w-auto" unoptimized />
+              <Image src="https://vyla.health/assets/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-30 w-auto" unoptimized />
             </a>
 
             {/* Links */}
