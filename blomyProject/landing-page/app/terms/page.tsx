@@ -3,8 +3,11 @@ import Image from "next/image";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Use — Vyla",
-  description: "The terms that govern your access to and use of Vyla's services.",
+  title: "Terms of Use",
+  description:
+    "Read the terms that govern your access to and use of Vyla's cycle tracking app and services. Covers permitted use, subscriptions, and data rights.",
+  alternates: { canonical: "https://vyla.health/terms" },
+  robots: { index: true, follow: true },
 };
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
