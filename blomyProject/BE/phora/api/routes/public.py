@@ -247,7 +247,7 @@ def list_published_posts(
     return BlogPostListOut(items=[BlogPostOut.from_model(r) for r in rows], total=total)
 
 
-@router.get("/blog/{slug}", response_model=BlogPostOut)
+@router.get("/blog/{slug:path}", response_model=BlogPostOut)
 def get_published_post(
     slug: str,
     db: Session = Depends(get_db),
