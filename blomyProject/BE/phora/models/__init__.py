@@ -1,4 +1,5 @@
 from phora.models.ai import MedicalChatMessage, MedicalChatThread
+from phora.models.blog import BlogPost
 from phora.models.contact import ContactMessage
 from phora.models.audit import AuditEvent
 from phora.models.billing import FlutterwaveWebhookErrorLog, Invoice, Subscription, StripeWebhookErrorLog
@@ -12,6 +13,7 @@ from phora.models.user import EmailOtpCode, OnboardingProgress, RefreshTokenSess
 
 __all__ = [
     "AuditEvent",
+    "BlogPost",
     "ContactMessage",
     "MedicalChatThread",
     "MedicalChatMessage",

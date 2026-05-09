@@ -2,17 +2,22 @@
 Public (unauthenticated) endpoints for the Vyla landing page.
   POST /public/contact          — contact form submission
   POST /public/send-download    — email the user an app download link
+  GET  /public/blog             — list published blog posts
+  GET  /public/blog/{slug}      — get a published blog post by slug
 """
 import logging
 import uuid
 from html import escape
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from phora.core.config import get_settings
 from phora.db.session import get_db
+from phora.models.blog import BlogPost
+from phora.schemas.blog import BlogPostListOut, BlogPostOut
 from phora.models.contact import ContactMessage
 from phora.services.email import EmailService
 
@@ -218,3 +223,36 @@ def _render_simple_html(heading: str, subtext: str, body_html: str) -> str:
 </td></tr>
 </table>
 </body></html>"""
+
+
+# ── Public blog endpoints ──────────────────────────────────────────────────────
+
+@router.get("/blog", response_model=BlogPostListOut)
+def list_published_posts(
+    category: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    db: Session = Depends(get_db),
+) -> BlogPostListOut:
+    stmt = select(BlogPost).where(BlogPost.published.is_(True))
+    if category:
+        stmt = stmt.where(BlogPost.category == category)
+    from sqlalchemy import func
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = db.scalars(
+        stmt.order_by(BlogPost.published_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return BlogPostListOut(items=[BlogPostOut.from_model(r) for r in rows], total=total)
+
+
+@router.get("/blog/{slug}", response_model=BlogPostOut)
+def get_published_post(
+    slug: str,
+    db: Session = Depends(get_db),
+) -> BlogPostOut:
+    post = db.scalar(select(BlogPost).where(BlogPost.slug == slug, BlogPost.published.is_(True)))
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    return BlogPostOut.from_model(post)

@@ -90,6 +90,8 @@ export default function OvulationTrackingPage() {
     <SeoPageLayout
       breadcrumb="Ovulation Tracking"
       breadcrumbPath="/ovulation-tracking"
+      pageTitle="Ovulation Tracking App — Fertile Window & Cycle Insights"
+      pageDescription="Track ovulation with Vyla — log BBT temperature, LH tests, and cervical mucus to understand your fertile window. Private, AI-powered ovulation tracking for iPhone and Android."
       label="Ovulation & fertile window"
       heading={
         <>

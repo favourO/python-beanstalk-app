@@ -223,7 +223,7 @@ class NotificationService:
             lock_screen_body=payload.lock_screen_body,
             force_delivery=payload.force_delivery,
         )
-        dispatched = self.dispatch_pending(user_id=user_id)
+        dispatched = self.dispatch_pending(user_id=user_id, now=payload.send_at)
         return NotificationDispatchResponse(
             created=1 if record else 0,
             dispatched=dispatched.dispatched,

@@ -90,6 +90,8 @@ export default function OuraCycleTrackingPage() {
     <SeoPageLayout
       breadcrumb="Oura Cycle Tracking"
       breadcrumbPath="/oura-cycle-tracking"
+      pageTitle="Oura Ring Cycle Tracking — Period & Ovulation Insights with Oura"
+      pageDescription="Connect your Oura Ring to Vyla for cycle-phase-aware temperature trends, heart rate variability, and wellness insights alongside your period and ovulation tracking."
       label="Wearable cycle integration"
       heading={
         <>

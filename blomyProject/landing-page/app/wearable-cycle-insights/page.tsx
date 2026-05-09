@@ -86,6 +86,8 @@ export default function WearableCycleInsightsPage() {
     <SeoPageLayout
       breadcrumb="Wearable Cycle Insights"
       breadcrumbPath="/wearable-cycle-insights"
+      pageTitle="Wearable Cycle Insights — Smartwatch & Ring Period Tracking"
+      pageDescription="Use your wearable's health data to understand your menstrual cycle better. Vyla integrates with Oura Ring to layer temperature and wellness trends on top of your cycle tracking."
       label="Wearable wellness & cycle"
       heading={
         <>

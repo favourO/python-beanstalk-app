@@ -86,6 +86,8 @@ export default function CycleTrackingPage() {
     <SeoPageLayout
       breadcrumb="Cycle Tracking"
       breadcrumbPath="/cycle-tracking"
+      pageTitle="Cycle Tracking App — Period & Menstrual Cycle Tracker"
+      pageDescription="Vyla is a free cycle tracking app for iPhone and Android. Log your period, track symptoms, predict fertile windows, and understand your menstrual cycle with AI-powered insights."
       label="Period & cycle tracking"
       heading={
         <>

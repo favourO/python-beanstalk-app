@@ -58,9 +58,9 @@ export function mobileApplicationSchema() {
     ],
     aggregateRating: {
       "@type": "AggregateRating",
-      ratingValue: "4.8",
-      reviewCount: "50000",
-      bestRating: "5",
+      ratingValue: 4.8,
+      reviewCount: 50000,
+      bestRating: 5,
     },
     description:
       "Track your menstrual cycle, BBT temperature, symptoms, moods, fertile window, and wearable wellness trends. Get AI-powered cycle insights and ovulation tracking in one private, easy-to-use app.",
@@ -129,5 +129,58 @@ export function breadcrumbSchema(
       name: crumb.name,
       item: crumb.url,
     })),
+  };
+}
+
+export function webPageSchema({
+  name,
+  description,
+  url,
+  breadcrumbs,
+}: {
+  name: string;
+  description: string;
+  url: string;
+  breadcrumbs?: { name: string; url: string }[];
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name,
+    description,
+    url,
+    inLanguage: "en-GB",
+    isPartOf: { "@type": "WebSite", url: BASE_URL, name: "Vyla" },
+    ...(breadcrumbs && {
+      breadcrumb: {
+        "@type": "BreadcrumbList",
+        itemListElement: breadcrumbs.map(({ name: n, url: u }, i) => ({
+          "@type": "ListItem",
+          position: i + 1,
+          name: n,
+          item: u,
+        })),
+      },
+    }),
+  };
+}
+
+export function blogPageSchema() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Vyla Blog — Cycle Health, Wellness & BBT Tracking Guides",
+    description:
+      "In-depth articles on cycle tracking, BBT temperature charting, ovulation awareness, wearable health insights, and women's wellness from the Vyla team.",
+    url: `${BASE_URL}/blog`,
+    inLanguage: "en-GB",
+    isPartOf: { "@type": "WebSite", url: BASE_URL, name: "Vyla" },
+    breadcrumb: {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: BASE_URL },
+        { "@type": "ListItem", position: 2, name: "Blog", item: `${BASE_URL}/blog` },
+      ],
+    },
   };
 }

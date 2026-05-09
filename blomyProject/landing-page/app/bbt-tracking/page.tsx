@@ -90,6 +90,8 @@ export default function BBTTrackingPage() {
     <SeoPageLayout
       breadcrumb="BBT Tracking"
       breadcrumbPath="/bbt-tracking"
+      pageTitle="BBT Tracking App — Basal Body Temperature Chart & Cycle Insights"
+      pageDescription="Log and chart your basal body temperature (BBT) with Vyla. Understand temperature shifts around ovulation, track cycle phases, and spot patterns — private and free on iPhone and Android."
       label="Basal body temperature"
       heading={
         <>

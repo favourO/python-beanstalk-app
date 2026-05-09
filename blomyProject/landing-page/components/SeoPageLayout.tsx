@@ -3,7 +3,7 @@ import Image from "next/image";
 import Footer from "./Footer";
 import FAQSection from "./FAQSection";
 import JsonLd from "./JsonLd";
-import { breadcrumbSchema } from "@/lib/jsonld";
+import { breadcrumbSchema, webPageSchema } from "@/lib/jsonld";
 import type { FAQ_ITEMS } from "./FAQSection";
 
 interface Feature {
@@ -19,6 +19,8 @@ interface SeoPageLayoutProps {
   label: string;
   heading: React.ReactNode;
   subheading: string;
+  pageTitle: string;
+  pageDescription: string;
   features: Feature[];
   faqItems: typeof FAQ_ITEMS;
   faqTitle?: string;
@@ -31,6 +33,8 @@ export default function SeoPageLayout({
   label,
   heading,
   subheading,
+  pageTitle,
+  pageDescription,
   features,
   faqItems,
   faqTitle,
@@ -43,7 +47,17 @@ export default function SeoPageLayout({
 
   return (
     <div className="min-h-screen bg-[#FFF6F0]">
-      <JsonLd data={breadcrumbSchema(crumbs)} />
+      <JsonLd
+        data={[
+          breadcrumbSchema(crumbs),
+          webPageSchema({
+            name: pageTitle,
+            description: pageDescription,
+            url: `https://vyla.health${breadcrumbPath}`,
+            breadcrumbs: crumbs,
+          }),
+        ]}
+      />
 
       {/* Minimal nav */}
       <header className="bg-white border-b border-[#FFD9C2] sticky top-0 z-50">
@@ -142,8 +156,9 @@ export default function SeoPageLayout({
         </section>
 
         {/* Features grid */}
-        <section className="bg-white py-20 border-t border-[#FFD9C2]/40">
+        <section className="bg-white py-20 border-t border-[#FFD9C2]/40" aria-labelledby="features-heading">
           <div className="max-w-[1200px] mx-auto px-6">
+            <h2 id="features-heading" className="sr-only">Key features</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {features.map((feature) => (
                 <article
@@ -163,9 +178,9 @@ export default function SeoPageLayout({
                       unoptimized
                     />
                   </div>
-                  <h2 className="text-[16px] font-semibold text-[#1E0C16] mb-2 leading-snug">
+                  <h3 className="text-[16px] font-semibold text-[#1E0C16] mb-2 leading-snug">
                     {feature.title}
-                  </h2>
+                  </h3>
                   <p className="text-sm font-light text-[#A06A52] leading-relaxed">
                     {feature.body}
                   </p>
