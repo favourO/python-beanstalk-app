@@ -19,6 +19,7 @@ export default function Nav() {
       initial={{ y: -80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
+      aria-label="Main navigation"
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
           ? "bg-white/95 backdrop-blur-md shadow-[0_1px_0_#FFD9C2]"
@@ -27,7 +28,7 @@ export default function Nav() {
     >
       <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
-        <a href="#" className="flex items-center">
+        <a href="/" className="flex items-center" aria-label="Vyla home">
           <Image src="https://vyla.health/assets/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-26 w-auto" unoptimized priority />
         </a>
 
@@ -46,12 +47,12 @@ export default function Nav() {
 
         {/* CTA */}
         <div className="hidden md:flex items-center gap-4">
-          <a href="#" className="text-sm font-medium text-[#1E0C16] hover:text-[#FF7A33] transition-colors">
+          <a href="#" className="text-sm font-medium text-[#1E0C16] hover:text-[#FF7A33] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A33] rounded">
             Sign in
           </a>
           <a
             href="#"
-            className="text-sm font-medium bg-[#FF7A33] text-white px-5 py-2.5 rounded-full hover:bg-[#e86a22] transition-colors"
+            className="text-sm font-medium bg-[#FF7A33] text-white px-5 py-2.5 rounded-full hover:bg-[#e86a22] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A33] focus-visible:ring-offset-2"
           >
             Download free
           </a>

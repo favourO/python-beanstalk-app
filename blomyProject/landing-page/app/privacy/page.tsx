@@ -3,8 +3,11 @@ import Image from "next/image";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Vyla",
-  description: "How Vyla collects, uses, and protects your personal data.",
+  title: "Privacy Policy",
+  description:
+    "Learn how Vyla collects, uses, and protects your personal data. Your cycle data is never sold to advertisers. You can export or delete your data at any time.",
+  alternates: { canonical: "https://vyla.health/privacy" },
+  robots: { index: true, follow: true },
 };
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
