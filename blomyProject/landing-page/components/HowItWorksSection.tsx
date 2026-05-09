@@ -61,10 +61,11 @@ export default function HowItWorksSection() {
                   <div className="relative z-10 w-14 h-14 bg-white rounded-[28px] border border-[#FFD9C2]/60 flex items-center justify-center mb-6 shadow-sm">
                     <Image
                       src={step.icon}
-                      alt={step.title}
+                      alt=""
                       width={28}
                       height={28}
                       unoptimized
+                      aria-hidden="true"
                     />
                   </div>
 

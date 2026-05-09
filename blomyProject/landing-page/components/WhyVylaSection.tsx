@@ -25,11 +25,11 @@ const cards = [
 
 export default function WhyVylaSection() {
   return (
-    <section id="why-vyla" className="bg-[#FFF6F0] py-24 lg:py-32">
+    <section id="why-vyla" aria-labelledby="why-vyla-heading" className="bg-[#FFF6F0] py-24 lg:py-32">
       <div className="max-w-[1200px] mx-auto px-6">
         <FadeIn>
           <SectionLabel>Why Vyla</SectionLabel>
-          <h2 className="font-serif text-[52px] lg:text-[62px] leading-[1.08] tracking-[-0.02em] text-[#1E0C16] mb-5 max-w-[540px]">
+          <h2 id="why-vyla-heading" className="font-serif text-[52px] lg:text-[62px] leading-[1.08] tracking-[-0.02em] text-[#1E0C16] mb-5 max-w-[540px]">
             Designed for real cycles,{" "}
             <span className="text-[#FF7A33]">not perfect calendars</span>
           </h2>
@@ -46,7 +46,7 @@ export default function WhyVylaSection() {
                   className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5"
                   style={{ backgroundColor: card.iconBg }}
                 >
-                  <Image src={card.icon} alt={card.title} width={30} height={30} unoptimized />
+                  <Image src={card.icon} alt="" width={30} height={30} unoptimized aria-hidden="true" />
                 </div>
                 <h3 className="text-[17px] font-semibold text-[#1E0C16] mb-3 leading-snug">{card.title}</h3>
                 <p className="text-sm font-light text-[#A06A52] leading-relaxed">{card.body}</p>

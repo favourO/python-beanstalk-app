@@ -44,9 +44,9 @@ export default function TestimonialsSection() {
           </FadeIn>
 
           <FadeIn delay={0.1} direction="right">
-            <div className="text-right shrink-0">
-              <p className="text-[64px] font-semibold text-[#1E0C16] leading-none">4.8</p>
-              <p className="text-[#E8A135] text-xl tracking-wide mt-1">★★★★★</p>
+            <div className="text-right shrink-0" aria-label="4.8 out of 5 stars on the App Store">
+              <p className="text-[64px] font-semibold text-[#1E0C16] leading-none" aria-hidden="true">4.8</p>
+              <p className="text-[#E8A135] text-xl tracking-wide mt-1" aria-hidden="true">★★★★★</p>
               <p className="text-sm text-[#A06A52] mt-1">App Store average</p>
             </div>
           </FadeIn>
@@ -62,10 +62,11 @@ export default function TestimonialsSection() {
                     {review.usePhoto ? (
                       <Image
                         src="https://vyla.health/assets/images/testimonial-avatar.png"
-                        alt={review.name}
+                        alt=""
                         width={40}
                         height={40}
                         className="w-full h-full object-cover"
+                        aria-hidden="true"
                       />
                     ) : (
                       <div

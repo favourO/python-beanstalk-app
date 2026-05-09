@@ -53,7 +53,7 @@ export default function TermsPage() {
         </div>
       </header>
 
-      <main className="max-w-[760px] mx-auto px-6 py-16">
+      <main id="main-content" className="max-w-[760px] mx-auto px-6 py-16">
         {/* Page heading */}
         <div className="mb-14">
           <p className="text-xs font-medium tracking-[0.12em] uppercase text-[#FF7A33] mb-3">Legal</p>
