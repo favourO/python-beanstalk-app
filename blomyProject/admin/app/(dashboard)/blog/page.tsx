@@ -11,7 +11,7 @@ const CATEGORIES = ["Cycle Tracking", "BBT & Temperature", "Ovulation Awareness"
 type View = "list" | "create" | "edit";
 
 function slugify(t: string) {
-  return t.toLowerCase().replace(/[^\w\s-]/g, "").replace(/[\s_]+/g, "-").replace(/^-+|-+$/g, "");
+  return t.toLowerCase().replace(/[^\w\s-]/g, "").replace(/[\s_]+/g, "-").replace(/^-+|-+$/g, "").replace(/\//g, "-");
 }
 
 function readingTime(body: string) {
