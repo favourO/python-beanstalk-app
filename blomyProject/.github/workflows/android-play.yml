@@ -1,0 +1,103 @@
+name: Android – Play Store (Internal)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Version name (e.g. 1.2.0)"
+        required: false
+        default: ""
+      build_number:
+        description: "Build number (leave empty to use run number)"
+        required: false
+        default: ""
+      track:
+        description: "Play Store track"
+        required: false
+        default: "internal"
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: phora/pubspec.yaml
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: phora
+        run: flutter pub get
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo -n "$KEYSTORE_BASE64" | base64 --decode \
+            > phora/android/app/vyla-release.jks
+
+      - name: Set version
+        working-directory: phora
+        run: |
+          VERSION="${{ github.event.inputs.version_name }}"
+          BUILD="${{ github.event.inputs.build_number }}"
+          if [ -z "$BUILD" ]; then BUILD="${{ github.run_number }}"; fi
+          if [ -n "$VERSION" ]; then
+            sed -i "s/^version:.*/version: ${VERSION}+${BUILD}/" pubspec.yaml
+          else
+            CURRENT=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
+            sed -i "s/^version:.*/version: ${CURRENT}+${BUILD}/" pubspec.yaml
+          fi
+          echo "Building $(grep '^version:' pubspec.yaml)"
+
+      - name: Build App Bundle
+        working-directory: phora
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          flutter build appbundle \
+            --release \
+            --obfuscate \
+            --split-debug-info=build/symbols/prod \
+            --dart-define-from-file=env/prod.json
+
+      - name: Sign App Bundle
+        uses: r0adkll/sign-android-release@v1
+        id: sign
+        with:
+          releaseDirectory: phora/build/app/outputs/bundle/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload to Play Store
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.vyla.health
+          releaseFiles: ${{ steps.sign.outputs.signedReleaseFile }}
+          track: ${{ github.event.inputs.track || 'internal' }}
+          status: completed
+          inAppUpdatePriority: 2
+          mappingFile: phora/build/symbols/prod/app.android-arm64.symbols
