@@ -103,6 +103,8 @@ class Settings(BaseSettings):
     public_app_url: str | None = None
     report_share_bucket: str | None = None
     report_share_url_expiration_seconds: int = 60 * 60 * 24 * 7
+    blog_media_bucket: str | None = None
+    blog_media_public_base_url: str | None = None
     android_release_bucket: str | None = None
     android_release_manifest_key: str = "android/latest.json"
     android_release_presign_expiration_seconds: int = 60 * 60

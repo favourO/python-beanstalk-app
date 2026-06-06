@@ -371,6 +371,71 @@ def test_admin_can_update_country_allowlist(tmp_path, monkeypatch):
     assert result["availability_reason"] == "in_stock"
 
 
+def test_admin_can_update_wearable_stock_from_inventory_endpoint(tmp_path, monkeypatch):
+    app = _boot_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        admin_id = _seed_user(db, email="admin-stock@example.com", is_admin=True)
+        _seed_inventory(db)
+
+    token = create_token(admin_id, "access", 30)
+    response = client.patch(
+        "/api/v1/admin/wearable/inventory",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "sku": "VYLA-WEARABLE-V1",
+            "total_stock": 42,
+            "available_stock": 39,
+            "low_stock_threshold": 4,
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["available_stock"] == 39
+    assert response.json()["low_stock_threshold"] == 4
+
+    with get_session_factory()() as db:
+        inv = db.query(WearableInventory).filter(WearableInventory.sku == "VYLA-WEARABLE-V1").one()
+        assert inv.total_stock == 42
+        assert inv.available_stock == 39
+        assert inv.low_stock_threshold == 4
+
+
+def test_admin_stock_update_cannot_reduce_total_below_available_plus_reserved(tmp_path, monkeypatch):
+    app = _boot_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        admin_id = _seed_user(db, email="admin-stock-invalid@example.com", is_admin=True)
+        _seed_inventory(db)
+        inv = db.query(WearableInventory).filter(WearableInventory.sku == "VYLA-WEARABLE-V1").one()
+        inv.available_stock = 8
+        inv.reserved_stock = 3
+        inv.total_stock = 11
+        db.commit()
+
+    token = create_token(admin_id, "access", 30)
+    response = client.patch(
+        "/api/v1/admin/wearable/inventory",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "sku": "VYLA-WEARABLE-V1",
+            "total_stock": 10,
+        },
+    )
+
+    assert response.status_code == 422
+    assert "cannot exceed total stock" in response.json()["detail"].lower()
+
+    with get_session_factory()() as db:
+        inv = db.query(WearableInventory).filter(WearableInventory.sku == "VYLA-WEARABLE-V1").one()
+        assert inv.total_stock == 11
+        assert inv.available_stock == 8
+        assert inv.reserved_stock == 3
+
+
 def test_availability_reflects_admin_allowlist_update(tmp_path, monkeypatch):
     app = _boot_app(tmp_path, monkeypatch)
     client = TestClient(app)

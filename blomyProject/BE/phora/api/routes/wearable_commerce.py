@@ -366,7 +366,10 @@ def admin_update_inventory(
         total_stock = body.total_stock or 0
         available_stock = body.available_stock or 0
         if available_stock > total_stock:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Available stock cannot exceed total stock.")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Available stock cannot exceed total stock.",
+            )
         # Create new inventory record
         inv = WearableInventory(
             sku=body.sku,
@@ -376,11 +379,16 @@ def admin_update_inventory(
             price_minor=body.price_minor or 2500,
             currency="GBP",
             currency_symbol="£",
-            low_stock_threshold=body.low_stock_threshold or 5,
+            low_stock_threshold=body.low_stock_threshold if body.low_stock_threshold is not None else 5,
             is_active=body.is_active if body.is_active is not None else True,
+            allowed_country_codes=body.allowed_country_codes or ["GB"],
         )
         db.add(inv)
-        db.commit()
+        try:
+            svc.update_inventory(inv, allowed_country_codes=inv.allowed_country_codes)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        db.refresh(inv)
     else:
         update_fields = {}
         if body.total_stock is not None:

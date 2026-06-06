@@ -68,3 +68,11 @@ class BlogPostOut(BaseModel):
 class BlogPostListOut(BaseModel):
     items: list[BlogPostOut]
     total: int
+
+
+class BlogImageUploadOut(BaseModel):
+    url: str
+    bucket: str
+    key: str
+    content_type: str
+    size_bytes: int

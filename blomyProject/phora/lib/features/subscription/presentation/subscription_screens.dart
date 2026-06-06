@@ -9,6 +9,7 @@ import 'package:phora/core/auth/auth_providers.dart';
 import 'package:phora/core/i18n/l10n_extensions.dart';
 import 'package:phora/core/location/device_location_country_service.dart';
 import 'package:phora/core/payments/payment_country_catalog.dart';
+import 'package:phora/core/payments/stripe_wallet_config.dart';
 import 'package:phora/core/ui/app_dimensions.dart';
 import 'package:phora/core/ui/app_theme.dart';
 import 'package:phora/core/ui/phora_loading.dart';
@@ -400,6 +401,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             ? ThemeMode.dark
             : ThemeMode.light;
     stripe.Stripe.publishableKey = session.publishableKey;
+    stripe.Stripe.merchantIdentifier = stripeApplePayMerchantIdentifier;
     stripe.Stripe.urlScheme = 'vyla';
     stripe.Stripe.setReturnUrlSchemeOnAndroid = true;
     await stripe.Stripe.instance.applySettings();
@@ -411,6 +413,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         customerId: session.customerId,
         customerEphemeralKeySecret: session.customerEphemeralKeySecret,
         merchantDisplayName: 'Vyla',
+        applePay: stripePaymentSheetApplePay,
+        googlePay: stripePaymentSheetGooglePay,
         primaryButtonLabel:
             session.displayPrice.isEmpty ? null : 'Pay ${session.displayPrice}',
         returnURL:

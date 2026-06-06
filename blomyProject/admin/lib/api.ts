@@ -49,6 +49,18 @@ export const api = {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     }).then(res => { if (!res.ok && res.status !== 204) throw new ApiError(res.status, res.statusText); }),
+  upload: async <T>(path: string, token: string, body: FormData): Promise<T> => {
+    const res = await fetch(`${BASE}${PREFIX}${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      throw new ApiError(res.status, text);
+    }
+    return res.json() as Promise<T>;
+  },
 };
 
 export async function adminLogin(email: string, password: string): Promise<string> {
@@ -342,6 +354,14 @@ export type BlogPostItem = {
   updated_at: string;
 };
 export type BlogPostListOut = { items: BlogPostItem[]; total: number };
+
+export type BlogImageUploadOut = {
+  url: string;
+  bucket: string;
+  key: string;
+  content_type: string;
+  size_bytes: number;
+};
 
 export type BlogPostCreate = {
   title: string; slug: string; excerpt: string; body: string;

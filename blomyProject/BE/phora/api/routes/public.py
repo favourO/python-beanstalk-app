@@ -21,6 +21,7 @@ from phora.db.session import get_db
 from phora.models.blog import BlogPost
 from phora.schemas.blog import BlogPostListOut, BlogPostOut
 from phora.models.contact import ContactMessage, DownloadRequest
+from phora.services.blog_media import BlogMediaNotConfigured, BlogMediaNotFound, BlogMediaService
 from phora.services.app_release import AppReleaseService, AppReleaseUnavailable
 from phora.services.email import EmailService
 
@@ -348,6 +349,21 @@ def list_published_posts(
         .limit(page_size)
     ).all()
     return BlogPostListOut(items=[BlogPostOut.from_model(r) for r in rows], total=total)
+
+
+@router.get("/blog/media/{object_key:path}", name="public_blog_media")
+def get_blog_media(object_key: str) -> Response:
+    try:
+        media = BlogMediaService(get_settings()).load_object(object_key)
+    except BlogMediaNotConfigured as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except BlogMediaNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found") from exc
+
+    headers = {"Cache-Control": media.cache_control}
+    if media.etag:
+        headers["ETag"] = media.etag
+    return Response(content=media.body, media_type=media.content_type, headers=headers)
 
 
 @router.get("/blog/{slug:path}", response_model=BlogPostOut)

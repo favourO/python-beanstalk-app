@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { api, getToken, ApiError, type BlogPostItem, type BlogPostListOut, type BlogPostCreate } from "@/lib/api";
+import { api, getToken, ApiError, type BlogImageUploadOut, type BlogPostItem, type BlogPostListOut, type BlogPostCreate } from "@/lib/api";
 import Badge from "@/components/Badge";
 import { Table, Thead, Th, Tbody, Tr, Td } from "@/components/Table";
 import { LoadingRows } from "@/components/PageShell";
@@ -46,6 +46,7 @@ function PostForm({
   const [f, setF] = useState<FormState>(initial);
   const [slugManual, setSlugManual] = useState(!!editId);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
 
@@ -59,6 +60,7 @@ function PostForm({
   }
 
   async function save(asDraft = false) {
+    if (uploadingImage) { setErr("Wait for the image upload to finish."); return; }
     if (!f.title.trim()) { setErr("Title is required."); return; }
     if (!f.slug.trim()) { setErr("Slug is required."); return; }
     const token = getToken();
@@ -88,6 +90,29 @@ function PostForm({
     } finally { setSaving(false); }
   }
 
+  async function uploadCoverImage(file: File | null) {
+    if (!file) return;
+    const token = getToken();
+    if (!token) { router.push("/login"); return; }
+
+    const form = new FormData();
+    form.append("image", file);
+    if (f.slug.trim()) form.append("slug", f.slug.trim());
+
+    setUploadingImage(true); setErr(null);
+    try {
+      const uploaded = await api.upload<BlogImageUploadOut>("/admin/blog/image", token, form);
+      set("coverUrl", uploaded.url);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.status === 401 || e.status === 403) router.push("/login");
+        else setErr("Failed to upload image. " + e.message);
+      } else setErr("Failed to upload image.");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
   const lines = f.body.split("\n").map(line => {
     if (line.startsWith("# ")) return `<h1 class="text-2xl font-bold mb-3">${line.slice(2)}</h1>`;
     if (line.startsWith("## ")) return `<h2 class="text-xl font-semibold mb-2 mt-5">${line.slice(3)}</h2>`;
@@ -111,14 +136,14 @@ function PostForm({
             {preview ? "← Edit" : "Preview →"}
           </button>
           {!editId && (
-            <button onClick={() => save(true)} disabled={saving}
+            <button onClick={() => save(true)} disabled={saving || uploadingImage}
               className="text-[13px] font-medium text-[#9E7B6E] border border-[#E0CEC8] px-4 py-2 rounded-xl hover:border-[#B0938A] transition-colors disabled:opacity-50">
               Save draft
             </button>
           )}
-          <button onClick={() => save(false)} disabled={saving}
+          <button onClick={() => save(false)} disabled={saving || uploadingImage}
             className="text-[13px] font-semibold bg-[#FF7A33] text-white px-5 py-2 rounded-xl hover:bg-[#e86a22] transition-colors disabled:opacity-50">
-            {saving ? "Saving…" : editId ? "Save changes" : f.published ? "Publish" : "Save draft"}
+            {saving ? "Saving…" : uploadingImage ? "Uploading…" : editId ? "Save changes" : f.published ? "Publish" : "Save draft"}
           </button>
         </div>
       </div>
@@ -211,9 +236,15 @@ function PostForm({
 
             {/* Cover URL */}
             <div className="bg-white rounded-2xl border border-[#F0E8E4] p-4">
-              <label className="block text-[10px] font-bold text-[#9E7B6E] uppercase tracking-wider mb-2">Cover image URL</label>
+              <label className="block text-[10px] font-bold text-[#9E7B6E] uppercase tracking-wider mb-2">Cover image</label>
+              <label className="block text-center cursor-pointer text-[13px] font-semibold text-[#FF7A33] border border-dashed border-[#E0CEC8] rounded-lg px-3 py-3 hover:border-[#FF7A33] transition-colors">
+                {uploadingImage ? "Uploading…" : "Upload image"}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={uploadingImage}
+                  onChange={e => uploadCoverImage(e.target.files?.[0] ?? null)}
+                  className="hidden" />
+              </label>
               <input type="url" value={f.coverUrl} onChange={e => set("coverUrl", e.target.value)} placeholder="https://…"
-                className="w-full text-[13px] text-[#1E0C16] placeholder:text-[#C0A898] border border-[#F0E8E4] rounded-lg px-3 py-2 outline-none focus:border-[#FF7A33]" />
+                className="mt-3 w-full text-[13px] text-[#1E0C16] placeholder:text-[#C0A898] border border-[#F0E8E4] rounded-lg px-3 py-2 outline-none focus:border-[#FF7A33]" />
               {f.coverUrl && (
                 <img src={f.coverUrl} alt="" className="mt-3 w-full h-24 object-cover rounded-lg border border-[#F0E8E4]"
                   onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />

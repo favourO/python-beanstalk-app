@@ -8,7 +8,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -29,7 +29,8 @@ from phora.models.timeseries import WearableMetric
 from phora.models.blog import BlogPost
 from phora.models.contact import ContactMessage, DownloadRequest
 from phora.models.user import OnboardingProgress, User, UserProfile
-from phora.schemas.blog import BlogPostCreate, BlogPostListOut, BlogPostOut, BlogPostUpdate
+from phora.schemas.blog import BlogImageUploadOut, BlogPostCreate, BlogPostListOut, BlogPostOut, BlogPostUpdate
+from phora.services.blog_media import BlogMediaError, BlogMediaNotConfigured, BlogMediaService
 from phora.schemas.notification import NotificationTriggerRequest
 from phora.services.notification_service import NotificationService
 
@@ -1287,6 +1288,39 @@ def admin_create_blog_post(
     if post.published:
         background_tasks.add_task(_dispatch_blog_notifications, post.id, post.title, post.excerpt or "", post.slug)
     return BlogPostOut.from_model(post)
+
+
+@router.post("/blog/image", response_model=BlogImageUploadOut, status_code=status.HTTP_201_CREATED)
+async def admin_upload_blog_image(
+    request: Request,
+    slug: str | None = Form(default=None),
+    image: UploadFile = File(...),
+    admin: User = Depends(get_current_admin_user),
+) -> BlogImageUploadOut:
+    image_bytes = await image.read()
+    settings = get_settings()
+    public_base_url = settings.blog_media_public_base_url or settings.public_app_url or str(request.base_url)
+    try:
+        stored = BlogMediaService(settings).store_cover_image(
+            image_bytes=image_bytes,
+            content_type=image.content_type,
+            filename=image.filename,
+            slug=slug,
+            admin_id=admin.id,
+            public_base_url=public_base_url,
+        )
+    except BlogMediaNotConfigured as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except BlogMediaError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return BlogImageUploadOut(
+        url=stored.url,
+        bucket=stored.bucket,
+        key=stored.key,
+        content_type=stored.content_type,
+        size_bytes=stored.size_bytes,
+    )
 
 
 @router.get("/blog/{post_id}", response_model=BlogPostOut)
