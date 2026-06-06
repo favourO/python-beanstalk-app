@@ -3,8 +3,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
 
+from phora.services.home_i18n import translate as _t
+
 from phora.core.config import Settings
-from phora.models import CycleRecord, DailyLog, StressScore, User
+from phora.models import CycleRecord, DailyLog, StressScore, User, WearableMetric
 from phora.models.enums import CyclePhase, LogType, WearableType
 from phora.repositories.core import CycleRepository, PredictionRepository, SensorRepository, UserRepository
 from phora.schemas.home import (
@@ -28,14 +30,8 @@ from phora.services.daily_insights import DailyInsightService
 from phora.services.prediction_service import PREDICTION_INPUT_PIPELINE_VERSION, PredictionService
 
 
-CYCLE_AWARENESS_DISCLAIMER = (
-    "Vyla provides wellness and cycle awareness insights only. Predictions are estimates and "
-    "should not be used for contraception, diagnosis, or treatment."
-)
-SIGNAL_CHECK_DISCLAIMER = (
-    "If this reading is unusual for you or you feel unwell, consider speaking with a healthcare "
-    "professional."
-)
+CYCLE_AWARENESS_DISCLAIMER = _t("en", "cycle_awareness_disclaimer")
+SIGNAL_CHECK_DISCLAIMER = _t("en", "signal_check_disclaimer")
 
 
 class HomeService:
@@ -52,7 +48,7 @@ class HomeService:
     def _now_utc() -> datetime:
         return datetime.now(UTC)
 
-    def get_home_payload(self, user_id: str) -> HomeResponse:
+    def get_home_payload(self, user_id: str, locale: str = "en") -> HomeResponse:
         user = self.db.query(User).filter(User.id == user_id).one()
         profile = self.users.ensure_profile(user_id)
         cycle = self.cycles.active_for_user(user_id)
@@ -68,20 +64,22 @@ class HomeService:
         ovulation_date = self._parse_date(prediction.ovulation_estimate.get("date"))
         tracked_cycles = self._tracked_cycles(user_id)
 
-        sleep = self._latest_sensor(user_id, "sleep_minutes")
-        steps = self._latest_sensor(user_id, "steps")
-        sleep_deep = self._latest_sensor(user_id, "sleep_deep_minutes")
-        sleep_light = self._latest_sensor(user_id, "sleep_light_minutes")
-        sleep_awake = self._latest_sensor(user_id, "sleep_awake_minutes")
-        rhr = self._latest_sensor(user_id, "rhr")
-        blood_oxygen_avg = self._latest_sensor(user_id, "blood_oxygen_avg")
-        blood_oxygen_min = self._latest_sensor(user_id, "blood_oxygen_min")
+        source_filter = self._wearable_source_filter(profile.wearable_type)
+        sleep = self._latest_sensor(user_id, "sleep_minutes", source=source_filter)
+        steps = self._latest_sensor(user_id, "steps", source=source_filter)
+        sleep_deep = self._latest_sensor(user_id, "sleep_deep_minutes", source=source_filter)
+        sleep_light = self._latest_sensor(user_id, "sleep_light_minutes", source=source_filter)
+        sleep_awake = self._latest_sensor(user_id, "sleep_awake_minutes", source=source_filter)
+        rhr = self._latest_sensor(user_id, "rhr", source=source_filter)
+        blood_oxygen_avg = self._latest_sensor(user_id, "blood_oxygen_avg", source=source_filter)
+        blood_oxygen_min = self._latest_sensor(user_id, "blood_oxygen_min", source=source_filter)
         stress = self._latest_stress(user_id)
-        hrv = self._latest_sensor(user_id, "hrv")
-        temp = self._latest_sensor(user_id, "wrist_temp")
+        hrv = self._latest_sensor(user_id, "hrv", source=source_filter)
+        temp = self._latest_sensor(user_id, "wrist_temp", source=source_filter)
         recent_logs = self.cycles.recent_logs(user_id, days=7)
 
         health_snapshot = self._build_health_snapshot(
+            user_id,
             profile.wearable_type,
             sleep,
             sleep_deep,
@@ -94,8 +92,9 @@ class HomeService:
             stress,
             hrv,
             temp,
+            locale=locale,
         )
-        device_trends = self._build_device_trends(user_id)
+        device_trends = self._build_device_trends(user_id, source=source_filter)
         cycle_prediction_impact = self._build_cycle_prediction_impact(
             cycle=cycle,
             prediction=prediction,
@@ -134,6 +133,7 @@ class HomeService:
             tracked_cycles=tracked_cycles,
             wearable_type=profile.wearable_type,
             health_snapshot=health_snapshot,
+            locale=locale,
         )
 
         return HomeResponse(
@@ -167,14 +167,14 @@ class HomeService:
             device_cycle_insights=device_cycle_insights,
             device_trends=device_trends,
             cycle_prediction_impact=cycle_prediction_impact,
-            prediction_disclaimer=CYCLE_AWARENESS_DISCLAIMER,
+            prediction_disclaimer=_t(locale, "cycle_awareness_disclaimer"),
             quick_actions=[
-                HomeQuickActionResponse(type="log_period", label="Log Period"),
-                HomeQuickActionResponse(type="log_cramps", label="Log Cramps"),
-                HomeQuickActionResponse(type="log_mood", label="Log Mood"),
-                HomeQuickActionResponse(type="log_discharge", label="Log Discharge"),
-                HomeQuickActionResponse(type="log_sleep", label="Log Sleep"),
-                HomeQuickActionResponse(type="log_workout", label="Log Workout"),
+                HomeQuickActionResponse(type="log_period", label=_t(locale, "qa_log_period")),
+                HomeQuickActionResponse(type="log_cramps", label=_t(locale, "qa_log_cramps")),
+                HomeQuickActionResponse(type="log_mood", label=_t(locale, "qa_log_mood")),
+                HomeQuickActionResponse(type="log_discharge", label=_t(locale, "qa_log_discharge")),
+                HomeQuickActionResponse(type="log_sleep", label=_t(locale, "qa_log_sleep")),
+                HomeQuickActionResponse(type="log_workout", label=_t(locale, "qa_log_workout")),
             ],
             alerts=alerts,
         )
@@ -244,6 +244,7 @@ class HomeService:
         deep_sleep = health_snapshot.sleep_deep_minutes
         temp_delta = health_snapshot.temperature_delta_c
         spo2 = health_snapshot.blood_oxygen_avg
+        stress_avg = health_snapshot.stress_avg
 
         rhr_latest, rhr_baseline = self._trend_latest_and_baseline(device_trends, "rhr")
         steps_latest, steps_baseline = self._trend_latest_and_baseline(device_trends, "steps")
@@ -403,7 +404,43 @@ class HomeService:
                     source_signals=["sleep"],
                 )
             )
-        elif low_sleep:
+
+        if stress_avg is not None and stress_avg > 0:
+            if stress_avg >= 65:
+                title = "Stress may be adding cycle noise"
+                summary = "Your stress signal is elevated today, which can make ovulation and period timing harder to interpret."
+                advice = "Prioritise rest, hydration, lighter movement, and consistent sleep where possible."
+                cycle_impact = "Higher stress can affect sleep and recovery patterns, so Vyla treats today’s ovulation and period estimates with more caution."
+                severity = "caution"
+                stress_confidence = "medium"
+            elif stress_avg >= 35:
+                title = "Stress may influence today’s cycle context"
+                summary = "Your stress signal is present today and may shape how reliable some body signals look."
+                advice = "Keep wearing your device and use gentle recovery habits to help Vyla separate stress from cycle patterns."
+                cycle_impact = "Stress can contribute to noisier temperature, heart-rate, and sleep signals, which may affect ovulation and period confidence."
+                severity = "neutral"
+                stress_confidence = "medium"
+            else:
+                title = "Stress is part of today’s body context"
+                summary = "Your stress signal is low, but Vyla still includes it when interpreting cycle-related body signals."
+                advice = "Maintain steady sleep, meals, hydration, and movement to keep cycle signals easier to read."
+                cycle_impact = "Lower stress is generally more supportive for stable cycle interpretation, but it does not confirm ovulation or period timing."
+                severity = "positive"
+                stress_confidence = "low" if confidence == "low" else "medium"
+            insights.append(
+                self._insight(
+                    id="stress_cycle_context",
+                    type="stress",
+                    title=title,
+                    summary=summary,
+                    advice=advice,
+                    cycle_impact=cycle_impact,
+                    confidence=stress_confidence,
+                    severity=severity,
+                    source_signals=["stress"],
+                )
+            )
+        if low_sleep:
             insights.append(
                 self._insight(
                     id="sleep_low",
@@ -647,7 +684,7 @@ class HomeService:
             return "medium"
         return "low"
 
-    def _build_device_trends(self, user_id: str) -> list[HomeDeviceTrendResponse]:
+    def _build_device_trends(self, user_id: str, source: str | None = None) -> list[HomeDeviceTrendResponse]:
         configs = [
             ("rhr", "Resting HR", "bpm"),
             ("hrv", "HRV", "ms"),
@@ -662,7 +699,7 @@ class HomeService:
             readings = (
                 self.sensors.recent_stress(user_id, days=30)
                 if metric == "stress"
-                else self.sensors.recent(user_id, metric, days=30)
+                else self.sensors.recent(user_id, metric, days=30, source=source)
             )
             latest_by_day = {}
             for item in readings:
@@ -755,8 +792,15 @@ class HomeService:
             return int(round(cycle.mu_cycle))
         return None
 
-    def _latest_sensor(self, user_id: str, metric: str):
-        readings = self.sensors.recent(user_id, metric, days=30)
+    @staticmethod
+    def _wearable_source_filter(wearable_type) -> str | None:
+        from phora.models.enums import WearableType
+        if wearable_type == WearableType.APPLE_WATCH:
+            return "healthkit"
+        return None
+
+    def _latest_sensor(self, user_id: str, metric: str, source: str | None = None):
+        readings = self.sensors.recent(user_id, metric, days=60, source=source)
         return readings[-1] if readings else None
 
     def _latest_stress(self, user_id: str):
@@ -767,8 +811,18 @@ class HomeService:
             .first()
         )
 
+    def _latest_wearable_sync_time(self, user_id: str) -> datetime | None:
+        metric = (
+            self.db.query(WearableMetric)
+            .filter(WearableMetric.user_id == user_id)
+            .order_by(WearableMetric.collected_at.desc())
+            .first()
+        )
+        return metric.collected_at if metric else None
+
     def _build_health_snapshot(
         self,
+        user_id: str,
         wearable_type,
         sleep,
         sleep_deep,
@@ -781,6 +835,7 @@ class HomeService:
         stress,
         hrv,
         temp,
+        locale: str = "en",
     ) -> HomeHealthSnapshotResponse:
         latest_times = [
             item.recorded_at
@@ -799,6 +854,7 @@ class HomeService:
             )
             if item
         ]
+        latest_synced_at = self._latest_wearable_sync_time(user_id)
         connected = wearable_type not in (None, WearableType.NONE, WearableType.MANUAL_BBT)
         signals: list[str] = []
         if temp:
@@ -817,18 +873,18 @@ class HomeService:
             signals.append("sleep")
         if not connected:
             state = "connect_wearable"
-            title = "Connect wearable"
-            message = "Connect a wearable to show temperature, heart rate, HRV, and sleep readings here."
-            action_label = "Connect wearable"
+            title = _t(locale, "bss_connect_title")
+            message = _t(locale, "bss_connect_message")
+            action_label = _t(locale, "bss_connect_action")
         elif signals:
             state = "readings_available"
-            title = "Wearable readings"
-            message = "Showing the latest readings synced from your connected device."
+            title = _t(locale, "bss_readings_title")
+            message = _t(locale, "bss_readings_message")
             action_label = None
         else:
             state = "awaiting_readings"
-            title = "Waiting for readings"
-            message = "Your wearable is connected. Sync your device to show body signals here."
+            title = _t(locale, "bss_awaiting_title")
+            message = _t(locale, "bss_awaiting_message")
             action_label = None
         return HomeHealthSnapshotResponse(
             wearable_connected=connected,
@@ -849,6 +905,7 @@ class HomeService:
             hrv=round(hrv.value, 1) if hrv else None,
             temperature_delta_c=round(temp.delta if temp and temp.delta is not None else temp.value, 2) if temp else None,
             latest_recorded_at=max(latest_times) if latest_times else None,
+            latest_synced_at=latest_synced_at,
             cycle_support_signals=signals,
         )
 
@@ -978,27 +1035,28 @@ class HomeService:
         tracked_cycles: int,
         wearable_type,
         health_snapshot: HomeHealthSnapshotResponse,
+        locale: str = "en",
     ) -> list[HomeAlertResponse]:
         alerts: list[HomeAlertResponse] = []
         if tracked_cycles < 3:
             alerts.append(
                 HomeAlertResponse(
                     type="prediction_improves_with_data",
-                    message="Prediction accuracy improves as you log more cycles.",
+                    message=_t(locale, "alert_prediction_improves"),
                 )
             )
         if wearable_type in (None, WearableType.NONE, WearableType.MANUAL_BBT):
             alerts.append(
                 HomeAlertResponse(
                     type="connect_wearable",
-                    message="Connect a wearable to improve cycle and recovery insights.",
+                    message=_t(locale, "alert_connect_wearable"),
                 )
             )
         elif not health_snapshot.cycle_support_signals:
             alerts.append(
                 HomeAlertResponse(
                     type="sync_health_data",
-                    message="Your wearable is connected, but no recent body signals were found.",
+                    message=_t(locale, "alert_sync_health_data"),
                 )
             )
         return alerts

@@ -17,6 +17,8 @@ const mainNav = [
   { label: "AI Threads",    href: "/ai-threads",      icon: <AIIcon /> },
   { label: "Referrals",     href: "/referrals",       icon: <ReferralIcon /> },
   { label: "Support",       href: "/support",         icon: <SupportIcon /> },
+  { label: "Contacts",      href: "/contacts",        icon: <ContactIcon /> },
+  { label: "Downloads",     href: "/download-requests", icon: <DownloadIcon /> },
 ];
 
 const secondNav = [
@@ -163,4 +165,10 @@ function SettingsIcon() {
 }
 function LogoutIcon() {
   return <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M11 11l3-3-3-3M7 8h7"/></svg>;
+}
+function ContactIcon() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M13 2H3a1 1 0 00-1 1v7a1 1 0 001 1h3l2 3 2-3h3a1 1 0 001-1V3a1 1 0 00-1-1z"/></svg>;
+}
+function DownloadIcon() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 2v8M5 7l3 3 3-3M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1"/></svg>;
 }

@@ -11,8 +11,6 @@ from phora.core.security import hash_ip_for_rate_limit
 from phora.db.session import get_db
 from phora.schemas.auth import (
     AppleLoginRequest,
-    AnonymousLoginResponse,
-    AnonymousRegisterResponse,
     AuthResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
@@ -22,12 +20,13 @@ from phora.schemas.auth import (
     GoogleLoginRequest,
     LoginRequest,
     PendingVerificationResponse,
-    RecoveryPhraseLoginRequest,
     RegisterRequest,
     RefreshTokenRequest,
     ResetPasswordRequest,
     ResetPasswordResponse,
     ResendOtpRequest,
+    SetPasswordRequest,
+    SetPasswordResponse,
     SignoutResponse,
     SignupRequest,
     SignupResponse,
@@ -40,6 +39,7 @@ from phora.schemas.auth import (
 )
 from phora.services.auth import AuthService, ConflictError, InvalidAuthRequestError, UnverifiedAccountError
 from phora.services.email import EmailDeliveryError, EmailService
+from phora.services.email_i18n import parse_accept_language
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
@@ -92,11 +92,13 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenPa
 @router.post("/signup", response_model=SignupResponse)
 def signup(
     payload: SignupRequest,
+    request: Request,
     db: Session = Depends(get_db),
     settings=Depends(get_settings_dep),
 ) -> SignupResponse:
+    locale = parse_accept_language(request.headers.get("accept-language"))
     try:
-        return _service(db, settings).signup(payload)
+        return _service(db, settings).signup(payload, locale=locale)
     except EmailDeliveryError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except InvalidAuthRequestError as exc:
@@ -123,11 +125,13 @@ def verify(
 @router.post("/resend-otp", response_model=SignupResponse)
 def resend_otp(
     payload: ResendOtpRequest,
+    request: Request,
     db: Session = Depends(get_db),
     settings=Depends(get_settings_dep),
 ) -> SignupResponse:
+    locale = parse_accept_language(request.headers.get("accept-language"))
     try:
-        return _service(db, settings).resend_otp(payload)
+        return _service(db, settings).resend_otp(payload, locale=locale)
     except EmailDeliveryError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
@@ -202,6 +206,8 @@ def apple_login(
         auth_response = _service(db, settings).apple_login(payload)
         _set_refresh_cookie(response, auth_response.refresh_token, settings)
         return auth_response
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except InvalidAuthRequestError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except PermissionError as exc:
@@ -221,6 +227,8 @@ def apple_signup(
         auth_response = _service(db, settings).apple_signup(payload)
         _set_refresh_cookie(response, auth_response.refresh_token, settings)
         return auth_response
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except ConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except InvalidAuthRequestError as exc:
@@ -289,55 +297,16 @@ def signout(
     return SignoutResponse()
 
 
-@router.post("/register/anonymous", response_model=AnonymousRegisterResponse, status_code=status.HTTP_201_CREATED)
-def register_anonymous(
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db),
-    settings=Depends(get_settings_dep),
-) -> AnonymousRegisterResponse:
-    _check_auth_rate_limit(request)
-    try:
-        tokens = _service(db, settings).register_anonymous()
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Registration failed") from exc
-    db.commit()
-    _set_refresh_cookie(response, tokens["refresh_token"], settings)
-    return AnonymousRegisterResponse(
-        access_token=tokens["access_token"],
-        token_type=tokens["token_type"],
-        recovery_phrase=tokens["recovery_phrase"],
-    )
-
-
-@router.post("/login/recovery-phrase", response_model=AnonymousLoginResponse)
-def login_with_recovery_phrase(
-    payload: RecoveryPhraseLoginRequest,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db),
-    settings=Depends(get_settings_dep),
-) -> AnonymousLoginResponse:
-    _check_auth_rate_limit(request)
-    try:
-        tokens = _service(db, settings).login_with_recovery_phrase(payload)
-    except ValueError as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
-    db.commit()
-    _set_refresh_cookie(response, tokens["refresh_token"], settings)
-    return AnonymousLoginResponse(access_token=tokens["access_token"], token_type=tokens["token_type"])
-
-
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
 def forgot_password(
     payload: ForgotPasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
     settings=Depends(get_settings_dep),
 ) -> ForgotPasswordResponse:
+    locale = parse_accept_language(request.headers.get("accept-language"))
     try:
-        return _service(db, settings).start_password_reset(payload)
+        return _service(db, settings).start_password_reset(payload, locale=locale)
     except EmailDeliveryError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
@@ -365,6 +334,37 @@ def change_password(
         return _service(db, settings).change_password(user_id, payload)
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/send-set-password-otp", status_code=status.HTTP_204_NO_CONTENT)
+def send_set_password_otp(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+    settings=Depends(get_settings_dep),
+) -> None:
+    locale = parse_accept_language(request.headers.get("Accept-Language", "en"))
+    try:
+        _service(db, settings).send_set_password_otp(user_id, locale=locale)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except EmailDeliveryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to send verification email.") from exc
+
+
+@router.post("/set-password", response_model=SetPasswordResponse)
+def set_password(
+    payload: SetPasswordRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+    settings=Depends(get_settings_dep),
+) -> SetPasswordResponse:
+    try:
+        return _service(db, settings).set_password_with_otp(user_id, payload)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

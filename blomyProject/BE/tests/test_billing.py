@@ -10,10 +10,9 @@ from phora.api.app import create_app
 from phora.core.config import Settings
 from phora.core.security import create_token
 from phora.db.session import get_session_factory
-from phora.models import FlutterwaveWebhookErrorLog, Invoice, Subscription, User
+from phora.models import Invoice, PricingEligibilityReviewLog, Subscription, User, WearableOrder
 from phora.services import billing_catalog
 from phora.services.email import EmailService
-from phora.services.flutterwave_billing import FlutterwaveBillingError, FlutterwaveBillingService
 
 
 def test_plan_offers_uses_stripe_for_united_kingdom(tmp_path, monkeypatch):
@@ -197,6 +196,37 @@ def test_plan_offers_uses_czk_for_czech_republic_in_test_catalog(tmp_path, monke
     ]
 
 
+def test_plan_offers_uses_matching_eur_test_prices(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-eur.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get("/api/v1/billing/plan-offers", params={"country": "Germany"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["currency"] == "EUR"
+    assert body["plans"][1]["price_options"] == [
+        {
+            "interval": "month",
+            "provider_price_id": "price_1TYsDpGRl5Hb5DeyORFNMRbA",
+            "price_minor": 459,
+            "display_price": "EUR4.59",
+        },
+        {
+            "interval": "year",
+            "provider_price_id": "price_1TYsDpGRl5Hb5DeygaJVLN6N",
+            "price_minor": 3680,
+            "display_price": "EUR36.80",
+        },
+    ]
+
+
 def test_test_stripe_catalog_covers_all_stripe_country_currencies():
     stripe_currencies = {currency for _, currency in billing_catalog._STRIPE_COUNTRIES.values()}
     test_currencies = {currency for currency, _, _ in billing_catalog._STRIPE_PRICE_IDS_TEST}
@@ -248,7 +278,7 @@ def test_create_stripe_checkout_session_returns_checkout_url(tmp_path, monkeypat
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -327,7 +357,7 @@ def test_create_stripe_payment_sheet_returns_native_payment_details(tmp_path, mo
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -434,6 +464,221 @@ def test_create_stripe_payment_sheet_returns_native_payment_details(tmp_path, mo
         assert subscription.status == "incomplete"
         assert subscription.amount == 3.99
         assert subscription.billing_interval == "month"
+
+
+def test_african_user_gets_free_launch_access_without_stripe(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-africa-free.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("AFRICA_FREE_LAUNCH_ENABLED", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+
+    app = create_app()
+    client = TestClient(app)
+    user_id = "01AFRICAFREELAUNCHUSER000"
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id=user_id,
+                email="africa-free@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        db.commit()
+
+    def fail_stripe_post(*args, **kwargs):
+        raise AssertionError("Stripe must not be called for Africa free launch users")
+
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_post", fail_stripe_post)
+    headers = {"Authorization": f"Bearer {create_token(user_id, 'access', 30)}"}
+
+    response = client.post(
+        "/api/v1/billing/stripe/payment-sheet",
+        headers=headers,
+        json={
+            "country": "Ghana",
+            "plan_id": "premium_plus",
+            "interval": "month",
+            "app_store_country": "GH",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["isFreeRegion"] is True
+    assert body["requiresPayment"] is False
+    assert body["pricingRule"] == "africa_free_launch_promotion"
+    assert body["freeLaunchPlanId"] == "africa_free_launch_premium_plus"
+
+    with get_session_factory()() as db:
+        subscription = db.query(Subscription).filter(Subscription.user_id == user_id).one()
+        assert subscription.provider == "africa_free_launch"
+        assert subscription.tier == "premium_plus"
+        assert subscription.status == "active"
+        assert subscription.amount == 0.0
+
+
+def test_non_african_user_continues_to_stripe(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-non-africa-stripe.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("AFRICA_FREE_LAUNCH_ENABLED", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+
+    app = create_app()
+    client = TestClient(app)
+    user_id = "01NONAFRICASTRIPEUSER000"
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id=user_id,
+                email="non-africa@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        db.commit()
+
+    calls: list[str] = []
+
+    def fake_stripe_post(self, path: str, *, data: dict[str, object], stripe_version: str | None = None) -> dict[str, object]:
+        calls.append(path)
+        if path == "/v1/customers":
+            return {"id": "cus_non_africa"}
+        if path == "/v1/subscriptions":
+            return {
+                "id": "sub_non_africa",
+                "status": "incomplete",
+                "current_period_end": int(datetime(2026, 6, 1, tzinfo=UTC).timestamp()),
+                "latest_invoice": {"payment_intent": {"client_secret": "pi_non_africa_secret"}},
+            }
+        if path == "/v1/ephemeral_keys":
+            return {"secret": "ek_non_africa_secret"}
+        raise AssertionError(f"Unexpected Stripe path: {path}")
+
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_post", fake_stripe_post)
+    headers = {"Authorization": f"Bearer {create_token(user_id, 'access', 30)}"}
+
+    response = client.post(
+        "/api/v1/billing/stripe/payment-sheet",
+        headers=headers,
+        json={"country": "United Kingdom", "plan_id": "premium_plus", "interval": "month"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["provider"] == "stripe"
+    assert calls == ["/v1/customers", "/v1/subscriptions", "/v1/ephemeral_keys"]
+
+
+def test_mismatched_pricing_signals_are_logged(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-signal-mismatch.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("AFRICA_FREE_LAUNCH_ENABLED", "true")
+
+    app = create_app()
+    client = TestClient(app)
+    user_id = "01SIGNALMISMATCHUSER000"
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id=user_id,
+                email="signal-mismatch@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        db.commit()
+
+    headers = {"Authorization": f"Bearer {create_token(user_id, 'access', 30)}"}
+    response = client.post(
+        "/api/v1/billing/pricing-eligibility",
+        headers=headers,
+        json={"country": "Ghana", "billing_country": "United States"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["isFreeRegion"] is False
+    assert response.json()["requiresPayment"] is True
+    assert response.json()["reviewFlagged"] is True
+
+    with get_session_factory()() as db:
+        log = db.query(PricingEligibilityReviewLog).one()
+        assert log.reason == "country_signal_mismatch"
+        countries = {item["country"] for item in log.signals["countries"]}
+        assert {"GH", "US"}.issubset(countries)
+
+
+def test_device_location_country_can_qualify_africa_free_launch(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-device-location.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("AFRICA_FREE_LAUNCH_ENABLED", "true")
+
+    app = create_app()
+    client = TestClient(app)
+    user_id = "01DEVICELOCATIONUSER000"
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id=user_id,
+                email="device-location@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/billing/pricing-eligibility",
+        headers={"Authorization": f"Bearer {create_token(user_id, 'access', 30)}"},
+        json={"country": "Ghana", "device_location_country": "GH"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["isFreeRegion"] is True
+    assert response.json()["requiresPayment"] is False
+
+
+def test_africa_free_launch_flag_disabled_uses_normal_pricing(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-africa-disabled.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("AFRICA_FREE_LAUNCH_ENABLED", "false")
+
+    app = create_app()
+    client = TestClient(app)
+    user_id = "01AFRICADISABLEDUSER000"
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id=user_id,
+                email="africa-disabled@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        db.commit()
+
+    headers = {"Authorization": f"Bearer {create_token(user_id, 'access', 30)}"}
+    response = client.post(
+        "/api/v1/billing/pricing-eligibility",
+        headers=headers,
+        json={"country": "Nigeria", "app_store_country": "NG"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["isFreeRegion"] is False
+    assert body["requiresPayment"] is True
+    assert body["pricingRule"] == "standard_paid_pricing"
+    assert body["reason"] == "feature_flag_disabled"
+
+    with get_session_factory()() as db:
+        assert db.query(Subscription).filter(Subscription.user_id == user_id).count() == 0
 
 
 def test_sync_stripe_payment_sheet_subscription_marks_subscription_active(tmp_path, monkeypatch):
@@ -601,7 +846,7 @@ def test_create_flutterwave_checkout_session_returns_checkout_url(tmp_path, monk
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -811,7 +1056,7 @@ def test_create_flutterwave_checkout_session_requires_flutterwave_country(tmp_pa
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -868,7 +1113,7 @@ def test_create_flutterwave_checkout_session_hides_expired_key_provider_error(tm
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -1133,6 +1378,12 @@ def test_stripe_webhook_persists_subscription_and_invoice(tmp_path, monkeypatch)
         "billing_interval": "month",
         "provider_price_id": "price_1TIwFQGRl5Hb5DeygcA8938Y",
         "current_period_end": "2026-05-05T00:00:00",
+        "cancel_at_period_end": False,
+        "pending_billing_interval": None,
+        "pending_provider_price_id": None,
+        "pending_amount": None,
+        "pending_currency": None,
+        "pending_change_effective_at": None,
     }
 
 
@@ -1951,7 +2202,7 @@ def test_subscription_selection_can_save_free_choice(tmp_path, monkeypatch):
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -2002,6 +2253,12 @@ def test_subscription_selection_can_save_free_choice(tmp_path, monkeypatch):
         "billing_interval": None,
         "provider_price_id": None,
         "current_period_end": None,
+        "cancel_at_period_end": False,
+        "pending_billing_interval": None,
+        "pending_provider_price_id": None,
+        "pending_amount": None,
+        "pending_currency": None,
+        "pending_change_effective_at": None,
     }
 
 
@@ -2075,7 +2332,7 @@ def test_subscription_selection_requires_country_and_interval_for_premium_plus(t
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -2139,7 +2396,7 @@ def test_subscription_selection_exposes_stripe_checkout_metadata(tmp_path, monke
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -2188,10 +2445,12 @@ def test_subscription_selection_accepts_live_stripe_price_for_germany(tmp_path, 
     monkeypatch.setenv("PHORA_ENVIRONMENT", "stage")
     monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_live_123")
     monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_live_123")
+    monkeypatch.setenv("PHORA_STRIPE_PRICE_DE_MONTH", "price_live_de_month_placeholder")
+    monkeypatch.setenv("PHORA_STRIPE_PRICE_DE_YEAR", "price_live_de_year_placeholder")
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -2326,10 +2585,357 @@ def test_cancel_stripe_subscription_calls_provider_and_updates_state(tmp_path, m
     assert response.json()["is_active"] is True
     assert response.json()["redirect_to_home"] is True
     assert response.json()["show_subscription_screen"] is False
+    assert response.json()["cancel_at_period_end"] is True
     assert response.json()["current_period_end"] in {
         "2026-06-01T00:00:00+00:00",
         "2026-06-01T00:00:00",
     }
+
+
+def test_change_stripe_subscription_interval_schedules_monthly_without_immediate_invoice(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-switch-monthly.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+
+    from phora.db.session import get_session_factory
+    from phora.models import User
+
+    calls: list[tuple[str, dict[str, object] | None]] = []
+
+    def fake_stripe_get(self, path: str, *, params: dict[str, object] | None = None) -> dict[str, object]:
+        calls.append((path, params))
+        if path == "/v1/subscriptions/sub_switch":
+            return {
+                "id": "sub_switch",
+                "current_period_start": int(datetime(2025, 6, 1, tzinfo=UTC).timestamp()),
+                "current_period_end": int(datetime(2026, 6, 1, tzinfo=UTC).timestamp()),
+                "items": {
+                    "data": [
+                        {
+                            "id": "si_switch",
+                            "quantity": 1,
+                            "price": {"id": "price_year"},
+                        }
+                    ]
+                },
+            }
+        raise AssertionError(f"unexpected Stripe GET {path}")
+
+    def fake_stripe_post(self, path: str, *, data: dict[str, str]) -> dict[str, object]:
+        calls.append((path, data))
+        if path == "/v1/subscription_schedules":
+            assert data == {"from_subscription": "sub_switch"}
+            return {
+                "id": "sched_switch",
+                "current_phase": {
+                    "start_date": int(datetime(2025, 6, 1, tzinfo=UTC).timestamp()),
+                    "end_date": int(datetime(2026, 6, 1, tzinfo=UTC).timestamp()),
+                },
+            }
+        if path == "/v1/subscription_schedules/sched_switch":
+            assert data["proration_behavior"] == "none"
+            assert data["end_behavior"] == "release"
+            assert data["phases[0][items][0][price]"] == "price_year"
+            assert data["phases[0][end_date]"] == str(int(datetime(2026, 6, 1, tzinfo=UTC).timestamp()))
+            assert data["phases[1][items][0][price]"] == "price_1TTR20GRl5Hb5Deyw0zaAes6"
+            assert data["phases[1][metadata][interval]"] == "month"
+            return {"id": "sched_switch"}
+        raise AssertionError(f"unexpected Stripe POST {path}")
+
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_get", fake_stripe_get)
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_post", fake_stripe_post)
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        user = User(
+            id="01TESTUSERSWITCHMONTHLY",
+            email="switch-monthly@example.com",
+            password_hash="!phora-unusable-password$test",
+            email_verified=True,
+        )
+        db.add(user)
+        db.add(
+            Subscription(
+                user_id=user.id,
+                provider="stripe",
+                provider_subscription_id="sub_switch",
+                provider_customer_id="cus_switch",
+                provider_price_id="price_year",
+                tier="premium_plus",
+                status="active",
+                billing_interval="year",
+                currency="GBP",
+                amount=35.0,
+                current_period_end=datetime(2026, 6, 1, tzinfo=UTC),
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/billing/subscription/change-interval",
+        headers={"Authorization": f"Bearer {create_token('01TESTUSERSWITCHMONTHLY', 'access', 30)}"},
+        json={"country": "United Kingdom", "interval": "month"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["interval"] == "month"
+    assert [call[0] for call in calls] == [
+        "/v1/subscriptions/sub_switch",
+        "/v1/subscription_schedules",
+        "/v1/subscription_schedules/sched_switch",
+    ]
+    with get_session_factory()() as db:
+        subscription = db.query(Subscription).filter(Subscription.user_id == "01TESTUSERSWITCHMONTHLY").one()
+        assert subscription.billing_interval == "year"
+        assert subscription.provider_price_id == "price_year"
+        assert subscription.amount == 35.0
+        assert subscription.pending_billing_interval == "month"
+        assert subscription.pending_provider_price_id == "price_1TTR20GRl5Hb5Deyw0zaAes6"
+        assert subscription.pending_amount == 3.99
+        assert subscription.pending_change_effective_at.replace(tzinfo=UTC) == datetime(2026, 6, 1, tzinfo=UTC)
+        assert subscription.cancel_at_period_end is False
+
+    history = client.get(
+        "/api/v1/billing/invoices",
+        headers={"Authorization": f"Bearer {create_token('01TESTUSERSWITCHMONTHLY', 'access', 30)}"},
+    )
+    assert history.status_code == 200
+    assert history.json()["items"][0]["item_type"] == "event"
+    assert history.json()["items"][0]["title"] == "Plan change scheduled"
+    assert history.json()["items"][0]["amount_label"] == "No charge"
+
+
+def test_cancel_scheduled_stripe_subscription_interval_change_releases_schedule(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-cancel-scheduled-change.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+
+    from phora.db.session import get_session_factory
+    from phora.models import User
+
+    calls: list[tuple[str, dict[str, object] | None]] = []
+
+    def fake_stripe_get(self, path: str, *, params: dict[str, object] | None = None) -> dict[str, object]:
+        calls.append((path, params))
+        assert path == "/v1/subscriptions/sub_cancel_schedule"
+        return {
+            "id": "sub_cancel_schedule",
+            "status": "active",
+            "cancel_at_period_end": False,
+            "current_period_end": int(datetime(2026, 6, 1, tzinfo=UTC).timestamp()),
+            "schedule": {"id": "sched_cancel"},
+        }
+
+    def fake_stripe_post(self, path: str, *, data: dict[str, str]) -> dict[str, object]:
+        calls.append((path, data))
+        assert path == "/v1/subscription_schedules/sched_cancel/release"
+        assert data == {}
+        return {"id": "sched_cancel", "released_subscription": "sub_cancel_schedule"}
+
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_get", fake_stripe_get)
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_post", fake_stripe_post)
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        user = User(
+            id="01TESTUSERCANCELSCHEDULE",
+            email="cancel-schedule@example.com",
+            password_hash="!phora-unusable-password$test",
+            email_verified=True,
+        )
+        db.add(user)
+        db.add(
+            Subscription(
+                user_id=user.id,
+                provider="stripe",
+                provider_subscription_id="sub_cancel_schedule",
+                provider_customer_id="cus_cancel_schedule",
+                provider_price_id="price_year",
+                tier="premium_plus",
+                status="active",
+                billing_interval="year",
+                currency="GBP",
+                amount=35.0,
+                current_period_end=datetime(2026, 6, 1, tzinfo=UTC),
+                pending_billing_interval="month",
+                pending_provider_price_id="price_month",
+                pending_currency="GBP",
+                pending_amount=3.99,
+                pending_change_effective_at=datetime(2026, 6, 1, tzinfo=UTC),
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/billing/subscription/change-interval/cancel",
+        headers={"Authorization": f"Bearer {create_token('01TESTUSERCANCELSCHEDULE', 'access', 30)}"},
+    )
+
+    assert response.status_code == 200
+    assert [call[0] for call in calls] == [
+        "/v1/subscriptions/sub_cancel_schedule",
+        "/v1/subscription_schedules/sched_cancel/release",
+    ]
+    with get_session_factory()() as db:
+        subscription = db.query(Subscription).filter(Subscription.user_id == "01TESTUSERCANCELSCHEDULE").one()
+        assert subscription.pending_billing_interval is None
+        assert subscription.pending_provider_price_id is None
+        assert subscription.pending_amount is None
+        assert subscription.pending_currency is None
+        assert subscription.pending_change_effective_at is None
+        assert subscription.billing_interval == "year"
+        assert subscription.provider_price_id == "price_year"
+
+    history = client.get(
+        "/api/v1/billing/invoices",
+        headers={"Authorization": f"Bearer {create_token('01TESTUSERCANCELSCHEDULE', 'access', 30)}"},
+    )
+    assert history.status_code == 200
+    assert history.json()["items"][0]["item_type"] == "event"
+    assert history.json()["items"][0]["title"] == "Scheduled plan change canceled"
+    assert history.json()["items"][0]["amount_label"] == "No charge"
+
+
+def test_billing_history_payment_links_to_wearable_order_detail(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-history-wearable.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+
+    app = create_app()
+    client = TestClient(app)
+    user_id = "01TESTUSERHISTORYWEARABLE"
+
+    with get_session_factory()() as db:
+        user = User(
+            id=user_id,
+            email="history-wearable@example.com",
+            password_hash="!phora-unusable-password$test",
+            email_verified=True,
+        )
+        db.add(user)
+        subscription = Subscription(
+            user_id=user.id,
+            provider="stripe",
+            provider_subscription_id="sub_history_wearable",
+            tier="premium_plus",
+            status="active",
+            billing_interval="year",
+            currency="EUR",
+            amount=65.91,
+        )
+        db.add(subscription)
+        db.flush()
+        invoice = Invoice(
+            subscription_id=subscription.id,
+            provider_invoice_id="in_history_wearable",
+            provider_payment_intent_id="pi_history_wearable",
+            total=65.91,
+            currency="EUR",
+            status="paid",
+        )
+        db.add(invoice)
+        order = WearableOrder(
+            user_id=user.id,
+            subscription_id=subscription.id,
+            order_number="#VYLA-HISTORY",
+            wearable_sku="VYLA-WEARABLE-V1",
+            wearable_name="Vyla Wearable",
+            wearable_price=29.11,
+            wearable_currency="EUR",
+            payment_status="paid",
+            fulfillment_status="pending",
+            shipping_address_json={},
+            timeline_json=[],
+            provider_payment_intent_id="pi_history_wearable",
+        )
+        db.add(order)
+        db.commit()
+        order_id = order.id
+
+    response = client.get(
+        "/api/v1/billing/invoices",
+        headers={"Authorization": f"Bearer {create_token(user_id, 'access', 30)}"},
+    )
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["title"] == "Payment received"
+    assert item["subtitle"] == "View order details"
+    assert item["amount_label"] == "€65.91"
+    assert item["action_url"] == f"/wearable/orders/{order_id}"
+
+
+def test_restart_stripe_subscription_turns_renewal_back_on(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-restart-stripe.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+
+    from phora.db.session import get_session_factory
+    from phora.models import User
+
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    def fake_stripe_post(self, path: str, *, data: dict[str, str]) -> dict[str, object]:
+        calls.append((path, data))
+        return {
+            "id": "sub_restart",
+            "status": "active",
+            "cancel_at_period_end": False,
+            "current_period_end": int(datetime(2026, 6, 1, tzinfo=UTC).timestamp()),
+        }
+
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_post", fake_stripe_post)
+
+    app = create_app()
+    client = TestClient(app)
+
+    with get_session_factory()() as db:
+        user = User(
+            id="01TESTUSERRESTARTSTRIPE",
+            email="restart-stripe@example.com",
+            password_hash="!phora-unusable-password$test",
+            email_verified=True,
+        )
+        db.add(user)
+        db.add(
+            Subscription(
+                user_id=user.id,
+                provider="stripe",
+                provider_subscription_id="sub_restart",
+                provider_customer_id="cus_restart",
+                provider_price_id="price_123",
+                tier="premium_plus",
+                status="active",
+                billing_interval="month",
+                currency="GBP",
+                amount=3.99,
+                current_period_end=datetime(2026, 6, 1, tzinfo=UTC),
+                cancel_at_period_end=True,
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/billing/subscription/restart",
+        headers={"Authorization": f"Bearer {create_token('01TESTUSERRESTARTSTRIPE', 'access', 30)}"},
+    )
+
+    assert response.status_code == 200
+    assert calls == [("/v1/subscriptions/sub_restart", {"cancel_at_period_end": "false"})]
+    assert response.json()["cancel_at_period_end"] is False
+    with get_session_factory()() as db:
+        subscription = db.query(Subscription).filter(Subscription.user_id == "01TESTUSERRESTARTSTRIPE").one()
+        assert subscription.cancel_at_period_end is False
 
 
 def test_cancel_flutterwave_subscription_calls_provider_and_updates_state(tmp_path, monkeypatch):

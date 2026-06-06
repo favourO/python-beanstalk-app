@@ -9,6 +9,7 @@ from phora.models import (
     DailyLog,
     DailyInsight,
     EmailOtpCode,
+    GoogleHealthConnection,
     NotificationDevice,
     NotificationHistory,
     NotificationPreference,
@@ -34,10 +35,6 @@ class UserRepository:
 
     def by_email(self, email: str) -> User | None:
         return self.db.scalar(select(User).where(User.email == email.lower()))
-
-    def anonymous_users(self) -> list[User]:
-        stmt = select(User).where(User.account_mode == "anonymous", User.deleted_at.is_(None))
-        return list(self.db.scalars(stmt))
 
     def active_user_ids(self) -> list[str]:
         stmt = select(User.id).where(User.deleted_at.is_(None))
@@ -366,11 +363,13 @@ class SensorRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def recent(self, user_id: str, metric: str | None = None, days: int = 30) -> list[SensorReading]:
+    def recent(self, user_id: str, metric: str | None = None, days: int = 30, source: str | None = None) -> list[SensorReading]:
         since = datetime.now(UTC) - timedelta(days=days)
         stmt = select(SensorReading).where(SensorReading.user_id == user_id, SensorReading.recorded_at >= since)
         if metric:
             stmt = stmt.where(SensorReading.metric == metric)
+        if source:
+            stmt = stmt.where(SensorReading.source == source)
         stmt = stmt.order_by(SensorReading.recorded_at.asc())
         return list(self.db.scalars(stmt))
 
@@ -386,6 +385,7 @@ class SensorRepository:
         metric_types: list[str] | None = None,
         days: int = 30,
         include_excluded: bool = True,
+        data_source: str | None = None,
     ) -> list[WearableMetric]:
         since = datetime.now(UTC) - timedelta(days=days)
         stmt = select(WearableMetric).where(
@@ -398,8 +398,33 @@ class SensorRepository:
             stmt = stmt.where(
                 WearableMetric.excluded_from_ovulation_prediction.is_(False)
             )
+        if data_source:
+            stmt = stmt.where(WearableMetric.data_source == data_source)
         stmt = stmt.order_by(WearableMetric.measured_at.asc())
         return list(self.db.scalars(stmt))
+
+
+class GoogleHealthConnectionRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def by_user(self, user_id: str) -> GoogleHealthConnection | None:
+        stmt = select(GoogleHealthConnection).where(
+            GoogleHealthConnection.user_id == user_id,
+            GoogleHealthConnection.revoked_at.is_(None),
+        )
+        return self.db.scalar(stmt)
+
+    def any_by_user(self, user_id: str) -> GoogleHealthConnection | None:
+        stmt = select(GoogleHealthConnection).where(
+            GoogleHealthConnection.user_id == user_id,
+        )
+        return self.db.scalar(stmt)
+
+    def save(self, connection: GoogleHealthConnection) -> GoogleHealthConnection:
+        self.db.add(connection)
+        self.db.flush()
+        return connection
 
 
 class AuditRepository:

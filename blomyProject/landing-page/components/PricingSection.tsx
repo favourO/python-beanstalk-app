@@ -16,7 +16,7 @@ const premiumFeatures = [
   "Detailed insights and reports",
   "Stress monitoring and ovulation shift insights",
   "Health insight sync with supported devices",
-  "Vyla Wearable included with first upgrade",
+  "Vyla Band — add for just £25 with first upgrade",
   "Priority experience",
 ];
 

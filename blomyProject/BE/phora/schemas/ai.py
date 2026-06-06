@@ -37,10 +37,20 @@ class MedicalChatResponse(BaseModel):
     answer: str
     medical_only: bool = True
     sufficient_data: bool = False
+    chat_limit: int | None = None
+    chats_used: int | None = None
+    chats_remaining: int | None = None
+    quota_reset_at: str | None = None
     used_user_data: list[str] = Field(default_factory=list)
     saved_records: list[str] = Field(default_factory=list)
     missing_data: list[MedicalChatMissingData] = Field(default_factory=list)
     disclaimer: str
+
+
+class MedicalDocumentAnalysisResponse(MedicalChatResponse):
+    filename: str
+    extracted_text_chars: int = 0
+    document_type: str
 
 
 class MedicalChatHistoryItem(BaseModel):
@@ -61,6 +71,8 @@ class MedicalChatThreadSummary(BaseModel):
 class MedicalChatHistoryResponse(BaseModel):
     thread_id: str | None = None
     messages: list[MedicalChatHistoryItem] = Field(default_factory=list)
+    has_more: bool = False
+    next_before: str | None = None
 
 
 class MedicalChatThreadListResponse(BaseModel):

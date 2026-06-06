@@ -28,12 +28,12 @@ celery_app.conf.task_routes = {
 celery_app.conf.beat_schedule = {
     "refresh-daily-insights-at-midnight": {
         "task": "phora.workers.jobs.refresh_all_daily_insights",
-        "schedule": crontab(minute=0),
+        "schedule": crontab(hour=0, minute=0),
         "options": {"queue": "default"},
     },
     "send-cycle-reminders-at-7am": {
         "task": "phora.workers.jobs.send_all_morning_cycle_notifications",
-        "schedule": crontab(minute=0),
+        "schedule": crontab(hour=7, minute=0),
         "options": {"queue": "default"},
     },
 }

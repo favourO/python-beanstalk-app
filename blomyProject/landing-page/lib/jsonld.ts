@@ -74,7 +74,7 @@ export function mobileApplicationSchema() {
       "Period and cycle tracking",
       "BBT temperature logging",
       "Ovulation tracking",
-      "Wearable integration (Oura Ring)",
+      "Wearable integration (Apple Watch & Fitbit)",
       "AI-powered cycle insights",
       "Symptom and mood logging",
       "Fertile window predictions",

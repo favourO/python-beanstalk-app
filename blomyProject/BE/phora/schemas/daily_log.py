@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 
 
 class PeriodLogPayload(BaseModel):
+    start_date: date | None = None
+    end_date: date | None = None
     intensity: str | None = None
     colour: str | None = None
     symptoms: list[str] = Field(default_factory=list)

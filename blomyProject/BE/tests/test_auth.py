@@ -15,7 +15,7 @@ def test_signup_verify_login_flow(tmp_path, monkeypatch):
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -74,7 +74,7 @@ def test_login_flags_reflect_onboarding_and_subscription_selection(tmp_path, mon
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -180,7 +180,7 @@ def test_login_returns_saved_onboarding_progress(tmp_path, monkeypatch):
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -243,7 +243,7 @@ def test_signup_fails_when_email_exists(tmp_path, monkeypatch):
     monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
     monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
 
-    monkeypatch.setattr(EmailService, "send_signup_otp", lambda self, recipient, code: None)
+    monkeypatch.setattr(EmailService, "send_signup_otp", lambda self, recipient, code, locale="en": None)
 
     app = create_app()
     client = TestClient(app)
@@ -295,7 +295,7 @@ def test_auth_tokens_expire_after_at_least_one_year(tmp_path, monkeypatch):
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -337,7 +337,7 @@ def test_refresh_rotates_refresh_token_and_detects_reuse(tmp_path, monkeypatch):
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -397,7 +397,7 @@ def test_signup_accepts_extended_payload(tmp_path, monkeypatch):
     monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
     monkeypatch.setenv("PHORA_SMTP_ENABLED", "false")
 
-    monkeypatch.setattr(EmailService, "send_signup_otp", lambda self, recipient, code: None)
+    monkeypatch.setattr(EmailService, "send_signup_otp", lambda self, recipient, code, locale="en": None)
 
     app = create_app()
     client = TestClient(app)
@@ -438,7 +438,7 @@ def test_signup_rejects_future_birth_date(tmp_path, monkeypatch):
     monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
     monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
 
-    monkeypatch.setattr(EmailService, "send_signup_otp", lambda self, recipient, code: None)
+    monkeypatch.setattr(EmailService, "send_signup_otp", lambda self, recipient, code, locale="en": None)
 
     app = create_app()
     client = TestClient(app)
@@ -466,7 +466,7 @@ def test_signup_and_login_support_passwords_longer_than_72_bytes(tmp_path, monke
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -509,7 +509,7 @@ def test_signup_and_login_support_multibyte_passwords_longer_than_72_bytes(tmp_p
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -552,10 +552,10 @@ def test_forgot_password_and_reset_flow(tmp_path, monkeypatch):
 
     sent_codes: dict[str, str] = {}
 
-    def capture_signup(self, recipient: str, code: str) -> None:
+    def capture_signup(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[f"signup:{recipient}"] = code
 
-    def capture_reset(self, recipient: str, code: str) -> None:
+    def capture_reset(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[f"reset:{recipient}"] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture_signup)
@@ -612,7 +612,7 @@ def test_change_password_flow(tmp_path, monkeypatch):
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -673,7 +673,7 @@ def test_forgot_password_does_not_attempt_email_for_unknown_user(tmp_path, monke
     monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
     monkeypatch.setenv("PHORA_SMTP_ENABLED", "false")
 
-    def fail_if_called(self, recipient: str, code: str) -> None:
+    def fail_if_called(self, recipient: str, code: str, locale: str = "en") -> None:
         raise AssertionError(f"password reset email should not be sent for unknown user: {recipient} {code}")
 
     monkeypatch.setattr(EmailService, "send_password_reset_otp", fail_if_called)
@@ -694,7 +694,7 @@ def test_totp_setup_enable_and_login_requires_code(tmp_path, monkeypatch):
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -754,7 +754,7 @@ def test_refresh_reuse_clears_cookie(tmp_path, monkeypatch):
     monkeypatch.setenv("PHORA_SMTP_ENABLED", "false")
 
     sent_codes: dict[str, str] = {}
-    monkeypatch.setattr(EmailService, "send_signup_otp", lambda self, r, c: sent_codes.__setitem__(r, c))
+    monkeypatch.setattr(EmailService, "send_signup_otp", lambda self, r, c, locale="en": sent_codes.__setitem__(r, c))
 
     app = create_app()
     client = TestClient(app)
@@ -798,7 +798,7 @@ def test_signout_revokes_access_token_and_clears_refresh_cookie(tmp_path, monkey
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -858,7 +858,7 @@ def test_login_with_unverified_account_resends_otp(tmp_path, monkeypatch):
 
     sent_codes: dict[str, list[str]] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes.setdefault(recipient, []).append(code)
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)

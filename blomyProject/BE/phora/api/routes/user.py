@@ -1,18 +1,22 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from phora.api.deps import get_current_user_id
+from phora.api.deps import get_current_user_id, get_settings_dep
 from phora.db.session import get_db
 from phora.repositories.core import AuditRepository, UserRepository
 from phora.models import User
 from phora.schemas.user import (
     AgeProfileResponse,
+    DeleteAccountRequest,
     AgeProfileUpdateRequest,
+    DeleteAccountResponse,
     ReproductiveStageRequest,
     UserProfileResponse,
 )
+from phora.services.auth import AuthService
+from phora.services.email import EmailDeliveryError, EmailService
 from phora.services.age import POPULATION_PRIORS, age_band_label, age_on_day, derive_age_band
 
 router = APIRouter(prefix="/user", tags=["user"])
@@ -104,3 +108,32 @@ def set_reproductive_stage(
     AuditRepository(db).log(user_id, "user.reproductive_stage.updated", payload.model_dump(mode="json"))
     db.commit()
     return {"status": "ok", "stage": payload.stage}
+
+
+@router.post("/account/delete-otp", response_model=DeleteAccountResponse, status_code=200)
+def request_delete_account_otp(
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+    settings=Depends(get_settings_dep),
+) -> DeleteAccountResponse:
+    try:
+        AuthService(db, settings, EmailService(settings)).request_delete_account_otp(user_id)
+    except EmailDeliveryError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return DeleteAccountResponse(message="Confirmation code sent to your email.")
+
+
+@router.delete("/account", response_model=DeleteAccountResponse, status_code=200)
+def delete_account(
+    payload: DeleteAccountRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+    settings=Depends(get_settings_dep),
+) -> DeleteAccountResponse:
+    try:
+        AuthService(db, settings, EmailService(settings)).delete_account(user_id, payload.otp_code)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return DeleteAccountResponse()

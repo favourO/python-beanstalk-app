@@ -1,0 +1,21 @@
+name: phora_gtl1_watch
+description: GTL1 watch integration wrapper for Phora.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ^3.7.2
+  flutter: ">=3.29.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.phora.gtl1_watch
+        pluginClass: PhoraGtl1WatchPlugin
+      ios:
+        pluginClass: PhoraGtl1WatchPlugin

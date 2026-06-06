@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   description:
     "Track your period, BBT temperature, ovulation, symptoms, and wearable wellness trends with Vyla. AI-powered cycle insights in a private, easy-to-use app for iPhone and Android.",
   keywords:
-    "cycle tracking app, period tracker, BBT tracking, ovulation tracking, menstrual cycle tracker, wearable cycle insights, Oura ring period tracking, AI wellness, women's health app",
+    "cycle tracking app, period tracker, BBT tracking, ovulation tracking, menstrual cycle tracker, wearable cycle insights, Apple Watch period tracking, Fitbit cycle tracking, AI wellness, women's health app",
   authors: [{ name: "Vyla", url: BASE_URL }],
   creator: "Vyla",
   publisher: "Vyla",

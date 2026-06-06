@@ -60,14 +60,23 @@ def test_send_signup_otp_builds_html_email_with_inline_logo(monkeypatch):
     html = html_parts[0].get_content()
     assert "Verify it" in html
     assert all(d in html for d in "842193")
-    assert "Keep your account safe" in html
-    assert "Didn" in html and "request this" in html
-    assert "Vyla Health Ltd." in html
+    assert "Never share this code with anyone" in html
+    assert "request a code" in html and "safely ignore this email" in html
+    assert "Vyla</strong> Team" in html
     assert "#FF8A4C" in html
     assert "cid:" in html
 
     assert len(image_parts) == 1
     assert image_parts[0].get_filename() == "vyla-logo.png"
+
+
+def test_account_confirmed_email_dashboard_button_uses_app_link():
+    service = EmailService(Settings(smtp_enabled=False))
+
+    html = service._render_account_confirmed_html()
+
+    assert 'href="https://vyla.health/dashboard"' in html
+    assert "Go to My Dashboard" in html
 
 
 def test_deployed_environment_raises_when_smtp_disabled():

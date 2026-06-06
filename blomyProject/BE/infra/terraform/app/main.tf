@@ -38,19 +38,24 @@ locals {
 
   secret_environment = merge(
     {
-      PHORA_SECRET_KEY                      = coalesce(var.app_secret_key, random_password.app_secret.result)
-      PHORA_APPLE_BUNDLE_ID                 = ""
-      PHORA_APPLE_SERVICE_ID                = ""
-      PHORA_STRIPE_SECRET_KEY               = ""
-      PHORA_STRIPE_PUBLISHABLE_KEY          = ""
-      PHORA_STRIPE_WEBHOOK_SECRET           = ""
-      PHORA_FLUTTERWAVE_SECRET_KEY          = ""
-      PHORA_FLUTTERWAVE_PUBLIC_KEY          = ""
-      PHORA_FLUTTERWAVE_ENCRYPTION_KEY      = ""
-      PHORA_FLUTTERWAVE_REDIRECT_URL        = ""
-      PHORA_FLUTTERWAVE_WEBHOOK_SECRET_HASH = ""
-      PHORA_LLM_API_KEY                     = ""
-      PHORA_FIREBASE_CREDENTIALS_JSON       = ""
+      PHORA_SECRET_KEY                           = coalesce(var.app_secret_key, random_password.app_secret.result)
+      PHORA_APPLE_BUNDLE_ID                      = ""
+      PHORA_APPLE_SERVICE_ID                     = ""
+      PHORA_STRIPE_SECRET_KEY                    = ""
+      PHORA_STRIPE_PUBLISHABLE_KEY               = ""
+      PHORA_STRIPE_WEBHOOK_SECRET                = ""
+      PHORA_FLUTTERWAVE_SECRET_KEY               = ""
+      PHORA_FLUTTERWAVE_PUBLIC_KEY               = ""
+      PHORA_FLUTTERWAVE_ENCRYPTION_KEY           = ""
+      PHORA_FLUTTERWAVE_REDIRECT_URL             = ""
+      PHORA_FLUTTERWAVE_WEBHOOK_SECRET_HASH      = ""
+      PHORA_LLM_API_KEY                          = ""
+      PHORA_FIREBASE_CREDENTIALS_JSON            = ""
+      PHORA_GOOGLE_HEALTH_CLIENT_ID              = ""
+      PHORA_GOOGLE_HEALTH_CLIENT_SECRET          = ""
+      PHORA_GOOGLE_HEALTH_REDIRECT_URI           = ""
+      PHORA_GOOGLE_HEALTH_OAUTH_SUCCESS_REDIRECT = "vyla://wearables/google-health?status=connected"
+      PHORA_GOOGLE_HEALTH_OAUTH_ERROR_REDIRECT   = "vyla://wearables/google-health?status=error"
     },
     var.extra_secret_environment,
   )

@@ -49,6 +49,18 @@ def normalize_metric_source(source: str) -> str:
     return normalized or "manual"
 
 
+def classify_data_source(source: str) -> str:
+    """Map any source string to a canonical data_source value."""
+    normalized = (source or "").strip().lower()
+    if normalized in {"gtl1", "phora_wear", "vyla_wearable"}:
+        return "vyla_wearable"
+    if normalized in {"healthkit", "apple_watch", "apple_health"}:
+        return "apple_health"
+    if normalized in {"manual", "manual_bbt", "manual_entry"}:
+        return "manual_entry"
+    return "manual_entry"
+
+
 def build_manual_bbt_metric(
     *,
     user_id: str,
@@ -109,6 +121,7 @@ def build_manual_bbt_metric(
     return WearableMetric(
         user_id=user_id,
         source="manual",
+        data_source="manual_entry",
         metric_type="basal_body_temperature",
         value=temperature_celsius,
         unit="celsius",
@@ -138,10 +151,13 @@ def build_trend_metric(
     excluded_from_ovulation_prediction: bool = False,
     exclusion_reason: str | None = None,
     raw_payload: dict | None = None,
+    data_source: str | None = None,
+    external_id: str | None = None,
 ) -> WearableMetric:
     return WearableMetric(
         user_id=user_id,
         source=normalize_metric_source(source),
+        data_source=data_source or classify_data_source(source),
         metric_type=metric_type,
         value=value,
         unit=unit,
@@ -153,4 +169,5 @@ def build_trend_metric(
         excluded_from_ovulation_prediction=excluded_from_ovulation_prediction,
         exclusion_reason=exclusion_reason,
         raw_payload=raw_payload,
+        external_id=external_id,
     )

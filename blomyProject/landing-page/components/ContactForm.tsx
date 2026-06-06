@@ -31,7 +31,7 @@ export default function ContactForm() {
     try {
       const base =
         process.env.NEXT_PUBLIC_API_URL ??
-        "https://vyla-stage-api.875kda1e0109p.eu-west-2.cs.amazonlightsail.com";
+        "https://stage.api.vyla.health";
       const res = await fetch(`${base}/api/v1/public/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -198,7 +198,7 @@ export default function ContactForm() {
       </button>
 
       <p className="text-[12px] text-[#B0938A] text-center">
-        Vyla Health Technologies Inc · 6 Giles Avenue, London RM13
+        Vyla Health · a product of Demycorp Ltd
       </p>
     </form>
   );

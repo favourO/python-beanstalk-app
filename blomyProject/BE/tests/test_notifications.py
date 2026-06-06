@@ -169,15 +169,15 @@ def test_evaluate_due_prediction_notifications_creates_period_and_ovulation_aler
                 cycle_id=cycle.id,
                 generated_at=datetime(2026, 4, 6, 7, 0, tzinfo=UTC),
                 current_phase="ovulatory",
-                ovulation_estimate={"cycle_day": 23, "date": "2026-04-06"},
+                ovulation_estimate={"cycle_day": 23, "date": "2026-04-07"},
                 confidence=0.87,
                 confidence_explanation="Strong ensemble agreement.",
                 warning_flags=[],
                 models_used=["ensemble"],
                 model_audits=[],
                 audit={"ovulation_estimate_source": "ensemble"},
-                fertile_window={"start": "2026-04-07", "end": "2026-04-12", "is_open": True, "method": "ensemble"},
-                next_period_estimate={"date": "2026-04-09", "range_days": 2},
+                fertile_window={"start": "2026-04-10", "end": "2026-04-12", "is_open": True, "method": "ensemble"},
+                next_period_estimate={"date": "2026-04-07", "range_days": 2},
                 phase_distribution={},
                 contributing_signals=[],
                 model_version="v1",
@@ -269,7 +269,7 @@ def test_morning_cycle_notifications_include_daily_recommendations(tmp_path, mon
                 model_audits=[],
                 audit={},
                 fertile_window={"start": "2026-04-09", "end": "2026-04-15"},
-                next_period_estimate={"date": "2026-04-04"},
+                next_period_estimate={"date": "2026-04-02"},
                 phase_distribution={},
                 contributing_signals=[],
                 model_version="v1",
@@ -286,7 +286,61 @@ def test_morning_cycle_notifications_include_daily_recommendations(tmp_path, mon
     assert result.created == 2
     assert "period_approaching" in types
     assert "period_care_reminder" in types
+    period_care_items = [item for item in items if item.notification_type == "period_care_reminder"]
+    assert period_care_items
+    assert "until April 5" in period_care_items[0].body
+    assert "Log bleeding, pain, mood, and symptoms" in period_care_items[0].body
+    assert period_care_items[0].payload["current_period_end_date"] == "2026-04-05"
     assert any(item.payload.get("nutrition_recommendation") for item in items)
+
+
+def test_morning_cycle_notifications_send_daily_while_period_is_active(tmp_path, monkeypatch):
+    _boot_app(tmp_path, monkeypatch)
+    with get_session_factory()() as db:
+        user_id = _seed_user(db)
+        cycle = CycleRecord(
+            user_id=user_id,
+            period_start_date=date(2026, 4, 1),
+            menses_length=5,
+            is_active=True,
+        )
+        db.add(cycle)
+        db.flush()
+        db.add(
+            PredictionSnapshot(
+                prediction_id="pred-period-daily",
+                user_id=user_id,
+                cycle_id=cycle.id,
+                generated_at=datetime(2026, 4, 1, 6, 0, tzinfo=UTC),
+                current_phase="menstrual",
+                ovulation_estimate={"date": "2026-04-14"},
+                confidence=0.7,
+                confidence_explanation="test",
+                warning_flags=[],
+                models_used=["test"],
+                model_audits=[],
+                audit={},
+                fertile_window={"start": "2026-04-09", "end": "2026-04-15"},
+                next_period_estimate={"date": "2026-05-01"},
+                phase_distribution={},
+                contributing_signals=[],
+                model_version="v1",
+                ml_payload={},
+                source="test",
+            )
+        )
+        db.commit()
+
+        service = NotificationService(db)
+        first = service.evaluate_morning_cycle_notifications(user_id, now=datetime(2026, 4, 1, 7, 0, tzinfo=UTC))
+        second = service.evaluate_morning_cycle_notifications(user_id, now=datetime(2026, 4, 2, 7, 0, tzinfo=UTC))
+        items, _ = service.list_notifications(user_id)
+
+    period_care_items = [item for item in items if item.notification_type == "period_care_reminder"]
+    assert first.created == 1
+    assert second.created == 1
+    assert len(period_care_items) == 2
+    assert {item.payload["cycle_day"] for item in period_care_items} == {1, 2}
 
 
 def test_invalid_fcm_tokens_are_disabled_after_send(tmp_path, monkeypatch):

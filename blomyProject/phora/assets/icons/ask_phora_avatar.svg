@@ -1,0 +1,41 @@
+<svg width="180" height="160" viewBox="0 0 180 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="hairBack" x1="38" y1="18" x2="126" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5E2D39"/>
+      <stop offset="1" stop-color="#2F1723"/>
+    </linearGradient>
+    <linearGradient id="hairFront" x1="65" y1="20" x2="126" y2="98" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6D3542"/>
+      <stop offset="1" stop-color="#3A1D29"/>
+    </linearGradient>
+    <linearGradient id="skin" x1="63" y1="34" x2="111" y2="102" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD0B6"/>
+      <stop offset="1" stop-color="#F2A98C"/>
+    </linearGradient>
+    <linearGradient id="shirt" x1="44" y1="104" x2="130" y2="158" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF2EC"/>
+      <stop offset="1" stop-color="#F6D6C6"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="88" cy="145" rx="44" ry="10" fill="#C58770" fill-opacity="0.18"/>
+  <path d="M40 110C38 82 45 41 84 28C123 15 138 47 137 78C136 109 143 122 138 135C130 155 108 158 88 157C60 156 43 141 40 110Z" fill="url(#hairBack)"/>
+  <path d="M63 91H110V118C110 131 100 140 87 140C74 140 63 131 63 118V91Z" fill="url(#skin)"/>
+  <path d="M87 111C95 111 102 107 107 101V115C107 126 98 135 87 135C76 135 67 126 67 115V101C72 107 79 111 87 111Z" fill="#F0A98B"/>
+  <path d="M46 158C49 128 62 113 87 113C112 113 125 128 128 158H46Z" fill="url(#shirt)"/>
+  <path d="M66 158L73 122C76 118 81 115 87 115C93 115 98 118 101 122L108 158H66Z" fill="#FFF8F4"/>
+  <path d="M58 158C60 134 70 122 87 122C104 122 114 134 116 158H58Z" fill="#F8E2D7"/>
+  <circle cx="87" cy="69" r="34" fill="url(#skin)"/>
+  <path d="M56 70C57 48 71 34 87 34C105 34 119 48 120 69C114 56 103 48 87 48C71 48 62 56 56 70Z" fill="url(#hairFront)"/>
+  <path d="M55 70C54 86 62 101 75 108L70 89L55 70Z" fill="#472432"/>
+  <path d="M119 69C121 85 113 101 99 109L104 89L119 69Z" fill="#472432"/>
+  <ellipse cx="75" cy="71" rx="4" ry="5" fill="#2A1820"/>
+  <ellipse cx="100" cy="71" rx="4" ry="5" fill="#2A1820"/>
+  <path d="M70 61C73 58 77 57 81 59" stroke="#4C2934" stroke-width="3" stroke-linecap="round"/>
+  <path d="M94 59C98 57 102 58 105 61" stroke="#4C2934" stroke-width="3" stroke-linecap="round"/>
+  <path d="M87 74V84" stroke="#DA8C70" stroke-width="3" stroke-linecap="round"/>
+  <path d="M77 90C83 95 91 95 98 90" stroke="#C26661" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M64 57C65 43 74 32 90 31C103 31 115 38 119 53C111 40 98 36 87 36C76 36 68 42 64 57Z" fill="#472432"/>
+  <path d="M82 125H92" stroke="#F08B5E" stroke-width="4" stroke-linecap="round"/>
+  <path d="M74 125C77 121 80 120 84 120" stroke="#F08B5E" stroke-width="4" stroke-linecap="round"/>
+  <path d="M100 125C97 121 94 120 90 120" stroke="#F08B5E" stroke-width="4" stroke-linecap="round"/>
+</svg>

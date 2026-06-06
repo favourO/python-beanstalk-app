@@ -36,7 +36,7 @@ const features = [
     icon: "https://vyla.health/assets/icons/icon-sound.png",
     iconBg: "#FFF6DD",
     title: "Wearable temperature integration",
-    body: "Connect an Oura Ring on Premium to supplement manual BBT logs with continuous overnight temperature data for a fuller cycle picture.",
+    body: "Connect an Apple Watch Series 8+ or Fitbit on Premium to supplement manual BBT logs with continuous overnight temperature data for a fuller cycle picture.",
   },
   {
     icon: "https://vyla.health/assets/icons/icon-note.png",
@@ -73,7 +73,7 @@ const faqItems = [
   },
   {
     q: "Can I track BBT with a wearable in Vyla?",
-    a: "Yes. Vyla Premium integrates with Oura Ring to pull in continuous overnight temperature trends, which can complement your manual morning BBT logs.",
+    a: "Yes. Vyla Premium integrates with Apple Watch Series 8 and above and Fitbit to pull in continuous overnight temperature trends, which can complement your manual morning BBT logs.",
   },
   {
     q: "What is a BBT thermal shift?",

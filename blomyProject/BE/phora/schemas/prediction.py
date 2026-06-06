@@ -7,6 +7,9 @@ class PredictionSnapshotResponse(BaseModel):
     prediction_id: str
     user_id: str
     cycle_id: str | None = None
+    cycle_start_date: date | None = None
+    cycle_length_days: int | None = None
+    period_length_days: int | None = None
     generated_at: datetime
     current_phase: str
     ovulation_estimate: dict = Field(default_factory=dict)
@@ -39,4 +42,3 @@ class AgeContextResponse(BaseModel):
     perimenopause_mode_active: bool = False
     how_age_affects_predictions: str
     population_priors_for_band: dict = Field(default_factory=dict)
-

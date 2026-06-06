@@ -90,6 +90,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "ovulation_body": "Peak fertility. {confidence_pct}% confidence based on your data.",
         "morning_period_title": "Your period may start in 3 days",
         "period_care_title": "Period care for today",
+        "period_care_body": "You are on your period until {end_date}. Log bleeding, pain, mood, and symptoms so Vyla can keep your calendar and insights accurate.",
         "log_symptoms": "Log symptoms",
         "got_it": "Got it",
         "pregnancy_test": "Take pregnancy test?",
@@ -159,6 +160,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "setting_potential_pregnancy_desc": "Period 14+ days late",
         "setting_bangle_battery_critical_title": "Bangle battery critical",
         "setting_bangle_battery_critical_desc": "Battery below 5%",
+        "morning_lh_reminder_title": "Consider taking an LH test",
+        "morning_lh_reminder_body": "You're in your fertile window. LH tests can confirm ovulation timing.",
+        "morning_lh_reminder_skip": "Not using LH tests",
     },
     "es": {
         "period_approaching_title": "Tu periodo se acerca",
@@ -240,6 +244,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "setting_potential_pregnancy_desc": "Periodo con 14 o mas dias de retraso",
         "setting_bangle_battery_critical_title": "Bateria critica del bangle",
         "setting_bangle_battery_critical_desc": "Bateria por debajo del 5%",
+        "morning_lh_reminder_title": "Considera hacer un test de LH",
+        "morning_lh_reminder_body": "Estas en tu ventana fertil. Los tests de LH pueden confirmar el momento de la ovulacion.",
+        "morning_lh_reminder_skip": "No uso tests de LH",
     },
     "fr": {
         "period_approaching_title": "Vos regles approchent",
@@ -321,6 +328,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "setting_potential_pregnancy_desc": "Regles en retard de 14 jours ou plus",
         "setting_bangle_battery_critical_title": "Batterie du bangle critique",
         "setting_bangle_battery_critical_desc": "Batterie sous 5 %",
+        "morning_lh_reminder_title": "Pensez a faire un test LH",
+        "morning_lh_reminder_body": "Vous etes dans votre fenetre fertile. Les tests LH peuvent confirmer le moment de l'ovulation.",
+        "morning_lh_reminder_skip": "Je n'utilise pas les tests LH",
     },
     "de": {
         "period_approaching_title": "Deine Periode steht bald bevor",
@@ -402,6 +412,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "setting_potential_pregnancy_desc": "Periode 14 oder mehr Tage spaet",
         "setting_bangle_battery_critical_title": "Kritischer Bangle-Akku",
         "setting_bangle_battery_critical_desc": "Akku unter 5 %",
+        "morning_lh_reminder_title": "Erwaege einen LH-Test",
+        "morning_lh_reminder_body": "Du befindest dich in deinem fruchtbaren Fenster. LH-Tests koennen den Eisprungzeitpunkt bestaetigen.",
+        "morning_lh_reminder_skip": "Ich verwende keine LH-Tests",
     },
     "pt": {
         "period_approaching_title": "A tua menstruacao esta a aproximar-se",
@@ -483,6 +496,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "setting_potential_pregnancy_desc": "Menstruacao com 14 ou mais dias de atraso",
         "setting_bangle_battery_critical_title": "Bateria critica do bangle",
         "setting_bangle_battery_critical_desc": "Bateria abaixo de 5%",
+        "morning_lh_reminder_title": "Considere fazer um teste de LH",
+        "morning_lh_reminder_body": "Voce esta na sua janela fertil. Os testes de LH podem confirmar o momento da ovulacao.",
+        "morning_lh_reminder_skip": "Nao uso testes de LH",
     },
 }
 

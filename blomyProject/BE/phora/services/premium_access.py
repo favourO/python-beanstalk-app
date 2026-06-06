@@ -7,6 +7,7 @@ from phora.models.billing import Subscription
 from phora.models.growth import PremiumGrant
 
 _ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing"}
+_ACTIVE_BILLING_PROVIDERS = {"stripe", "africa_free_launch"}
 
 
 @dataclass
@@ -56,6 +57,8 @@ class PremiumAccessService:
     def _subscription_has_active_access(self, subscription: Subscription) -> bool:
         if subscription.tier == "free":
             return True
+        if subscription.provider not in _ACTIVE_BILLING_PROVIDERS:
+            return False
         if subscription.status in _ACTIVE_SUBSCRIPTION_STATUSES:
             return True
         if subscription.status in {"canceled", "cancelled"} and subscription.current_period_end:

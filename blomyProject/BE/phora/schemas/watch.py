@@ -49,3 +49,72 @@ class WatchSyncRequest(BaseModel):
     device_type: str
     synced_at: datetime
     days: list[Gtl1DailyHealthData] = Field(default_factory=list)
+
+
+class GoogleHealthAuthUrlResponse(BaseModel):
+    authorization_url: str
+
+
+class GoogleHealthStatusResponse(BaseModel):
+    connected: bool
+    provider: str = "google_health"
+    last_synced_at: datetime | None = None
+    sync_health: str = "unavailable"
+    granted_scopes: list[str] = Field(default_factory=list)
+    last_error: str | None = None
+
+
+class GoogleHealthSyncResponse(BaseModel):
+    synced: bool
+    saved: int = 0
+    last_synced_at: datetime | None = None
+    detail: str | None = None
+
+
+class AppleHealthDailyMetric(BaseModel):
+    date: date
+    sleep_minutes: int | None = None
+    deep_sleep_minutes: int | None = None
+    light_sleep_minutes: int | None = None
+    steps: int | None = None
+    resting_heart_rate: float | None = None
+    hrv: float | None = None
+    bbt: float | None = None
+    body_temperature: float | None = None
+    wrist_temperature: float | None = None
+    external_id: str | None = None
+
+
+class AppleHealthSyncRequest(BaseModel):
+    synced_at: datetime
+    days: list[AppleHealthDailyMetric] = Field(default_factory=list)
+
+
+class AppleHealthSyncResponse(BaseModel):
+    synced: bool
+    saved: int = 0
+    last_synced_at: datetime | None = None
+
+
+class AppleHealthStatusResponse(BaseModel):
+    connected: bool
+    last_synced_at: datetime | None = None
+
+
+class HealthMetricRecord(BaseModel):
+    id: str
+    user_id: str
+    metric_type: str
+    value: float
+    unit: str
+    data_source: str
+    recorded_at: datetime
+    external_id: str | None = None
+    confidence: str = "medium"
+    excluded_from_ovulation_prediction: bool = False
+    source_label: str = ""
+
+
+class HealthMetricsResponse(BaseModel):
+    metrics: list[HealthMetricRecord] = Field(default_factory=list)
+    total: int = 0

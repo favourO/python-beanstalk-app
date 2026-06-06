@@ -82,7 +82,7 @@ export default function PrivacyPage() {
         {/* Intro */}
         <div className="space-y-4 mb-14 p-6 bg-white rounded-2xl border border-[#FFD9C2]">
           <P>
-            This Privacy Policy explains how <strong>DemyCorp Ltd</strong>, trading as Vyla ("Vyla," "we," "us," or "our") collects, uses, stores, discloses, protects, and otherwise processes personal data when you use the Vyla mobile application, Vyla AI, connected wearable features, reports, sharing tools, websites, subscription flows, support channels, and related services (collectively, the "Services").
+            This Privacy Policy explains how <strong>DemyCorp Ltd</strong>, trading as Vyla (&quot;Vyla,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) collects, uses, stores, discloses, protects, and otherwise processes personal data when you use the Vyla mobile application, Vyla AI, connected wearable features, reports, sharing tools, websites, subscription flows, support channels, and related services (collectively, the &quot;Services&quot;).
           </P>
           <P>
             Vyla is a consumer cycle tracking and wellness app. It helps users log cycle information, symptoms, moods, temperature, LH tests, cervical mucus, intimacy, wearable signals, and related wellness information. Vyla may also provide cycle predictions, insights, reminders, reports, sharing tools, Vyla AI chat, AI-assisted logging, and subscription-based premium features.
@@ -277,7 +277,7 @@ export default function PrivacyPage() {
               "report configuration choices and share method selected",
               "email subject and body text generated for a share flow",
             ]} />
-            <P>Do not provide another person's contact details unless you have permission to do so.</P>
+            <P>Do not provide another person&apos;s contact details unless you have permission to do so.</P>
           </Sub>
 
           <Sub title="4.8 Subscription, Checkout, and Payment Data">
@@ -664,7 +664,7 @@ export default function PrivacyPage() {
             <P>You may have rights to access, rectification, erasure, restriction, portability, objection, withdrawal of consent, and rights related to automated decision-making.</P>
           </Sub>
           <Sub title="Complaints">
-            <P>If you are in the UK, you may complain to the Information Commissioner's Office at https://ico.org.uk/. If you are in the EEA, you may complain to your local data protection supervisory authority. We encourage you to contact us first so we can try to resolve your concern.</P>
+            <P>If you are in the UK, you may complain to the Information Commissioner&apos;s Office at https://ico.org.uk/. If you are in the EEA, you may complain to your local data protection supervisory authority. We encourage you to contact us first so we can try to resolve your concern.</P>
           </Sub>
         </Section>
 
@@ -685,7 +685,7 @@ export default function PrivacyPage() {
             ]} />
           </Sub>
           <Sub title="Sales, Sharing, and Targeted Advertising">
-            <P>We do not sell sensitive reproductive health data for money. We do not use sensitive reproductive health data for third-party targeted advertising. If we later engage in activities that are considered a "sale," "sharing," targeted advertising, or similar regulated disclosure under applicable state law, we will provide required notices and opt-out controls.</P>
+            <P>We do not sell sensitive reproductive health data for money. We do not use sensitive reproductive health data for third-party targeted advertising. If we later engage in activities that are considered a &quot;sale,&quot; &quot;sharing,&quot; targeted advertising, or similar regulated disclosure under applicable state law, we will provide required notices and opt-out controls.</P>
           </Sub>
           <Sub title="State Privacy Rights">
             <P>Depending on your state, you may have rights to confirm processing, access, delete, correct, obtain a portable copy, opt out of certain processing, limit certain sensitive data uses, and appeal denied requests. Contact us using the details in Section 2 to exercise these rights.</P>
@@ -705,7 +705,7 @@ export default function PrivacyPage() {
 
         {/* Section 29 */}
         <Section id="consumer-health" title="29. Consumer Health Data Notice">
-          <P>Some laws define "consumer health data" broadly. Where such laws apply, Vyla may collect consumer health data including menstrual cycle data, fertility and ovulation information, pregnancy-intention information you provide, symptoms, mood, sleep, pain, temperature, LH, cervical mucus, intimacy, and wellness logs, wearable health and wellness signals, AI messages about health or wellness, and inferred cycle, fertility, and wellness insights.</P>
+          <P>Some laws define &quot;consumer health data&quot; broadly. Where such laws apply, Vyla may collect consumer health data including menstrual cycle data, fertility and ovulation information, pregnancy-intention information you provide, symptoms, mood, sleep, pain, temperature, LH, cervical mucus, intimacy, and wellness logs, wearable health and wellness signals, AI messages about health or wellness, and inferred cycle, fertility, and wellness insights.</P>
           <P>You may have rights to access, delete, withdraw consent, or appeal decisions regarding consumer health data depending on where you live.</P>
         </Section>
 
@@ -718,12 +718,12 @@ export default function PrivacyPage() {
         {/* Section 31 */}
         <Section id="hipaa" title="31. HIPAA and Healthcare Providers">
           <P>Vyla is a consumer wellness app. Unless we expressly state otherwise in a separate written agreement, Vyla is not acting as a HIPAA covered entity or business associate when you use the consumer app.</P>
-          <P>If you choose to share a Vyla report with a healthcare provider, that provider's handling of the report may be subject to separate health privacy laws and the provider's own policies.</P>
+          <P>If you choose to share a Vyla report with a healthcare provider, that provider&apos;s handling of the report may be subject to separate health privacy laws and the provider&apos;s own policies.</P>
         </Section>
 
         {/* Section 32 */}
         <Section id="changes" title="32. Changes to This Privacy Policy">
-          <P>We may update this Privacy Policy from time to time. If we make material changes, we may notify you through the app, by email, through our website, or by other reasonable means. The "Last updated" date shows when this version was last revised.</P>
+          <P>We may update this Privacy Policy from time to time. If we make material changes, we may notify you through the app, by email, through our website, or by other reasonable means. The &quot;Last updated&quot; date shows when this version was last revised.</P>
           <P>Your continued use of the Services after an updated Privacy Policy becomes effective means your data will be processed under the updated policy to the extent permitted by law. If we need consent for a new processing activity, we will request it.</P>
         </Section>
 

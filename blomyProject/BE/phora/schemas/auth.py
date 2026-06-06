@@ -18,11 +18,6 @@ class LoginRequest(BaseModel):
     totp_code: str | None = Field(default=None, min_length=6, max_length=8)
 
 
-class RecoveryPhraseLoginRequest(BaseModel):
-    recovery_phrase: str = Field(min_length=16)
-    totp_code: str | None = Field(default=None, min_length=6, max_length=8)
-
-
 class SocialProvider(str, Enum):
     google = "google"
     facebook = "facebook"
@@ -107,6 +102,15 @@ class ChangePasswordResponse(BaseModel):
     message: str = "Password updated successfully."
 
 
+class SetPasswordRequest(BaseModel):
+    otp_code: str = Field(min_length=4, max_length=10)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class SetPasswordResponse(BaseModel):
+    message: str = "Password set successfully."
+
+
 class AuthUserResponse(BaseModel):
     id: str
     email: EmailStr
@@ -125,17 +129,6 @@ class TokenPair(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str | None = None
-
-
-class AnonymousRegisterResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    recovery_phrase: str
-
-
-class AnonymousLoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
 
 
 class AuthResponse(TokenPair):

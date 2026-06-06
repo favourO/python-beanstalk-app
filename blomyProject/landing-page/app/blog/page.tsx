@@ -9,7 +9,7 @@ import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
 import { blogPageSchema } from "@/lib/jsonld";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://stage.vyla.health";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://stage.api.vyla.health";
 const BASE_URL = "https://vyla.health";
 
 type Post = {
@@ -443,7 +443,7 @@ const TOPICS = [
   { title: "Cycle Tracking", desc: "Guides on logging periods, reading cycle phases, and getting the most from Vyla's tracking features.", href: "/cycle-tracking/", color: "#FFFBEE" },
   { title: "BBT & Temperature", desc: "How to measure basal body temperature, chart thermal shifts, and understand ovulation timing.", href: "/bbt-tracking/", color: "#F2FDF5" },
   { title: "Ovulation Awareness", desc: "LH surges, cervical mucus, fertile windows, and interpreting ovulation signals across cycles.", href: "/ovulation-tracking/", color: "#FFF4FB" },
-  { title: "Wearable Insights", desc: "Using Oura Ring alongside cycle tracking — what temperature and HRV data reveal about your cycle.", href: "/wearable-cycle-insights/", color: "#EEFCFA" },
+  { title: "Wearable Insights", desc: "Using Apple Watch and Fitbit alongside cycle tracking — what temperature and heart rate data reveal about your cycle.", href: "/wearable-cycle-insights/", color: "#EEFCFA" },
 ];
 
 // ── Main blog listing ──────────────────────────────────────────────────────
@@ -688,6 +688,7 @@ function BlogContent() {
 
   // Load post from ?post=slug
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!postSlug) { setActivePost(null); return; }
     const existing = posts.find(p => p.slug === postSlug);
     if (existing) { setActivePost(existing); return; }

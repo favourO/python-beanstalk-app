@@ -7,10 +7,12 @@ Public (unauthenticated) endpoints for the Vyla landing page.
 """
 import logging
 import uuid
+from io import BytesIO
 from html import escape
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, EmailStr
+from starlette.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -18,11 +20,13 @@ from phora.core.config import get_settings
 from phora.db.session import get_db
 from phora.models.blog import BlogPost
 from phora.schemas.blog import BlogPostListOut, BlogPostOut
-from phora.models.contact import ContactMessage
+from phora.models.contact import ContactMessage, DownloadRequest
+from phora.services.app_release import AppReleaseService, AppReleaseUnavailable
 from phora.services.email import EmailService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/public", tags=["public"])
+
 
 APP_STORE_URL = "https://apps.apple.com/app/vyla"
 PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.vyla.app"
@@ -48,6 +52,18 @@ class DownloadLinkRequest(BaseModel):
 
 class DownloadLinkResponse(BaseModel):
     ok: bool
+
+
+class AndroidReleaseResponse(BaseModel):
+    platform: str = "android"
+    download_url: str
+    qr_url: str
+    version_name: str | None = None
+    version_code: str | None = None
+    uploaded_at: str | None = None
+    file_name: str | None = None
+    size_bytes: int | None = None
+    sha256: str | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -81,11 +97,49 @@ def submit_contact(
 def send_download_link(
     payload: DownloadLinkRequest,
     background: BackgroundTasks,
+    db: Session = Depends(get_db),
 ) -> DownloadLinkResponse:
+    db.add(DownloadRequest(id=str(uuid.uuid4()), email=payload.email.lower().strip()))
+    db.commit()
     settings = get_settings()
     svc = EmailService(settings)
     background.add_task(_send_download_email, svc, payload.email)
     return DownloadLinkResponse(ok=True)
+
+
+@router.get("/app/android", response_model=AndroidReleaseResponse)
+def get_android_release(request: Request) -> AndroidReleaseResponse:
+    settings = get_settings()
+    release = _get_android_release_or_404(settings)
+    return AndroidReleaseResponse(
+        download_url=_android_download_url(request, settings),
+        qr_url=_android_qr_url(request, settings),
+        version_name=release.version_name,
+        version_code=release.version_code,
+        uploaded_at=release.uploaded_at,
+        file_name=release.file_name,
+        size_bytes=release.size_bytes,
+        sha256=release.sha256,
+    )
+
+
+@router.get("/app/android/download", name="download_android_app")
+def download_android_app() -> RedirectResponse:
+    settings = get_settings()
+    release = _get_android_release_or_404(settings)
+    return RedirectResponse(release.download_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@router.get("/app/android/qr.png", name="android_download_qr")
+def android_download_qr(request: Request) -> Response:
+    settings = get_settings()
+    _get_android_release_or_404(settings)
+    png = _render_qr_png(_android_download_url(request, settings))
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
 
 
 # ── Background email tasks ────────────────────────────────────────────────────
@@ -213,9 +267,15 @@ def _render_simple_html(heading: str, subtext: str, body_html: str) -> str:
     </tr>
     <tr>
       <td style="padding:20px 32px;background:#FFF6F0;border-top:1px solid #FFE0CC;text-align:center;">
-        <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#A06A52;">
-          &copy; 2026 Vyla Health Technologies Inc. All rights reserved.<br/>
-          6 Giles Avenue, London RM13
+        <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:12px;color:#A06A52;">
+          &copy; 2026 Vyla Health, a product of Demycorp Ltd. All rights reserved.
+        </p>
+        <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;">
+          <a href="https://vyla.health/privacy" style="color:#FF7A33;text-decoration:none;">Privacy Policy</a>
+          <span style="color:#FFD5B8;padding:0 6px;">&#8226;</span>
+          <a href="https://vyla.health/terms" style="color:#FF7A33;text-decoration:none;">Terms of Use</a>
+          <span style="color:#FFD5B8;padding:0 6px;">&#8226;</span>
+          <a href="mailto:support@vyla.health" style="color:#FF7A33;text-decoration:none;">Contact Us</a>
         </p>
       </td>
     </tr>
@@ -223,6 +283,49 @@ def _render_simple_html(heading: str, subtext: str, body_html: str) -> str:
 </td></tr>
 </table>
 </body></html>"""
+
+
+def _get_android_release_or_404(settings):
+    try:
+        return AppReleaseService(settings).latest_android_release()
+    except AppReleaseUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Android app download is not available yet.",
+        ) from exc
+
+
+def _android_download_url(request: Request, settings) -> str:
+    return f"{_public_base_url(request, settings)}{settings.api_prefix}/public/app/android/download"
+
+
+def _android_qr_url(request: Request, settings) -> str:
+    return f"{_public_base_url(request, settings)}{settings.api_prefix}/public/app/android/qr.png"
+
+
+def _public_base_url(request: Request, settings) -> str:
+    if settings.public_app_url:
+        return settings.public_app_url.rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+def _render_qr_png(value: str) -> bytes:
+    try:
+        import qrcode
+        from qrcode.constants import ERROR_CORRECT_M
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="QR code generation dependency is not installed.",
+        ) from exc
+
+    qr = qrcode.QRCode(error_correction=ERROR_CORRECT_M, box_size=8, border=4)
+    qr.add_data(value)
+    qr.make(fit=True)
+    image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()
 
 
 # ── Public blog endpoints ──────────────────────────────────────────────────────

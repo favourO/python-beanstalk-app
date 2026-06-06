@@ -67,6 +67,7 @@ class HomeHealthSnapshotResponse(BaseModel):
     hrv: float | None = None
     temperature_delta_c: float | None = None
     latest_recorded_at: datetime | None = None
+    latest_synced_at: datetime | None = None
     cycle_support_signals: list[str] = Field(default_factory=list)
 
 
