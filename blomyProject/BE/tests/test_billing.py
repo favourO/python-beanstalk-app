@@ -5,6 +5,7 @@ import json
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from phora.api.app import create_app
 from phora.core.config import Settings
@@ -2590,6 +2591,68 @@ def test_cancel_stripe_subscription_calls_provider_and_updates_state(tmp_path, m
         "2026-06-01T00:00:00+00:00",
         "2026-06-01T00:00:00",
     }
+
+
+def test_cancel_subscription_succeeds_when_billing_activity_table_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-cancel-missing-activity.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_test_123")
+
+    def fake_stripe_post(self, path: str, *, data: dict[str, str]) -> dict[str, object]:
+        return {
+            "id": "sub_missing_activity",
+            "status": "active",
+            "cancel_at_period_end": True,
+            "current_period_end": int(datetime(2026, 6, 1, tzinfo=UTC).timestamp()),
+        }
+
+    monkeypatch.setattr("phora.services.stripe_billing.StripeBillingService._stripe_post", fake_stripe_post)
+
+    app = create_app()
+    client = TestClient(app)
+    user_id = "01TESTUSERCANCELNOACTIVITY"
+
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id=user_id,
+                email="cancel-missing-activity@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        db.add(
+            Subscription(
+                user_id=user_id,
+                provider="stripe",
+                provider_subscription_id="sub_missing_activity",
+                provider_customer_id="cus_missing_activity",
+                provider_price_id="price_123",
+                tier="premium_plus",
+                status="active",
+                billing_interval="month",
+                currency="GBP",
+                amount=3.99,
+                current_period_end=datetime(2026, 6, 1, tzinfo=UTC),
+            )
+        )
+        db.commit()
+        db.execute(text("DROP TABLE billing_activities"))
+        db.commit()
+
+    response = client.post(
+        "/api/v1/billing/subscription/cancel",
+        headers={"Authorization": f"Bearer {create_token(user_id, 'access', 30)}"},
+        json={"immediate": False},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["cancel_at_period_end"] is True
+    with get_session_factory()() as db:
+        subscription = db.query(Subscription).filter(Subscription.user_id == user_id).one()
+        assert subscription.cancel_at_period_end is True
 
 
 def test_change_stripe_subscription_interval_schedules_monthly_without_immediate_invoice(tmp_path, monkeypatch):

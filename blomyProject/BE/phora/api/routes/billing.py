@@ -1,9 +1,11 @@
 import json
+import logging
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from phora.api.deps import get_current_user_id, get_settings_dep
@@ -37,6 +39,7 @@ from phora.services.stripe_billing import StripeBillingError, StripeBillingServi
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 admin_router = APIRouter(prefix="/admin/billing", tags=["admin-billing"])
+_log = logging.getLogger(__name__)
 
 _ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing"}
 _ACTIVE_BILLING_PROVIDERS = {"stripe", "africa_free_launch"}
@@ -184,6 +187,32 @@ def _record_billing_activity(
             subtitle=subtitle,
         )
     )
+
+
+def _record_billing_activity_best_effort(
+    db: Session,
+    subscription: Subscription,
+    *,
+    event_type: str,
+    title: str,
+    subtitle: str | None = None,
+) -> None:
+    try:
+        _record_billing_activity(
+            db,
+            subscription,
+            event_type=event_type,
+            title=title,
+            subtitle=subtitle,
+        )
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        _log.exception("Failed to record billing activity %s for subscription %s", event_type, subscription.id)
+        try:
+            db.refresh(subscription)
+        except SQLAlchemyError:
+            db.rollback()
 
 
 def _require_admin_user(db: Session, user_id: str) -> User:
@@ -433,8 +462,9 @@ def cancel_subscription(
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE if "not configured" in detail.lower() else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
+    db.commit()
     period = _format_billing_date(subscription.current_period_end)
-    _record_billing_activity(
+    _record_billing_activity_best_effort(
         db,
         subscription,
         event_type="subscription_cancellation_scheduled",
@@ -445,7 +475,6 @@ def cancel_subscription(
             else "Premium access continues until the end of your current billing period."
         ),
     )
-    db.commit()
     configured, checkout_endpoint, checkout_public_key = _provider_checkout_details(settings, subscription.provider)
     selection_made, redirect_to_home, show_subscription_screen = _subscription_response_flags(subscription)
     is_active = _subscription_has_active_access(subscription)
@@ -495,14 +524,14 @@ def restart_subscription(
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE if "not configured" in detail.lower() else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
-    _record_billing_activity(
+    db.commit()
+    _record_billing_activity_best_effort(
         db,
         subscription,
         event_type="subscription_restarted",
         title="Subscription restarted",
         subtitle=f"{_interval_plan_label(subscription.billing_interval)} will renew as normal.",
     )
-    db.commit()
     configured, checkout_endpoint, checkout_public_key = _provider_checkout_details(settings, subscription.provider)
     selection_made, redirect_to_home, show_subscription_screen = _subscription_response_flags(subscription)
     is_active = _subscription_has_active_access(subscription)
@@ -662,8 +691,9 @@ def change_subscription_interval(
         )
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
+    db.commit()
     effective = _format_billing_date(subscription.pending_change_effective_at)
-    _record_billing_activity(
+    _record_billing_activity_best_effort(
         db,
         subscription,
         event_type="plan_change_scheduled",
@@ -675,7 +705,6 @@ def change_subscription_interval(
             else f"{_interval_plan_label(subscription.pending_billing_interval)} starts after your current paid period."
         ),
     )
-    db.commit()
     return BillingSubscriptionIntervalChangeResponse(
         interval=payload.interval,
         current_period_end=(
@@ -731,14 +760,14 @@ def cancel_subscription_interval_change(
         )
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
-    _record_billing_activity(
+    db.commit()
+    _record_billing_activity_best_effort(
         db,
         subscription,
         event_type="plan_change_canceled",
         title="Scheduled plan change canceled",
         subtitle=f"{_interval_plan_label(subscription.billing_interval)} will continue.",
     )
-    db.commit()
     return BillingSubscriptionIntervalChangeCancelResponse(
         current_period_end=(
             subscription.current_period_end.isoformat()
