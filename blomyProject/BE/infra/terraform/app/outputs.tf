@@ -27,6 +27,11 @@ output "dns_name" {
   value = var.dns_name
 }
 
+output "redis_endpoint" {
+  value       = aws_elasticache_cluster.redis.cache_nodes[0].address
+  description = "ElastiCache Redis endpoint used by Celery worker and beat"
+}
+
 output "certificate_validation_records" {
   value = var.certificate_arn != null && trimspace(var.certificate_arn) != "" ? [] : [
     for dvo in aws_acm_certificate.app[0].domain_validation_options : {
