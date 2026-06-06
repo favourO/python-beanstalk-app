@@ -178,7 +178,7 @@ class CountryPricingProfile:
 
 
 _AFFORDABILITY_PRICES: dict[str, dict[str, str | int]] = {
-    "GB": {"currency": "GBP", "tier": "TIER_1_PREMIUM", "month": 299, "year": 3500, "m": "price_1TaYVaGRl5Hb5DeyQDl1oONm", "y": "price_1TaYWVGRl5Hb5DeypepmhPgc"},
+    "GB": {"currency": "GBP", "tier": "TIER_1_PREMIUM", "month": 399, "year": 3500, "m": "price_1TfEErGRl5Hb5DeyCEawachj", "y": "price_1TfEErGRl5Hb5DeyFEAbjpFM"},
     "US": {"currency": "USD", "tier": "TIER_1_PREMIUM", "month": 299, "year": 3500, "m": "price_1TaYWVGRl5Hb5Deyl6kkG0zi", "y": "price_1TaYWVGRl5Hb5DeyfpOWtvDv"},
     "CA": {"currency": "CAD", "tier": "TIER_1_PREMIUM", "month": 399, "year": 4500, "m": "price_1TaYWVGRl5Hb5DeylVwzpJLj", "y": "price_1TaYWVGRl5Hb5DeyKKUwnxAJ"},
     "AU": {"currency": "AUD", "tier": "TIER_1_PREMIUM", "month": 499, "year": 5500, "m": "price_1TaYWXGRl5Hb5Dey0ibJRoAE", "y": "price_1TaYWuGRl5Hb5DeyN3cmBoiC"},
