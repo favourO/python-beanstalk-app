@@ -4,6 +4,7 @@ import 'package:flutter_stripe/flutter_stripe.dart' as stripe;
 import 'package:go_router/go_router.dart';
 import 'package:phora/core/auth/auth_providers.dart';
 import 'package:phora/core/payments/payment_country_catalog.dart';
+import 'package:phora/core/payments/stripe_wallet_config.dart';
 import 'package:phora/core/ui/app_dimensions.dart';
 import 'package:phora/core/ui/app_theme.dart';
 import 'package:phora/features/auth/presentation/auth_ui.dart';
@@ -120,6 +121,7 @@ class _WearableCheckoutScreenState
       if (!context.mounted) return;
 
       stripe.Stripe.publishableKey = session.publishableKey;
+      stripe.Stripe.merchantIdentifier = stripeApplePayMerchantIdentifier;
       stripe.Stripe.urlScheme = 'vyla';
       stripe.Stripe.setReturnUrlSchemeOnAndroid = true;
       await stripe.Stripe.instance.applySettings();
@@ -130,6 +132,8 @@ class _WearableCheckoutScreenState
           customerEphemeralKeySecret: session.customerEphemeralKeySecret,
           customerId: session.customerId,
           merchantDisplayName: 'Vyla',
+          applePay: stripePaymentSheetApplePay,
+          googlePay: stripePaymentSheetGooglePay,
           style: ThemeMode.system,
         ),
       );

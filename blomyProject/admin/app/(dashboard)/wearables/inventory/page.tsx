@@ -127,14 +127,26 @@ export default function WearableInventoryPage() {
     const token = getToken();
     if (!token) { router.push("/login"); return; }
     const form = new FormData(e.currentTarget);
+    const totalStockValue = Number(form.get("total_stock"));
+    const availableStockValue = Number(form.get("available_stock"));
+    const priceValue = Number(form.get("price"));
+    const lowStockThresholdValue = Number(form.get("low_stock_threshold"));
+    if (!Number.isFinite(totalStockValue) || !Number.isFinite(availableStockValue) || !Number.isFinite(priceValue) || !Number.isFinite(lowStockThresholdValue)) {
+      setError("Stock, price, and threshold must be valid numbers.");
+      return;
+    }
+    if (availableStockValue + editing.reserved_stock > totalStockValue) {
+      setError(`Available stock plus reserved stock cannot exceed total stock. Reserved stock is ${editing.reserved_stock}.`);
+      return;
+    }
     setSaving(true); setError(null); setMessage(null);
     try {
       await wearableAdminApi.updateInventory(token, {
         sku: editing.sku,
-        total_stock: Number(form.get("total_stock")),
-        available_stock: Number(form.get("available_stock")),
-        price_minor: Math.round(Number(form.get("price")) * 100),
-        low_stock_threshold: Number(form.get("low_stock_threshold")),
+        total_stock: totalStockValue,
+        available_stock: availableStockValue,
+        price_minor: Math.round(priceValue * 100),
+        low_stock_threshold: lowStockThresholdValue,
         is_active: form.get("is_active") === "on",
       });
       setMessage(`Inventory updated for ${editing.sku}`);
@@ -174,7 +186,7 @@ export default function WearableInventoryPage() {
       <Table>
         <Thead><Th>Product</Th><Th>SKU</Th><Th>Price</Th><Th>Total</Th><Th>Available</Th><Th>Reserved</Th><Th>Threshold</Th><Th>Countries</Th><Th>Status</Th><Th>Updated</Th><Th>Action</Th></Thead>
         <Tbody>
-          {loading ? <LoadingRows cols={10} /> :
+          {loading ? <LoadingRows cols={11} /> :
            items.length === 0 ? <EmptyState label="No wearable inventory configured" /> :
            items.map(item => (
             <Tr key={item.id}>
@@ -185,8 +197,6 @@ export default function WearableInventoryPage() {
               <Td>{item.available_stock}</Td>
               <Td>{item.reserved_stock}</Td>
               <Td>{item.low_stock_threshold}</Td>
-              <Td><Badge label={item.is_active ? (item.low_stock ? "open" : "active") : "draft"} /></Td>
-              <Td muted>{formatDate(item.updated_at)}</Td>
               <Td>
                 <div className="flex flex-col gap-0.5">
                   {(item.allowed_country_codes ?? []).length === 0
@@ -196,6 +206,8 @@ export default function WearableInventoryPage() {
                       ))}
                 </div>
               </Td>
+              <Td><Badge label={item.is_active ? (item.low_stock ? "low stock" : "active") : "inactive"} /></Td>
+              <Td muted>{formatDate(item.updated_at)}</Td>
               <Td><button onClick={() => { setEditing(item); setEditingCountryCodes(item.allowed_country_codes ?? ["GB"]); }} className="text-[#FF7A33] text-[12px] font-semibold">Edit</button></Td>
             </Tr>
           ))}
@@ -214,12 +226,15 @@ export default function WearableInventoryPage() {
             </div>
             <form onSubmit={saveInventory}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label className="text-xs font-medium text-[#A06A52]">Total stock<input name="total_stock" type="number" min={0} defaultValue={editing.total_stock} className="mt-1 w-full border border-[#FFD9C2] rounded-lg px-3 py-2 text-sm text-[#1E0C16]" /></label>
+                <label className="text-xs font-medium text-[#A06A52]">Total stock<input name="total_stock" type="number" min={editing.reserved_stock} defaultValue={editing.total_stock} className="mt-1 w-full border border-[#FFD9C2] rounded-lg px-3 py-2 text-sm text-[#1E0C16]" /></label>
                 <label className="text-xs font-medium text-[#A06A52]">Available stock<input name="available_stock" type="number" min={0} defaultValue={editing.available_stock} className="mt-1 w-full border border-[#FFD9C2] rounded-lg px-3 py-2 text-sm text-[#1E0C16]" /></label>
                 <label className="text-xs font-medium text-[#A06A52]">Price<input name="price" type="number" min={0} step="0.01" defaultValue={(editing.price_minor / 100).toFixed(2)} className="mt-1 w-full border border-[#FFD9C2] rounded-lg px-3 py-2 text-sm text-[#1E0C16]" /></label>
                 <label className="text-xs font-medium text-[#A06A52]">Low stock threshold<input name="low_stock_threshold" type="number" min={0} defaultValue={editing.low_stock_threshold} className="mt-1 w-full border border-[#FFD9C2] rounded-lg px-3 py-2 text-sm text-[#1E0C16]" /></label>
                 <label className="sm:col-span-2 flex items-center gap-2 text-sm text-[#1E0C16]"><input name="is_active" type="checkbox" defaultChecked={editing.is_active} /> Active for checkout</label>
               </div>
+              <p className="mt-3 text-[11px] text-[#A06A52]">
+                Reserved stock is {editing.reserved_stock}. Total stock must be at least available stock plus reserved stock.
+              </p>
               <div className="mt-6 flex justify-end gap-3">
                 <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 rounded-lg border border-[#FFD9C2] text-sm text-[#A06A52]">Cancel</button>
                 <button disabled={saving} className="px-4 py-2 rounded-lg bg-[#FF7A33] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving…" : "Save inventory"}</button>

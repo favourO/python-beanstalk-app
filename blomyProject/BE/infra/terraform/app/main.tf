@@ -2,6 +2,7 @@ locals {
   name_prefix              = "${var.project}-${var.environment}"
   app_name                 = "${local.name_prefix}-api"
   report_share_bucket_name = "${var.project}-${var.environment}-share-reports-${data.aws_caller_identity.current.account_id}"
+  blog_media_bucket_name   = "${var.project}-${var.environment}-blog-media-${data.aws_caller_identity.current.account_id}"
   manage_route53_records   = var.route53_zone_id != null && trimspace(var.route53_zone_id) != ""
   use_provided_certificate = var.certificate_arn != null && trimspace(var.certificate_arn) != ""
   common_tags = merge(
@@ -32,6 +33,7 @@ locals {
       PHORA_OTP_LENGTH             = "6"
       PHORA_PUBLIC_APP_URL         = "https://${var.dns_name}"
       PHORA_REPORT_SHARE_BUCKET    = aws_s3_bucket.report_shares.bucket
+      PHORA_BLOG_MEDIA_BUCKET      = aws_s3_bucket.blog_media.bucket
     },
     var.extra_environment,
   )
@@ -162,8 +164,8 @@ resource "aws_iam_role" "ecs_task" {
   tags = local.common_tags
 }
 
-resource "aws_iam_role_policy" "ecs_task_report_shares" {
-  name = "${local.name_prefix}-ecs-task-report-shares"
+resource "aws_iam_role_policy" "ecs_task_s3_media" {
+  name = "${local.name_prefix}-ecs-task-s3-media"
   role = aws_iam_role.ecs_task.id
 
   policy = jsonencode({
@@ -175,7 +177,10 @@ resource "aws_iam_role_policy" "ecs_task_report_shares" {
           "s3:PutObject",
           "s3:GetObject"
         ]
-        Resource = ["${aws_s3_bucket.report_shares.arn}/*"]
+        Resource = [
+          "${aws_s3_bucket.report_shares.arn}/*",
+          "${aws_s3_bucket.blog_media.arn}/*"
+        ]
       }
     ]
   })
@@ -216,6 +221,30 @@ resource "aws_s3_bucket_lifecycle_configuration" "report_shares" {
 
     expiration {
       days = 7
+    }
+  }
+}
+
+resource "aws_s3_bucket" "blog_media" {
+  bucket = local.blog_media_bucket_name
+  tags   = merge(local.common_tags, { Name = local.blog_media_bucket_name })
+}
+
+resource "aws_s3_bucket_public_access_block" "blog_media" {
+  bucket = aws_s3_bucket.blog_media.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "blog_media" {
+  bucket = aws_s3_bucket.blog_media.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
     }
   }
 }
