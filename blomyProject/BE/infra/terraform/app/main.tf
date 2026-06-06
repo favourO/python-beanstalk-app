@@ -36,6 +36,16 @@ locals {
     var.extra_environment,
   )
 
+  # Environment for Celery worker and beat — same as API plus the broker URL.
+  # Kept separate so the API task definition does not depend on the Redis cluster.
+  worker_environment = merge(
+    local.plain_environment,
+    {
+      PHORA_BROKER_URL     = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/1"
+      PHORA_RESULT_BACKEND = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/2"
+    }
+  )
+
   secret_environment = merge(
     {
       PHORA_SECRET_KEY                           = coalesce(var.app_secret_key, random_password.app_secret.result)
@@ -469,6 +479,187 @@ resource "aws_ecs_service" "app" {
   }
 
   depends_on = [aws_lb_listener.https]
+
+  tags = local.common_tags
+}
+
+# ── Redis (ElastiCache) for Celery broker ────────────────────────────────────
+
+resource "aws_security_group" "redis" {
+  name        = "${local.name_prefix}-redis"
+  description = "Redis broker for ${local.name_prefix} Celery workers"
+  vpc_id      = var.vpc_id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-redis" })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "redis_from_service" {
+  security_group_id            = aws_security_group.redis.id
+  referenced_security_group_id = aws_security_group.service.id
+  from_port                    = 6379
+  to_port                      = 6379
+  ip_protocol                  = "tcp"
+  description                  = "Allow ECS tasks (API/worker/beat) to reach Redis"
+}
+
+resource "aws_elasticache_subnet_group" "redis" {
+  name       = "${local.name_prefix}-redis"
+  subnet_ids = var.public_subnet_ids
+  tags       = merge(local.common_tags, { Name = "${local.name_prefix}-redis" })
+}
+
+resource "aws_elasticache_cluster" "redis" {
+  cluster_id           = "${local.name_prefix}-redis"
+  engine               = "redis"
+  node_type            = "cache.t4g.micro"
+  num_cache_nodes      = 1
+  parameter_group_name = "default.redis7"
+  engine_version       = "7.1"
+  port                 = 6379
+  subnet_group_name    = aws_elasticache_subnet_group.redis.name
+  security_group_ids   = [aws_security_group.redis.id]
+  tags                 = merge(local.common_tags, { Name = "${local.name_prefix}-redis" })
+}
+
+# ── Celery worker ────────────────────────────────────────────────────────────
+
+resource "aws_cloudwatch_log_group" "worker" {
+  name              = "/ecs/${local.name_prefix}-worker"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+resource "aws_ecs_task_definition" "worker" {
+  family                   = "${local.name_prefix}-worker"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "worker"
+      image     = var.container_image
+      essential = true
+      command   = ["celery", "-A", "phora.workers.celery_app", "worker", "--loglevel=info", "-Q", "default,critical,low", "--concurrency=2"]
+      environment = [
+        for key, value in local.worker_environment : {
+          name  = key
+          value = value
+        }
+      ]
+      secrets = concat(
+        [{ name = "PHORA_DATABASE_URL", valueFrom = "${var.db_secret_arn}:url::" }],
+        [for key, value in local.secret_environment : { name = key, valueFrom = "${aws_secretsmanager_secret.app.arn}:${key}::" }]
+      )
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.worker.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "ecs"
+        }
+      }
+    }
+  ])
+
+  tags = local.common_tags
+}
+
+resource "aws_ecs_service" "worker" {
+  name            = "${local.name_prefix}-worker"
+  cluster         = aws_ecs_cluster.app.id
+  task_definition = aws_ecs_task_definition.worker.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  network_configuration {
+    subnets          = var.public_subnet_ids
+    security_groups  = [aws_security_group.service.id]
+    assign_public_ip = true
+  }
+
+  tags = local.common_tags
+}
+
+# ── Celery beat scheduler ────────────────────────────────────────────────────
+
+resource "aws_cloudwatch_log_group" "beat" {
+  name              = "/ecs/${local.name_prefix}-beat"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+resource "aws_ecs_task_definition" "beat" {
+  family                   = "${local.name_prefix}-beat"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "beat"
+      image     = var.container_image
+      essential = true
+      command   = ["celery", "-A", "phora.workers.celery_app", "beat", "--loglevel=info", "--scheduler=celery.beat:PersistentScheduler"]
+      environment = [
+        for key, value in local.worker_environment : {
+          name  = key
+          value = value
+        }
+      ]
+      secrets = concat(
+        [{ name = "PHORA_DATABASE_URL", valueFrom = "${var.db_secret_arn}:url::" }],
+        [for key, value in local.secret_environment : { name = key, valueFrom = "${aws_secretsmanager_secret.app.arn}:${key}::" }]
+      )
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.beat.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "ecs"
+        }
+      }
+    }
+  ])
+
+  tags = local.common_tags
+}
+
+resource "aws_ecs_service" "beat" {
+  name            = "${local.name_prefix}-beat"
+  cluster         = aws_ecs_cluster.app.id
+  task_definition = aws_ecs_task_definition.beat.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  network_configuration {
+    subnets          = var.public_subnet_ids
+    security_groups  = [aws_security_group.service.id]
+    assign_public_ip = true
+  }
 
   tags = local.common_tags
 }
