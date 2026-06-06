@@ -1,5 +1,5 @@
 from collections import Counter
-from datetime import UTC, date, time
+from datetime import UTC, date, time, timedelta
 from statistics import mean, pstdev
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -189,6 +189,16 @@ def cycle_stats(
             most_common=symptom_counts.most_common(1)[0][0] if symptom_counts else None,
             energy_dips=energy_dips,
         ),
+        period_ranges=[
+            {
+                "start_date": cycle.period_start_date,
+                "end_date": cycle.period_end_date
+                or (
+                    cycle.period_start_date + timedelta(days=max(1, cycle.menses_length or 1) - 1)
+                ),
+            }
+            for cycle in cycles
+        ],
     )
 
 

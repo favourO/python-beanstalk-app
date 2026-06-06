@@ -218,22 +218,21 @@ def _save_sections(*, db: Session, user_id: str, payload: DailyLogEnvelope) -> N
 def _save_period(*, db: Session, user_id: str, day: date, section: PeriodLogPayload) -> None:
     cycles = CycleRepository(db)
     active = cycles.active_for_user(user_id)
+    period_start = min(section.start_date or day, day)
+    period_end = max(section.end_date or day, day, period_start)
     if active is None:
         active = CycleRecord(
             user_id=user_id,
-            period_start_date=day,
-            period_end_date=day,
-            menses_length=1,
+            period_start_date=period_start,
+            period_end_date=period_end,
+            menses_length=(period_end - period_start).days + 1,
             is_active=True,
         )
         db.add(active)
         db.flush()
-    elif day < active.period_start_date:
-        active.period_start_date = day
-        active.period_end_date = max(active.period_end_date or day, day)
-        active.menses_length = (active.period_end_date - active.period_start_date).days + 1
-    elif _is_same_period_window(active, day):
-        active.period_end_date = max(active.period_end_date or active.period_start_date, day)
+    elif period_start < active.period_start_date or _is_same_period_window(active, period_start) or _is_same_period_window(active, day):
+        active.period_start_date = min(active.period_start_date, period_start)
+        active.period_end_date = max(active.period_end_date or active.period_start_date, period_end)
         active.menses_length = (active.period_end_date - active.period_start_date).days + 1
     else:
         active.is_active = False
@@ -242,9 +241,9 @@ def _save_period(*, db: Session, user_id: str, day: date, section: PeriodLogPayl
             active.menses_length = 1
         active = CycleRecord(
             user_id=user_id,
-            period_start_date=day,
-            period_end_date=day,
-            menses_length=1,
+            period_start_date=period_start,
+            period_end_date=period_end,
+            menses_length=(period_end - period_start).days + 1,
             is_active=True,
         )
         db.add(active)
@@ -257,7 +256,15 @@ def _save_period(*, db: Session, user_id: str, day: date, section: PeriodLogPayl
         data=section.model_dump(mode="json", exclude_none=True),
         cycle_id=active.id,
     )
-    AuditRepository(db).log(user_id, "cycle.period_logged", {"date": day.isoformat()})
+    AuditRepository(db).log(
+        user_id,
+        "cycle.period_logged",
+        {
+            "date": day.isoformat(),
+            "start_date": period_start.isoformat(),
+            "end_date": period_end.isoformat(),
+        },
+    )
 
 
 def _save_temperature_section(

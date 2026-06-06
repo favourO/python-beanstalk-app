@@ -28,13 +28,102 @@ def reset_db_state() -> None:
 
 def ensure_postgres_schemas() -> None:
     settings = get_settings()
+    sqlite = settings.database_url.startswith("sqlite")
     with get_engine().begin() as connection:
-        if not settings.database_url.startswith("sqlite"):
+        if not sqlite:
             for schema in (HEALTH_SCHEMA, BILLING_SCHEMA, AUDIT_SCHEMA):
                 if schema:
                     connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
             _ensure_postgres_enum_value(connection, enum_name="wearabletype", enum_value="GTL1")
-        _ensure_compat_columns(connection, sqlite=settings.database_url.startswith("sqlite"))
+        _ensure_audit_tables(connection, sqlite=sqlite)
+        _ensure_compat_columns(connection, sqlite=sqlite)
+
+
+def _ensure_audit_tables(connection, *, sqlite: bool) -> None:
+    """Guarantee audit-schema tables exist; safe to run on every startup."""
+    schema_prefix = "" if sqlite else (f'"{AUDIT_SCHEMA}".' if AUDIT_SCHEMA else "")
+    connection.execute(text(
+        f"""
+        CREATE TABLE IF NOT EXISTS {schema_prefix}contact_messages (
+            id          VARCHAR(36)               PRIMARY KEY,
+            name        VARCHAR(120)              NOT NULL,
+            email       VARCHAR(255)              NOT NULL,
+            subject     VARCHAR(200)              NOT NULL,
+            message     TEXT                      NOT NULL,
+            read        BOOLEAN                   NOT NULL DEFAULT FALSE,
+            replied_at  TIMESTAMP WITH TIME ZONE,
+            created_at  TIMESTAMP WITH TIME ZONE  NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    ))
+    connection.execute(text(
+        f"""
+        CREATE TABLE IF NOT EXISTS {schema_prefix}download_requests (
+            id         VARCHAR(36)               PRIMARY KEY,
+            email      VARCHAR(255)              NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE  NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    ))
+
+
+def ensure_stage_wearable_inventory() -> None:
+    settings = get_settings()
+    if settings.environment not in {"stage", "staging"}:
+        return
+
+    schema_prefix = f'"{BILLING_SCHEMA}".' if BILLING_SCHEMA and not settings.database_url.startswith("sqlite") else ""
+    with get_engine().begin() as connection:
+        connection.execute(
+            text(
+                f"""
+                INSERT INTO {schema_prefix}wearable_inventory (
+                    id,
+                    product_name,
+                    sku,
+                    total_stock,
+                    available_stock,
+                    reserved_stock,
+                    price_minor,
+                    currency,
+                    currency_symbol,
+                    low_stock_threshold,
+                    is_active,
+                    allowed_country_codes,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    '00000000-0000-0000-0000-000000000501',
+                    'Vyla Wearable',
+                    'VYLA-WEARABLE-V1',
+                    50,
+                    50,
+                    0,
+                    2500,
+                    'GBP',
+                    '£',
+                    5,
+                    true,
+                    '["GB"]',
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (sku) DO UPDATE SET
+                    product_name = EXCLUDED.product_name,
+                    total_stock = 50,
+                    available_stock = 50,
+                    reserved_stock = 0,
+                    price_minor = 2500,
+                    currency = 'GBP',
+                    currency_symbol = '£',
+                    low_stock_threshold = 5,
+                    is_active = true,
+                    allowed_country_codes = '["GB"]',
+                    updated_at = CURRENT_TIMESTAMP
+                """
+            )
+        )
 
 
 def _ensure_postgres_enum_value(connection, *, enum_name: str, enum_value: str) -> None:
@@ -105,6 +194,12 @@ def _ensure_compat_columns(connection, *, sqlite: bool) -> None:
             "currency": "VARCHAR(8)",
             "billing_interval": "VARCHAR(16)",
             "current_period_end": "TIMESTAMP WITH TIME ZONE",
+            "cancel_at_period_end": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "pending_billing_interval": "VARCHAR(16)",
+            "pending_provider_price_id": "VARCHAR(255)",
+            "pending_amount": "FLOAT",
+            "pending_currency": "VARCHAR(8)",
+            "pending_change_effective_at": "TIMESTAMP WITH TIME ZONE",
             "updated_at": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
         },
         new_indexes=("provider_subscription_id", "provider_customer_id"),
@@ -127,6 +222,21 @@ def _ensure_compat_columns(connection, *, sqlite: bool) -> None:
         connection,
         inspector=inspector,
         sqlite=sqlite,
+        schema=None if sqlite else BILLING_SCHEMA,
+        table_name="billing_activities",
+        missing_column_sql={
+            "subscription_id": "VARCHAR(36)",
+            "event_type": "VARCHAR(64)",
+            "title": "VARCHAR(128)",
+            "subtitle": "VARCHAR(512)",
+            "created_at": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        },
+        new_indexes=("user_id", "event_type"),
+    )
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
         schema=None if sqlite else HEALTH_SCHEMA,
         table_name="notification_preferences",
         missing_column_sql={
@@ -142,6 +252,9 @@ def _ensure_compat_columns(connection, *, sqlite: bool) -> None:
             "temperature_logging_reminder": "BOOLEAN NOT NULL DEFAULT FALSE",
             "weekly_summary": "BOOLEAN NOT NULL DEFAULT TRUE",
             "feature_tips": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "blog_posts": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "wearable_ovulation_reminder": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "update_reminders": "BOOLEAN NOT NULL DEFAULT TRUE",
             "quiet_hours_enabled": "BOOLEAN NOT NULL DEFAULT TRUE",
             "quiet_hours_start": "VARCHAR(5) NOT NULL DEFAULT '22:00'",
             "quiet_hours_end": "VARCHAR(5) NOT NULL DEFAULT '08:00'",
@@ -154,6 +267,31 @@ def _ensure_compat_columns(connection, *, sqlite: bool) -> None:
             "created_at": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
             "updated_at": "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP",
         },
+    )
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
+        schema=None if sqlite else BILLING_SCHEMA,
+        table_name="wearable_inventory",
+        missing_column_sql={
+            "price_minor": "INTEGER NOT NULL DEFAULT 2500",
+            "currency": "VARCHAR(8) NOT NULL DEFAULT 'GBP'",
+            "currency_symbol": "VARCHAR(4) NOT NULL DEFAULT '£'",
+            "allowed_country_codes": "JSON NOT NULL DEFAULT '[\"GB\"]'",
+        },
+    )
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
+        schema=None if sqlite else BILLING_SCHEMA,
+        table_name="wearable_orders",
+        missing_column_sql={
+            "wearable_currency": "VARCHAR(8) NOT NULL DEFAULT 'GBP'",
+            "provider_payment_intent_id": "VARCHAR(255)",
+        },
+        new_indexes=("provider_payment_intent_id",),
     )
     _ensure_missing_columns(
         connection,
@@ -180,6 +318,43 @@ def _ensure_compat_columns(connection, *, sqlite: bool) -> None:
             "delivery_attempts": "INTEGER NOT NULL DEFAULT 0",
         },
         new_indexes=("batch_key", "dedupe_key", "scheduled_for"),
+    )
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
+        schema=None if sqlite else HEALTH_SCHEMA,
+        table_name="wearable_metrics",
+        missing_column_sql={
+            "data_source": "VARCHAR(50) NOT NULL DEFAULT 'vyla_wearable'",
+            "external_id": "VARCHAR(255)",
+        },
+        new_indexes=("data_source",),
+    )
+    _ensure_missing_columns(
+        connection,
+        inspector=inspector,
+        sqlite=sqlite,
+        schema=None if sqlite else AUDIT_SCHEMA,
+        table_name="contact_messages",
+        missing_column_sql={
+            "replied_at": "TIMESTAMP WITH TIME ZONE",
+        },
+    )
+    _ensure_wearable_metrics_composite_index(connection, sqlite=sqlite)
+
+
+def _ensure_wearable_metrics_composite_index(connection, *, sqlite: bool) -> None:
+    inspector = inspect(connection)
+    if not inspector.has_table("wearable_metrics", schema=None if sqlite else HEALTH_SCHEMA):
+        return
+    qualified_table = "wearable_metrics" if sqlite or not HEALTH_SCHEMA else f'"{HEALTH_SCHEMA}"."wearable_metrics"'
+    index_name = "ix_wearable_metrics_user_source_type_time"
+    connection.execute(
+        text(
+            f"CREATE INDEX IF NOT EXISTS {index_name} ON {qualified_table} "
+            f"(user_id, data_source, metric_type, measured_at)"
+        )
     )
 
 

@@ -11,7 +11,7 @@ This stack deploys the current FastAPI app to AWS with:
 
 ## Environments
 
-- prod: `prod.vyla.health`
+- prod: `prod.api.vyla.health`
 
 ## Locked architecture
 
@@ -23,7 +23,6 @@ The target shape for the migration is locked as:
 - stage is not deployed through this Terraform AWS path
 - stage is expected to move to a separate Lightsail container + Lightsail PostgreSQL flow
 - ML stays out of deployment
-- the old AWS account `396913731550` stays intact until cutover is complete
 
 `./deploy` only supports `prod`.
 The prod var file is intentionally a template with placeholders until the new prod VPC, subnets, certificate, and DB outputs exist.

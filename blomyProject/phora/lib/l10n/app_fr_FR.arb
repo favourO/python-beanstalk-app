@@ -1,0 +1,1111 @@
+{
+  "@@locale": "fr_FR",
+  "appName": "Vyla",
+  "languageScreenTitle": "Choisissez votre langue",
+  "languageScreenSubtitle": "Vous pouvez changer cela plus tard dans les paramètres.",
+  "useDeviceLanguage": "Utiliser la langue de l’appareil",
+  "continueLabel": "Continuer",
+  "saveLabel": "Enregistrer",
+  "languageSectionTitle": "Langues",
+  "currentLanguageLabel": "Langue actuelle",
+  "profileLanguageTitle": "Langue",
+  "profileLanguageSubtitle": "Changer la langue de l’application et le format régional",
+  "systemLanguageLabel": "Utiliser la langue de l’appareil",
+  "onboardingNextLabel": "Suivant",
+  "onboardingGetStartedLabel": "Commencer",
+  "onboardingWelcomeTitle": "Soyez plus en harmonie avec votre cycle",
+  "onboardingWelcomeSubtitle": "Suivez vos symptômes, comprenez les changements de phase et recevez des conseils réfléchis dans un espace apaisant.",
+  "onboardingPrivacyTitle": "Vos données,\nVotre contrôle",
+  "onboardingPrivacySubtitle": "Nous ne pouvons pas vous identifier, ne vendons pas vos données, et n’avons jamais reçu de demande des forces de l’ordre.",
+  "onboardingPrivacyFeatureEncryption": "Chiffré de bout en bout avec AES-256",
+  "onboardingPrivacyFeatureNoSelling": "Zéro publicité, zéro vente de données",
+  "onboardingPrivacyFeatureLocalMode": "Mode local uniquement optionnel",
+  "onboardingSkipLabel": "Passer",
+  "onboardingPhasesTitle": "Chaque phase,\ndécodée.",
+  "onboardingPhasesSubtitle": "Du premier jour de vos règles jusqu’aux jours\naprès l’ovulation, Vyla repère où vous en êtes\net ce à quoi vous attendre",
+  "onboardingRhythmTitle": "Connaissez votre\nrythme.",
+  "onboardingRhythmSubtitle": "Vyla apprend les schémas de votre corps,\npour vous offrir de la clarté, pas seulement un calendrier.",
+  "onboardingPhaseMenstrualTitle": "Menstruelle",
+  "onboardingPhaseMenstrualSubtitle": "Repos · renouveau",
+  "onboardingPhaseMenstrualDays": "Jours 1–5",
+  "onboardingPhaseFollicularTitle": "Folliculaire",
+  "onboardingPhaseFollicularSubtitle": "Énergie · renouveau",
+  "onboardingPhaseFollicularDays": "Jours 6–13",
+  "onboardingPhaseOvulationTitle": "Ovulation",
+  "onboardingPhaseOvulationSubtitle": "Pic de fertilité",
+  "onboardingPhaseOvulationDays": "Jours 14–16",
+  "onboardingPhaseLutealTitle": "Lutéale",
+  "onboardingPhaseLutealSubtitle": "Repos · renouveau",
+  "onboardingPhaseLutealDays": "Jours 17–28",
+  "onboardingAiBadge": "Vyla Agent",
+  "onboardingAiTitle": "Votre santé,\nexpliquée.",
+  "onboardingAiSubtitle": "Posez toutes vos questions sur votre corps. Vyla Agent\ns’appuie sur vos données personnelles et sur des connaissances\nmédicales fondées sur des preuves pour vous guider.",
+  "onboardingAiQuestion": "Pourquoi ai-je peu d’énergie\navant mes règles ?",
+  "onboardingAiResponse": "Pendant la phase lutéale, la progestérone\naugmente et l’œstrogène diminue : votre\ncorps se prépare à évacuer. Vos suivis\nmontrent ce schéma sur 3 cycles.",
+  "onboardingStartTrackingLabel": "Commencer le suivi",
+  "privacyChoiceTitle": "Choisissez votre\nniveau de confidentialité",
+  "privacyChoiceEmailTitle": "Avec Email",
+  "privacyChoiceEmailBadge": "RECOMMANDÉ",
+  "privacyChoiceEmailDescription": "Récupération de compte, notifications, synchronisation multi-appareils",
+  "privacyChoiceEmailCta": "S’inscrire avec Email",
+  "privacyChoiceExistingAccountPrompt": "Vous avez déjà un compte ? ",
+  "signInLinkLabel": "Se connecter",
+  "signInSubtitle": "Suivez votre cycle, épanouissez-vous avec confiance",
+  "emailLabel": "E-mail",
+  "passwordLabel": "Mot de passe",
+  "emailHint": "Entrez votre email",
+  "signInButtonLabel": "Se connecter",
+  "signInEmptyCredentialsError": "Veuillez entrer votre email et mot de passe.",
+  "signInUnableError": "Impossible de se connecter.",
+  "forgotPasswordLabel": "Mot de passe oublié ?",
+  "authContinueWithLabel": "ou continuer avec",
+  "signInAppleError": "Impossible de se connecter avec Apple.",
+  "signInGoogleError": "Impossible de se connecter avec Google.",
+  "signInNoAccountPrompt": "Vous n'avez pas de compte ? ",
+  "signUpLinkLabel": "S'inscrire",
+  "signingInLoadingLabel": "Connexion en cours...",
+  "signUpNameRequiredError": "Entrez votre nom pour continuer.",
+  "signUpCountryRequiredError": "Indiquez où vous habitez pour continuer.",
+  "signUpBirthDateRequiredError": "Sélectionnez votre date de naissance pour continuer.",
+  "signUpAcceptTermsError": "Acceptez les Conditions d'utilisation et la Politique de confidentialité.",
+  "signUpCompleteProfileError": "Complétez les détails de votre profil avant de continuer.",
+  "signUpAppleError": "Impossible de s'inscrire avec Apple.",
+  "signUpExistingAccountError": "Un compte avec cet e-mail existe déjà. Connectez-vous plutôt.",
+  "signUpGoogleError": "Impossible de s'inscrire avec Google.",
+  "signUpCompleteProfileFirstError": "Complétez d'abord les détails de votre profil.",
+  "signUpEmailRequiredError": "Entrez votre adresse e-mail.",
+  "signUpEmailInvalidError": "Entrez une adresse e-mail valide.",
+  "signUpPasswordRequiredError": "Créez un mot de passe pour continuer.",
+  "signUpPasswordLengthError": "Utilisez au moins 8 caractères pour votre mot de passe.",
+  "signUpConfirmPasswordRequiredError": "Confirmez votre mot de passe pour continuer.",
+  "signUpPasswordsMismatchError": "Les mots de passe ne correspondent pas.",
+  "signUpCreateAccountError": "Impossible de créer le compte.",
+  "cancelLabel": "Annuler",
+  "doneLabel": "Terminé",
+  "signUpSelectBirthDateLabel": "Sélectionnez votre date de naissance",
+  "signUpStepLabel": "Étape {current} sur {total}",
+  "@signUpStepLabel": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "signUpNameTitle": "Quel est votre nom ?",
+  "signUpNameSubtitle": "Nous l'utiliserons pour personnaliser votre expérience Vyla.",
+  "fullNameLabel": "Nom complet",
+  "fullNameHint": "Sarah Chen",
+  "signUpNameHelp": "Utilisez le nom que vous souhaitez voir dans vos bilans quotidiens et vos analyses de cycle.",
+  "signUpCountryTitle": "Où habitez-vous ?",
+  "signUpCountrySubtitle": "Cela nous aide à localiser votre expérience et à garder les notifications précises.",
+  "countryLabel": "Pays",
+  "countryHint": "Sélectionnez votre pays",
+  "signUpCountryHelp": "Votre pays nous aide à adapter les plans, la facturation, les rappels et les conseils de santé régionaux.",
+  "signUpBirthDateTitle": "Quand êtes-vous née ?",
+  "signUpBirthDateSubtitle": "Les cycles évoluent avec le temps. Cela nous aide à personnaliser l'application pour vous.",
+  "birthDateLabel": "Date de naissance",
+  "signUpBirthDateHelp": "Nous utilisons cela pour adapter les prédictions et le contenu éducatif que vous voyez au fil du temps.",
+  "signUpMethodTitle": "Comment souhaitez-vous vous inscrire ?",
+  "signUpMethodSubtitle": "Choisissez la méthode que vous souhaitez utiliser pour votre compte Vyla.",
+  "signUpEmailTitle": "Inscrivez-vous avec un email",
+  "signUpEmailSubtitle": "Utilisez un email pour sécuriser votre compte et vérifier votre identité.",
+  "confirmPasswordLabel": "Confirmez le mot de passe",
+  "passwordHintMinimum": "Au moins 8 caractères",
+  "confirmPasswordHint": "Confirmez le mot de passe",
+  "signUpVerificationHelp": "Nous enverrons un code de vérification à 6 chiffres à cet email après l'inscription.",
+  "creatingLabel": "Création en cours...",
+  "createAccountLabel": "Créer un compte",
+  "iHaveAnAccountLabel": "J'ai un compte",
+  "creatingAccountLoadingLabel": "Création du compte...",
+  "signUpWithAppleLabel": "Inscrivez-vous avec Apple",
+  "signUpWithGoogleLabel": "Inscrivez-vous avec Google",
+  "signUpWithEmailLabel": "Inscrivez-vous avec un email",
+  "signUpProfileSummaryTitle": "Votre profil jusqu'à présent",
+  "consentAgreePrefix": "J'accepte les ",
+  "termsOfServiceLabel": "Conditions d'utilisation",
+  "consentAndLabel": " et la ",
+  "privacyPolicyTitleLabel": "Politique de confidentialité",
+  "forgotPasswordTitle": "Mot de passe oublié",
+  "forgotPasswordSubtitle": "Entrez votre email et nous enverrons un code de réinitialisation à 6 chiffres",
+  "sendCodeLoadingLabel": "Envoi en cours...",
+  "sendCodeLabel": "Envoyer le code",
+  "forgotPasswordUnableToSendCodeError": "Impossible d'envoyer le code.",
+  "rememberedPasswordPrompt": "Vous vous souvenez de votre mot de passe ? ",
+  "forgotPasswordVerifyTitle": "Entrez le code de réinitialisation",
+  "forgotPasswordVerifySubtitle": "Entrez le code à 6 chiffres que nous avons envoyé à {email}",
+  "@forgotPasswordVerifySubtitle": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "yourEmailLabel": "votre email",
+  "editEmailLabel": "Modifier l'email",
+  "verifyingLabel": "Vérification en cours...",
+  "verifyContinueLabel": "Vérifier et continuer",
+  "invalidCodeError": "Code invalide.",
+  "resendCodeLabel": "Renvoyer le code",
+  "unableToResendCodeError": "Impossible de renvoyer le code.",
+  "resendCodeInLabel": "Renvoyer le code dans 0:{seconds}",
+  "@resendCodeInLabel": {
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "resetPasswordTitle": "Définir un nouveau mot de passe",
+  "resetPasswordSubtitle": "Choisissez un nouveau mot de passe pour {account}",
+  "@resetPasswordSubtitle": {
+    "placeholders": {
+      "account": {
+        "type": "String"
+      }
+    }
+  },
+  "yourAccountLabel": "votre compte",
+  "newPasswordLabel": "Nouveau mot de passe",
+  "confirmPasswordTitleCaseLabel": "Confirmer le mot de passe",
+  "updatingLabel": "Mise à jour...",
+  "updatePasswordLabel": "Mettre à jour le mot de passe",
+  "resetCodeMissingError": "Code de réinitialisation manquant. Revenez en arrière et saisissez à nouveau le code.",
+  "unableToResetPasswordError": "Impossible de réinitialiser le mot de passe.",
+  "verifyEmailTitle": "Vérifiez votre e-mail",
+  "verifyEmailSubtitle": "Entrez le code à 6 chiffres envoyé à {email} pour terminer la création de votre compte Vyla.",
+  "@verifyEmailSubtitle": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "verifyEmailButtonLabel": "Vérifier l’e-mail",
+  "accountVerifiedSuccess": "Compte vérifié avec succès.",
+  "unableToVerifyEmailError": "Impossible de vérifier l’e-mail.",
+  "resendingLabel": "Renvoyer...",
+  "resendCodeButtonLabel": "Renvoyer le code",
+  "resendUnavailableError": "Le renvoi est indisponible. Recommencez l’inscription.",
+  "exportMyDataTitle": "Exporter mes données",
+  "exportMyDataSubtitle": "Demandez une exportation portable des données de votre compte Vyla. Nous préparerons une archive sécurisée que vous pourrez télécharger plus tard.",
+  "exportChooseIncludeTitle": "Choisissez ce que vous souhaitez inclure",
+  "exportCycleHistoryLabel": "Historique des cycles",
+  "exportCycleHistorySubtitle": "Cycles, dates des règles et résumés des phases",
+  "exportDailyLogsLabel": "Journaux quotidiens",
+  "exportDailyLogsSubtitle": "LH, température, symptômes, mucus, intimité",
+  "exportPredictionsLabel": "Prédictions et analyses",
+  "exportPredictionsSubtitle": "Prédictions de fertilité et résumés générés",
+  "exportBloomHistoryLabel": "Historique du chat Bloom",
+  "exportBloomHistorySubtitle": "Questions et réponses de l'assistant",
+  "exportFormatTitle": "Format d'exportation",
+  "exportJsonArchiveTitle": "Archive JSON",
+  "exportJsonArchiveSubtitle": "Export lisible par machine pour portabilité",
+  "recommendedLabel": "Recommandé",
+  "exportCsvBundleTitle": "Pack CSV",
+  "exportCsvBundleSubtitle": "Fichiers compatibles tableur pour révision",
+  "exportSensitiveTitle": "Export sensible",
+  "exportSensitiveSubtitle": "Les exports peuvent inclure des données personnelles de santé. Téléchargez et stockez le fichier dans un endroit privé.",
+  "requestExportLabel": "Demander l'export",
+  "exportRequestedTitle": "Export demandé",
+  "exportRequestedSubtitle": "Nous préparons votre archive et vous informerons lorsqu'elle sera prête à être téléchargée.",
+  "exportWhatNextTitle": "Que se passe-t-il ensuite",
+  "exportWhatNextItemOne": "Nous emballons vos enregistrements demandés dans une archive sécurisée.",
+  "exportWhatNextItemTwo": "Vous pourrez la télécharger via un lien protégé.",
+  "exportWhatNextItemThree": "Le lien expirera automatiquement pour des raisons de sécurité.",
+  "currentPlanLabel": "Forfait actuel",
+  "planFreeLabel": "Gratuit",
+  "planPremiumLabel": "Premium",
+  "planPremiumPlusLabel": "Premium",
+  "planClinicianLabel": "Clinicien",
+  "subscriptionStatusActive": "Actif",
+  "subscriptionStatusTrial": "Essai",
+  "subscriptionStatusPastDue": "En retard",
+  "subscriptionStatusCanceled": "Annulé",
+  "subscriptionStatusInactive": "Inactif",
+  "postSignupTitle": "Personnalisez votre expérience",
+  "postSignupPeriodLengthError": "Sélectionnez la durée habituelle de vos règles en jours.",
+  "postSignupLastPeriodError": "Sélectionnez le premier et le dernier jour de vos dernières règles.",
+  "postSignupGoalError": "Choisissez l'objectif qui vous correspond le mieux.",
+  "postSignupConditionsError": "Sélectionnez les conditions correspondantes, ou choisissez Aucune.",
+  "postSignupStepLabel": "Étape {step}",
+  "@postSignupStepLabel": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      }
+    }
+  },
+  "postSignupStep1Title": "Quelle est la durée de vos règles ?",
+  "postSignupStep1Subtitle": "En général, elles durent de 2 à 8 jours. Plus vous fournissez de données sur votre cycle, plus vos prévisions seront précises.",
+  "postSignupStep2Title": "Quand ont eu lieu vos dernières règles ?",
+  "postSignupStep2Subtitle": "Touchez la date de début et de fin de vos règles.",
+  "postSignupStep3Title": "Parlez-nous de vos objectifs.",
+  "postSignupStep3Subtitle": "Vyla peut personnaliser le suivi et les prévisions selon ce qui compte le plus pour vous.",
+  "postSignupStep4Title": "Presque terminé ! Nous avons besoin d'un peu plus d'informations.",
+  "postSignupStep4Subtitle": "Sélectionnez ce qui vous correspond. Vous pouvez choisir plusieurs options.",
+  "savingLabel": "Enregistrement...",
+  "finishLabel": "Terminer",
+  "saveLabelAction": "Enregistrer",
+  "postSignupSelectRange": "Sélectionnez une plage",
+  "postSignupDaysLabel": "{count} jours",
+  "@postSignupDaysLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "postSignupPeriodLengthHelp": "Utilisez le curseur pour estimer la durée habituelle de vos saignements.",
+  "postSignupPredictionQualityTitle": "Qualité de la prédiction",
+  "postSignupPredictionQualityDescription": "Une durée de règles précise aide Vyla à affiner les rappels et les prédictions du cycle dès le début.",
+  "postSignupSelectFirstDayPrompt": "Sélectionnez le premier jour de vos dernières règles.",
+  "postSignupSelectedSingle": "Sélectionné : {date}",
+  "@postSignupSelectedSingle": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "postSignupSelectedRange": "Sélectionné : du {start} au {end}",
+  "@postSignupSelectedRange": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "goalCycleTrackingTitle": "Suivi du cycle",
+  "goalCycleTrackingSubtitle": "Obtenez une meilleure compréhension de votre rythme et de vos symptômes.",
+  "goalAvoidPregnancyTitle": "TTA (Tentative d'éviter une grossesse)",
+  "goalAvoidPregnancySubtitle": "Suivez vos jours fertiles et planifiez avec plus de confiance.",
+  "goalTryingToConceiveTitle": "TTC (Tentative de conception)",
+  "goalTryingToConceiveSubtitle": "Repérez les fenêtres fertiles et améliorez le timing.",
+  "goalPregnancyTitle": "Grossesse",
+  "goalPregnancySubtitle": "Restez informée de l’historique de votre cycle pendant le début de la grossesse.",
+  "conditionHormoneImbalance": "Déséquilibre hormonal",
+  "conditionIrregularCycle": "Cycle irrégulier",
+  "conditionPcos": "PCOS",
+  "conditionMiscarriageHistory": "Antécédents de fausse couche",
+  "conditionBirthControl": "Je viens d’arrêter la contraception",
+  "conditionNone": "Aucun",
+  "stressImpactTitle": "Impact du stress",
+  "stressBurdenLabel": "CHARGE DE STRESS SUR 7 JOURS",
+  "stressBurdenDescription": "Charge de stress modérée détectée. Cela peut influencer le timing de votre cycle.",
+  "stressContributingFactorsTitle": "Facteurs contributifs",
+  "stressFactorHrvLabel": "HRV (en dessous de la normale)",
+  "stressFactorRhrLabel": "RHR (au-dessus de la normale)",
+  "stressFactorSleepLabel": "Fragmentation du sommeil",
+  "stressFactorSelfReportedLabel": "Stress auto-déclaré",
+  "stressNormalLabel": "Habituel",
+  "stressModerateLabel": "Modéré",
+  "stressPredictedImpactTitle": "Impact prédit sur le cycle",
+  "stressConfidenceLabel": "Confiance modérée",
+  "stressPredictedImpactSuffix": " que l’ovulation pourrait être retardée de 1 à 3 jours ce cycle.",
+  "stressPredictedImpactDescription": "Votre fenêtre fertile a été élargie en conséquence. Il s’agit d’une association, pas d’une certitude.",
+  "stressLast30DaysTitle": "30 derniers jours",
+  "stressBurdenLegend": "Charge de stress",
+  "stressOvulationDaysLegend": "Jours d’ovulation",
+  "stressCycleCorrelationTitle": "Corrélation du cycle",
+  "stressCycleCorrelationIntro": "Sur vos 6 derniers cycles :",
+  "stressCycleCorrelationItemOne": "Semaines de stress élevé : ovulation en moyenne 18 jours plus tard",
+  "stressCycleCorrelationItemTwo": "Semaines de stress faible : ovulation en moyenne au jour 14,2",
+  "stressCycleCorrelationItemThree": "Force de corrélation : r = 0,61",
+  "stressLowLabel": "Faible",
+  "stressHighLabel": "Élevé",
+  "stressTrendChartPlaceholder": "[Graphique de tendance de la charge de stress : échelle 0–1, moyenne glissante sur 7 jours]",
+  "logCervicalMucusTitle": "Mucus cervical",
+  "logConsistencyTypeTitle": "Consistance & Type",
+  "logMucusDryNoneLabel": "Sec / Aucun",
+  "logMucusDryNoneSubtitle": "Aucun mucus présent",
+  "logMucusStickyLabel": "Collant",
+  "logMucusStickySubtitle": "Épais, blanc ou trouble",
+  "logMucusCreamyLabel": "Crémeux",
+  "logMucusCreamySubtitle": "Texture lotion, blanc ou jaune",
+  "logMucusEggWhiteLabel": "Clair d’œuf (Fertile)",
+  "logMucusEggWhiteSubtitle": "Clair, élastique, glissant",
+  "logMucusWateryLabel": "Aqueux",
+  "logMucusWaterySubtitle": "Fin, clair, humide",
+  "logAmountTitle": "Quantité",
+  "logAmountLightLabel": "Léger",
+  "logAmountModerateLabel": "Modéré",
+  "logAmountHeavyLabel": "Abondant",
+  "logNotesTitle": "Remarques",
+  "logAdditionalObservationsHint": "Observations supplémentaires...",
+  "logCervicalMucusSaved": "Mucus cervical enregistré.",
+  "saveMucusLogLabel": "Enregistrer le journal du mucus",
+  "logPeriodTitle": "Journal des règles",
+  "logPeriodFlowIntensityTitle": "Intensité du flux",
+  "logPeriodFlowSpottingLabel": "Saignements",
+  "logPeriodFlowMediumLabel": "Moyen",
+  "logPeriodFlowColorTitle": "Couleur du flux",
+  "logPeriodColorBrownLabel": "Marron",
+  "logPeriodColorRedLabel": "Rouge",
+  "logPeriodColorDarkLabel": "Foncé",
+  "logPeriodSymptomsTitle": "Symptômes des règles",
+  "logPeriodNotesHint": "Ajoutez des notes supplémentaires...",
+  "logPeriodSaved": "Journal des règles enregistré.",
+  "savePeriodLogLabel": "Enregistrer le journal des règles",
+  "logSymptomsTitle": "Symptômes",
+  "logSymptomsEnergyLevelTitle": "Niveau d'énergie",
+  "logScaleLowLabel": "Faible",
+  "logScaleHighLabel": "Élevé",
+  "logSymptomsMoodTitle": "Humeur",
+  "logMoodHappyLabel": "Heureuse",
+  "logMoodSadLabel": "Triste",
+  "logMoodAnxiousLabel": "Anxieuse",
+  "logMoodIrritableLabel": "Irritée",
+  "logMoodCalmLabel": "Calme",
+  "logMoodEnergeticLabel": "Énergique",
+  "logSymptomsPhysicalSymptomsTitle": "Symptômes physiques",
+  "logSymptomCrampsLabel": "Crampes",
+  "logSymptomBloatingLabel": "Ballonnements",
+  "logSymptomHeadacheLabel": "Mal de tête",
+  "logSymptomFatigueLabel": "Grande fatigue",
+  "logSymptomBackPainLabel": "Douleur au dos",
+  "logSymptomNauseaLabel": "Nausée",
+  "logSymptomBreastTendernessLabel": "Sensibilité des seins",
+  "logSymptomAcneLabel": "Acné",
+  "logSymptomCravingsLabel": "Envies",
+  "logSymptomsPainLevelTitle": "Niveau de douleur",
+  "logScaleNoneLabel": "Aucune",
+  "logScaleSevereLabel": "Sévère",
+  "logSymptomsSleepQualityTitle": "Qualité du sommeil",
+  "logSleepPoorLabel": "Mauvaise",
+  "logSleepFairLabel": "Moyenne",
+  "logSleepGoodLabel": "Bonne",
+  "logSleepGreatLabel": "Excellente",
+  "logSymptomsNotesHint": "Comment vous sentez-vous aujourd'hui ?",
+  "logSymptomsSaved": "Symptômes enregistrés.",
+  "saveSymptomsLabel": "Enregistrer les symptômes",
+  "logTemperatureTitle": "Température",
+  "logTemperatureWatchConnectedTitle": "Apple Watch connectée",
+  "logTemperatureWatchConnectedSubtitle": "Température du poignet suivie automatiquement.\nSaisie manuelle optionnelle pour comparaison.",
+  "logTemperatureBbtTitle": "Température basale du corps",
+  "logTemperatureNormalRangeNote": "Plage normale : 36,1°C - 36,4°C (folliculaire)",
+  "logTemperatureMeasurementTimeTitle": "Heure de mesure",
+  "logTemperatureQualityFactorsTitle": "Facteurs de qualité des données",
+  "logTemperatureSameTimeLabel": "Même heure qu'hier ?",
+  "logTemperatureSleepLabel": "Sommeil ininterrompu (5+ heures) ?",
+  "logTemperatureBeforeGettingUpLabel": "Mesuré avant de se lever ?",
+  "logTemperatureSaved": "Température enregistrée.",
+  "saveTemperatureLabel": "Enregistrer la température",
+  "logIntimacyTitle": "Intimité",
+  "logIntimacyPrivacyTitle": "Votre vie privée compte",
+  "logIntimacyPrivacySubtitle": "Ces données sont privées, cryptées, et utilisées uniquement pour améliorer les prédictions d'ovulation.",
+  "logIntimacyActivityTitle": "Activité",
+  "logIntimacyUnprotectedLabel": "Non protégé",
+  "logIntimacyProtectedLabel": "Protégé",
+  "logIntimacyBirthControlLabel": "Contraception",
+  "logIntimacyOtherLabel": "Autre",
+  "logIntimacyTimeOptionalTitle": "Heure (optionnel)",
+  "logIntimacyDetailsOptionalTitle": "Détails supplémentaires (optionnel)",
+  "logIntimacyDetailOrgasmLabel": "Orgasme",
+  "logIntimacyDetailPainfulLabel": "Douloureux",
+  "logIntimacyDetailDryLabel": "Sec",
+  "logIntimacyDetailBleedingLabel": "Saignement",
+  "logIntimacyNotesHint": "Notes éventuelles...",
+  "logIntimacySaved": "Journal d'intimité enregistré.",
+  "saveIntimacyLogLabel": "Enregistrer le journal d'intimité",
+  "logDailyTitle": "Journal du jour",
+  "logDailyAllSavedLabel": "Tout enregistré",
+  "logDailySaveRemainingLabel": "Enregistrer le reste ({count})",
+  "@logDailySaveRemainingLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logDailySaved": "Journal du jour enregistré.",
+  "logSuggestedTodayLabel": "Suggéré aujourd'hui",
+  "logLhPhotoValidationMessage": "Effectuez une analyse valide de la bandelette LH avant d'enregistrer le mode photo.",
+  "logSectionEmptyValidationMessage": "Ajoutez quelque chose dans cette section avant d'enregistrer.",
+  "logSectionSavedMessage": "{section} enregistré.",
+  "@logSectionSavedMessage": {
+    "placeholders": {
+      "section": {
+        "type": "String"
+      }
+    }
+  },
+  "logSaveSectionLabel": "Enregistrer {section}",
+  "@logSaveSectionLabel": {
+    "placeholders": {
+      "section": {
+        "type": "String"
+      }
+    }
+  },
+  "logLhImagePrepareError": "Impossible de préparer l'image LH pour le moment.",
+  "logLhInvalidStripMessage": "Nous n'avons pas pu confirmer qu'il s'agit d'une image valide de bandelette LH.",
+  "logLhAnalysisCompleteMessage": "Analyse terminée. Vérifiez le résultat suggéré ci-dessous.",
+  "logLhImageAnalysisError": "Impossible d'analyser l'image LH pour le moment.",
+  "logImageSourceTitle": "Sélectionnez la source de l'image",
+  "logTakePhotoLabel": "Prendre une photo",
+  "logUploadFromLibraryLabel": "Importer depuis la bibliothèque",
+  "logDailyFlowColourTitle": "Couleur du flux",
+  "logDailyColorPinkLabel": "Rose",
+  "logDailySymptomTenderBreastsLabel": "Seins sensibles",
+  "logDailySymptomsNotesHint": "Ajoutez un contexte si vous le souhaitez...",
+  "logDailyWearableDetectedMessage": "Appareil connecté détecté. La saisie manuelle est optionnelle et utile pour comparaison.",
+  "logDailyBbtTitle": "BBT",
+  "logDailySelectTimeLabel": "Sélectionner l'heure",
+  "logDailyEntryMethodTitle": "Méthode de saisie",
+  "logDailyPhotoAnalysisLabel": "Analyse photo",
+  "logDailyManualLabel": "Manuel",
+  "logDailyPhotoAnalysisTitle": "Analyse photo",
+  "logDailyPreviewStripMessage": "Prévisualisez votre image de bandelette, puis traitez-la pour l'analyse LH",
+  "logDailyTakeOrUploadStripMessage": "Prenez une photo ou téléchargez une image de bandelette pour analyse",
+  "logDailyAnalysisBeforeSaveMessage": "Nous afficherons le résultat de l'analyse avant que vous ne sauvegardiez cette section. Vous pouvez toujours modifier le résultat suggéré.",
+  "logDailyStripPhotoTipsMessage": "Les meilleurs résultats proviennent d'une photo de bandelette claire et uniformément éclairée.",
+  "logDailyCouldNotPreviewImage": "Impossible de prévisualiser cette image",
+  "logDailyChooseAnotherImageLabel": "Choisir une autre image",
+  "logDailyTakeOrUploadStripPhotoLabel": "Prendre ou télécharger une photo de bandelette",
+  "logDailyProcessImageLabel": "Traiter l'image",
+  "logDailyAnalysisResultTitle": "Résultat de l'analyse",
+  "logDailyResultTitle": "Résultat",
+  "logDailyLhNegativeLabel": "Négatif",
+  "logDailyLhPeakLabel": "Pic",
+  "logDailyTimeOfTestTitle": "Heure du test",
+  "logDailyBestTestedTimeHint": "Meilleur test entre 10h et 20h",
+  "logDailySetTimeLabel": "Définir l'heure",
+  "logDailyAnalysisReadyTitle": "Analyse prête",
+  "logDailyAnalysisNeededTitle": "Analyse requise",
+  "logDailySuggestedResultLabel": "Résultat suggéré : {result}",
+  "@logDailySuggestedResultLabel": {
+    "placeholders": {
+      "result": {
+        "type": "String"
+      }
+    }
+  },
+  "logDailyProcessImageBeforeSaveMessage": "Traitez d'abord l'image. La sauvegarde reste désactivée tant qu'un résultat valide n'est pas obtenu.",
+  "logDailyTypeTitle": "Catégorie",
+  "logDailyFertileSignDetectedLabel": "Signe de fertilité détecté",
+  "logDailyMucusDryNoneLabel": "Sec/Aucun",
+  "logDailyAnythingElseHint": "Autre chose que vous avez remarqué...",
+  "logDailyPrivateTrackingMessage": "Privé, chiffré, utilisé uniquement pour améliorer les prédictions d'ovulation.",
+  "logDailyAdditionalDetailsTitle": "Détails supplémentaires",
+  "logDailyTimeTitle": "Heure",
+  "logDailyOptionalLabel": "Optionnel",
+  "logDailyOptionalNoteHint": "Note optionnelle...",
+  "logDiscardChangesTitle": "Ignorer les modifications non enregistrées ?",
+  "logDiscardChangesMessage": "Vous avez des modifications non enregistrées dans le journal. Quitter cet écran et les perdre ?",
+  "logStayLabel": "Rester",
+  "logLeaveLabel": "Quitter",
+  "logSectionPeriodTitle": "Règles",
+  "logSectionSymptomsTitle": "Symptômes",
+  "logSectionTemperatureTitle": "Température",
+  "logSectionLhTestTitle": "Test LH",
+  "logSectionCervicalMucusTitle": "Mucus cervical",
+  "logSectionIntimacyTitle": "Intimité",
+  "logUnsavedChangesLabel": "Modifications non enregistrées",
+  "logSectionPeriodSubtitle": "Flux, couleur et symptômes",
+  "logSectionSymptomsSubtitle": "Humeur, douleur, énergie et sommeil",
+  "logSectionTemperatureSubtitle": "BBT, heure et facteurs de qualité",
+  "logSectionLhTestSubtitle": "Analyse photo ou résultat manuel",
+  "logSectionCervicalMucusSubtitle": "Type, quantité et notes",
+  "logSectionIntimacySubtitle": "Suivi privé",
+  "logSavedEnergyLabel": "Énergie {count}",
+  "@logSavedEnergyLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logSavedPainLabel": "Douleur {count}",
+  "@logSavedPainLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logLoggedPrivatelyLabel": "Enregistré en privé",
+  "logTemperatureLutealRangeLabel": "Plage lutéale typique : environ 36,4°C–37,0°C",
+  "logTemperatureOvulationRangeLabel": "L’ovulation montre souvent une hausse après la ligne de base",
+  "logTemperatureMenstrualRangeLabel": "Plage menstruelle typique : environ 36,1°C–36,4°C",
+  "logTemperatureFollicularRangeLabel": "Plage folliculaire typique : environ 36,1°C–36,4°C",
+  "logLhPickerUnavailableMessage": "Le sélecteur d’images n’est pas disponible pour le moment. Fermez complètement et relancez l’application, puis réessayez.",
+  "logLhChooseEntryMethodTitle": "Choisir la méthode d’entrée",
+  "logLhImageAnalysisLabel": "Analyse d’image",
+  "logLhUploadStripPhotoSubtitle": "Télécharger une photo de bandelette",
+  "logLhManualEntryLabel": "Entrée manuelle",
+  "logLhSelectResultSubtitle": "Sélectionnez vous-même le résultat",
+  "logLhSelectManualResultMessage": "Sélectionnez un résultat LH manuel pour continuer.",
+  "logLhSaved": "Test LH enregistré.",
+  "logLhUploadStripMessage": "Téléchargez une photo de bandelette LH pour continuer.",
+  "logLhUnreadableStripMessage": "Nous n’avons pas pu lire cette bandelette LH. Veuillez choisir un résultat manuellement ou essayer une autre image.",
+  "logLhHistoryLogsTitle": "Historique des journaux",
+  "logLhLoadingHistoryMessage": "Chargement de l’historique LH...",
+  "logLhEmptyHistoryMessage": "Aucun test LH enregistré pour le moment. Appuyez sur + pour en ajouter un.",
+  "logLhImageAnalysisSourceLabel": "Analyse d’image",
+  "logLhManualSourceLabel": "Manuel",
+  "logLhUploadStripPhotoTitle": "Télécharger la photo de la bandelette de test",
+  "logLhTakePhotoOrUploadLabel": "Prendre une photo ou télécharger",
+  "logLhReplaceSelectedPhotoLabel": "Remplacer la photo sélectionnée",
+  "logLhAiWillAnalyzeLabel": "L'IA analysera l'intensité de la ligne",
+  "logLhImageReadyLabel": "Image prête pour l'analyse de la bandelette LH",
+  "logLhImageTipMessage": "💡 Astuce : Placez la bandelette sur un fond blanc avec un bon éclairage pour de meilleurs résultats",
+  "logLhNegativeSubtitle": "Test plus clair que le témoin",
+  "logLhLowSubtitle": "Ligne légèrement visible",
+  "logLhHighSubtitle": "Identique au témoin",
+  "logLhPeakSubtitle": "Plus foncé que le témoin",
+  "logLhTestTimeTitle": "Heure du test",
+  "logLhBestTestedHint": "Meilleur test entre 10h et 20h",
+  "logLhEditTimeLabel": "Modifier l'heure",
+  "logLhSaveButtonLabel": "Enregistrer le test LH",
+  "logLhImageAnalysisUnavailableMessage": "L'analyse d'image n'est pas disponible pour le moment. Veuillez choisir votre résultat LH manuellement.",
+  "logLhStripAnalysisUnavailableMessage": "L'analyse de la bandelette LH n'est pas disponible pour le moment. Veuillez choisir votre résultat LH manuellement.",
+  "logLhInvalidStripLabel": "Bandelette invalide",
+  "logLhUnreadableLabel": "Illisible",
+  "logLhUnknownLabel": "Inconnu",
+  "logLhCycleDayLabel": "Jour du cycle {count}",
+  "@logLhCycleDayLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logLhRatioLabel": "Ratio {value}",
+  "@logLhRatioLabel": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "logLhPositiveLabel": "Positif",
+  "authGenericError": "Une erreur est survenue.",
+  "appShellHomeLabel": "Accueil",
+  "appShellCalendarLabel": "Calendrier",
+  "appShellLogLabel": "Journal",
+  "appShellBloomLabel": "Bloom",
+  "appShellProfileLabel": "Profil",
+  "todayDashboardLoadError": "Impossible de charger votre tableau de bord pour le moment.",
+  "todayDashboardSignInRequired": "Connectez-vous pour voir votre tableau de bord.",
+  "todayFertilitySectionTitle": "Fertilité",
+  "todayDailyInsightsSectionTitle": "Mes insights quotidiens",
+  "todayFitnessSectionTitle": "Forme",
+  "todayWearableSnapshotSectionTitle": "Instantané du wearable",
+  "todayQuickActionsSectionTitle": "Actions rapides",
+  "todayForYouSectionTitle": "Pour vous",
+  "todayGreeting": "Bonjour {name}",
+  "@todayGreeting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "todayGreetingFallbackName": "bonjour",
+  "todayCountdownToday": "Aujourd'hui",
+  "todayCountdownDays": "{count} jours",
+  "@todayCountdownDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "todayConfidenceWithScore": "{label} {score}",
+  "@todayConfidenceWithScore": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "score": {
+        "type": "String"
+      }
+    }
+  },
+  "todayCycleDayLabel": "Jour du cycle {day}",
+  "@todayCycleDayLabel": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "todayPhaseLabel": "Phase {phase}",
+  "@todayPhaseLabel": {
+    "placeholders": {
+      "phase": {
+        "type": "String"
+      }
+    }
+  },
+  "todayNextPeriodLabel": "Prochaines règles",
+  "todayCountdownLabel": "Compte à rebours",
+  "todayConfidenceLabel": "Confiance",
+  "todayEditPeriodLabel": "Modifier les règles",
+  "todayCardTodayLabel": "Aujourd'hui",
+  "todayCardCycleDayLabel": "Jour du cycle",
+  "todayFoodWorkoutTitle": "Alimentation + Entraînement",
+  "todayEatRecommendation": "Mangez : {items}.",
+  "@todayEatRecommendation": {
+    "placeholders": {
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "todayTryRecommendation": "Essayez : {items}.",
+  "@todayTryRecommendation": {
+    "placeholders": {
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "todayFertilityStatusLabel": "Statut",
+  "todayFertileTodayLabel": "Fertile aujourd'hui",
+  "todayNotFertileTodayLabel": "Non fertile aujourd'hui",
+  "todayFertilityWindowLabel": "Fenêtre",
+  "todayPredictedOvulationLabel": "Ovulation prévue",
+  "todayMethodLabel": "Méthode",
+  "todayWeekdaySun": "DIM",
+  "todayWeekdayMon": "LUN",
+  "todayWeekdayTue": "MAR",
+  "todayWeekdayWed": "MER",
+  "todayWeekdayThu": "JEU",
+  "todayWeekdayFri": "VEN",
+  "todayWeekdaySat": "SAM",
+  "todayOvulationRangeIntro": "L’ovulation aura lieu entre -",
+  "todayIntensityLabel": "Intensité",
+  "todayRecoveryLabel": "Récupération",
+  "todayRecommendedFocusLabel": "Focus recommandé",
+  "todayConnectWearableTitle": "Connecter un appareil wearable",
+  "todayConnectWearableDescription": "Associez un appareil wearable pour débloquer des signaux de support basés sur le sommeil, la fréquence cardiaque, le HRV et la température.",
+  "todayConnectDeviceLabel": "Connecter l’appareil",
+  "todayWearableLabel": "Appareil connecté",
+  "todayConnectedLabel": "Connecté",
+  "todaySleepLabel": "Sommeil",
+  "todayRestingHeartRateLabel": "Fréquence cardiaque au repos",
+  "todayHrvLabel": "HRV",
+  "todayTemperatureDeltaLabel": "Delta de température",
+  "todayLatestSyncLabel": "Dernière synchronisation",
+  "todayDateRangeLabel": "Du {start} au {end}",
+  "@todayDateRangeLabel": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "todayPhaseMenstrual": "Menstruelle",
+  "todayPhaseFollicular": "Folliculaire",
+  "todayPhaseOvulatory": "Ovulatoire",
+  "todayPhaseLuteal": "Lutéal",
+  "todayPhaseCycle": "Cyclicité",
+  "todayConfidenceLow": "Faible",
+  "todayConfidenceModerate": "Modérée",
+  "todayConfidenceHigh": "Élevée",
+  "connectedDevicesTitle": "Appareils connectés",
+  "connectedDevicesSubtitle": "Gérez les connexions des appareils portables et des données de santé utilisées pour les insights du cycle et l’estimation du stress.",
+  "connectedDevicesAppleWatchTitle": "Apple Watch",
+  "connectedDevicesAppleWatchSubtitle": "Connecté et synchronisation de la température du poignet, HRV, fréquence cardiaque au repos et sommeil.",
+  "connectedDevicesLastSyncLabel": "Dernière synchronisation : Aujourd’hui, 07:14",
+  "connectedDevicesPhoneHealthTitle": "Stockage Santé du téléphone",
+  "connectedDevicesPhoneHealthSubtitle": "Utilisez les autorisations santé du téléphone comme source de secours lorsque les données des appareils portables ne sont pas disponibles.",
+  "connectedDevicesPermissionsTitle": "Autorisations",
+  "connectedDevicesPermissionWristTemperature": "Température du poignet",
+  "connectedDevicesPermissionHrv": "Variabilité de la fréquence cardiaque",
+  "connectedDevicesPermissionRestingHeartRate": "Fréquence cardiaque au repos",
+  "connectedDevicesPermissionSleepDuration": "Durée et fragmentation du sommeil",
+  "connectedDevicesInfoMessage": "La synchronisation des appareils améliore la qualité des prédictions, mais Vyla fonctionne toujours lorsque vous saisissez les données manuellement.",
+  "connectedDevicesUpdated": "Appareils connectés mis à jour.",
+  "healthDataCycleReportTitle": "Rapport de cycle",
+  "healthDataCycleReportSubtitle": "Générez un rapport complet du cycle à partager avec votre professionnel de santé.",
+  "healthDataReportOptionsTitle": "Options du rapport",
+  "healthDataCyclesToIncludeLabel": "NOMBRE DE CYCLES À INCLURE",
+  "healthDataCycleCountLabel": "{count} cycles suivis",
+  "@healthDataCycleCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "healthDataIncludeLhHistory": "Inclure l’historique LH",
+  "healthDataIncludeTemperatureChart": "Inclure le graphique de température",
+  "healthDataIncludeSymptomSummary": "Inclure le résumé des symptômes",
+  "healthDataReportIncludesTitle": "Le rapport inclura",
+  "healthDataPersonalHealthTitle": "⚠️ Données de santé personnelles",
+  "healthDataPersonalHealthSubtitle": "Ce rapport contient vos données de santé personnelles. Ne le partagez qu’avec des professionnels de santé de confiance.",
+  "healthDataGeneratePdfLabel": "Générer un rapport PDF",
+  "healthDataIncludedCycleLengths": "Durées et dates des {count} derniers cycles",
+  "@healthDataIncludedCycleLengths": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "healthDataIncludedAverageCycleLength": "Durée moyenne du cycle et variabilité",
+  "healthDataIncludedLhHistory": "Historique de détection du pic LH",
+  "healthDataIncludedTemperatureChart": "Graphique de température montrant le schéma biphasique",
+  "healthDataIncludedSymptomSummary": "Résumé du suivi des symptômes par phase",
+  "healthDataIncludedOvulationAccuracy": "Précision de la prédiction d’ovulation",
+  "healthDataReportGeneratedTitle": "Rapport généré",
+  "healthDataReportGeneratedSubtitle": "Résumé santé sur {count} cycles prêt à être partagé",
+  "@healthDataReportGeneratedSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "healthDataShareOptionsTitle": "Options de partage",
+  "healthDataSaveToFiles": "Enregistrer dans Fichiers",
+  "healthDataCopyLink": "Copier le lien",
+  "healthDataLinkExpiry": "Expire dans 1 heure",
+  "healthDataOpenIn": "Ouvrir dans...",
+  "editProfileFullNameLabel": "Nom complet",
+  "editProfileDateOfBirthLabel": "Date de naissance",
+  "editProfileCountryLabel": "Pays",
+  "editProfilePasswordSubtitle": "Mettez à jour votre mot de passe et vos paramètres de connexion.",
+  "editProfileUpdated": "Profil mis à jour.",
+  "editProfileSaveChanges": "Enregistrer les modifications",
+  "calendarViewMonthLabel": "Mois",
+  "calendarViewYearLabel": "Année",
+  "calendarSelectedDaySummary": "Jour {cycleDay} — phase {phase}",
+  "@calendarSelectedDaySummary": {
+    "placeholders": {
+      "cycleDay": {
+        "type": "int"
+      },
+      "phase": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarLoggedDataTitle": "Données enregistrées",
+  "calendarMoodLabel": "Humeur",
+  "calendarSymptomsLabel": "Symptômes",
+  "calendarSleepLabel": "Sommeil",
+  "calendarEnergyLabel": "Énergie",
+  "calendarWeekdayMon": "L",
+  "calendarWeekdayTue": "M",
+  "calendarWeekdayWed": "M",
+  "calendarWeekdayThu": "J",
+  "calendarWeekdayFri": "V",
+  "calendarWeekdaySat": "S",
+  "calendarWeekdaySun": "D",
+  "calendarPhaseUnknown": "Inconnue",
+  "calendarMoodMenstrual": "Reposée, réfléchie",
+  "calendarMoodFollicular": "Calme, équilibrée",
+  "calendarMoodOvulatory": "Sociable, énergique",
+  "calendarMoodLuteal": "Calme, équilibrée",
+  "calendarMoodUnknown": "Stable, tranquille",
+  "calendarSymptomsPresent": "Crampes légères, ballonnements",
+  "calendarSymptomsNone": "Aucun symptôme fort enregistré",
+  "calendarSleepMenstrual": "7,5 heures, agité",
+  "calendarSleepFollicular": "8 heures, réparateur",
+  "calendarSleepOvulatory": "7,8 heures, léger",
+  "calendarSleepLuteal": "7,5 heures, agité",
+  "calendarSleepUnknown": "Pas de données de sommeil",
+  "calendarEnergyMenstrual": "Énergie faible à moyenne",
+  "calendarEnergyFollicular": "Énergie en hausse",
+  "calendarEnergyOvulatory": "Énergie élevée",
+  "calendarEnergyLuteal": "Énergie moyenne",
+  "calendarEnergyUnknown": "Énergie non enregistrée",
+  "calendarNotesMenstrual": "Un peu ballonnée ce matin avec quelques crampes légères, mais dans l'ensemble c'était gérable.",
+  "calendarNotesFollicular": "L'énergie était plus stable aujourd'hui. La concentration et le mouvement sont venus un peu plus facilement que d'habitude.",
+  "calendarNotesOvulatory": "Plus sociable et alerte, avec une humeur plus légère pendant la majeure partie de la journée.",
+  "calendarNotesLuteal": "Un peu plus sensible et fatiguée que d'habitude, mais globalement assez équilibrée.",
+  "calendarNotesUnknown": "Aucune note enregistrée pour cette journée.",
+  "notificationsAndAlertsLabel": "Notifications & Alertes",
+  "notificationsTitle": "Alertes",
+  "notificationsSubtitle": "Restez informée, gardez le contrôle.",
+  "notificationsShowHistoryTooltip": "Afficher l'historique",
+  "notificationsSettingsTooltip": "Paramètres des notifications",
+  "notificationsLoadingSettings": "Chargement des paramètres de notification...",
+  "notificationsLoadingHistory": "Chargement de l'historique des notifications...",
+  "notificationsEmptyTitle": "Aucune notification pour le moment",
+  "notificationsEmptySubtitle": "Les alertes de cycle, rappels et conseils santé apparaîtront ici après leur envoi.",
+  "notificationsSectionSettings": "Paramètres",
+  "notificationsGroupAllTitle": "Toutes les notifications",
+  "notificationsGroupAllSubtitle": "Contrôle principal pour tous les types de notifications",
+  "notificationsAllEnabledTitle": "Activer toutes les notifications",
+  "notificationsAllEnabledSubtitle": "Activer ou désactiver les notifications push par catégorie",
+  "notificationsGroupPredictionsTitle": "Prédictions & Prévisions",
+  "notificationsGroupPredictionsSubtitle": "Mises à jour du cycle et de la fenêtre fertile",
+  "notificationsPeriodApproachingTitle": "Règles imminentes",
+  "notificationsPeriodApproachingSubtitle": "3 jours avant le début prévu",
+  "notificationsPeriodDetectedTitle": "Règles détectées",
+  "notificationsPeriodDetectedSubtitle": "Confirmez le début des règles",
+  "notificationsFertileWindowTitle": "Fenêtre fertile",
+  "notificationsFertileWindowSubtitle": "1 jour avant le début de la fenêtre fertile",
+  "notificationsOvulationPredictedTitle": "Ovulation prévue",
+  "notificationsOvulationPredictedSubtitle": "Le jour prévu de l'ovulation",
+  "notificationsCycleDelayTitle": "Alerte retard de cycle",
+  "notificationsCycleDelaySubtitle": "Lorsque les règles ont plus de 3 jours de retard",
+  "notificationsGroupHealthTitle": "Conseils santé",
+  "notificationsGroupHealthSubtitle": "Changements détectés par le modèle pouvant affecter votre cycle",
+  "notificationsCyclePatternTitle": "Changements dans le cycle",
+  "notificationsCyclePatternSubtitle": "Lorsque le ML détecte des irrégularités",
+  "notificationsUnusualSymptomsTitle": "Symptômes inhabituels",
+  "notificationsUnusualSymptomsSubtitle": "Symptômes sévères ou inattendus",
+  "notificationsStressAlertsTitle": "Alertes de stress",
+  "notificationsStressAlertsSubtitle": "Charge de stress élevée détectée",
+  "notificationsSleepQualityTitle": "Qualité du sommeil",
+  "notificationsSleepQualitySubtitle": "Mauvaise qualité de sommeil détectée (bangle uniquement)",
+  "notificationsGroupRemindersTitle": "Rappels",
+  "notificationsGroupRemindersSubtitle": "Incitations à rester régulier dans la saisie des données",
+  "notificationsDailyCheckInTitle": "Suivi quotidien des symptômes",
+  "notificationsDailyCheckInSubtitle": "Envoyé à 20h00",
+  "notificationsBangleSyncTitle": "Synchronisation Bangle",
+  "notificationsBangleSyncSubtitle": "Lorsque non synchronisé pendant 48 heures",
+  "notificationsLhReminderTitle": "Rappel test LH",
+  "notificationsLhReminderSubtitle": "Pendant la fenêtre fertile",
+  "notificationsGroupCriticalTitle": "Alertes critiques",
+  "notificationsGroupCriticalSubtitle": "Disponibles pour les risques de santé et de dispositif sensibles au temps",
+  "notificationsHeavyBleedingTitle": "Saignement abondant",
+  "notificationsHeavyBleedingSubtitle": "Flux anormalement abondant détecté",
+  "notificationsPotentialPregnancyTitle": "Grossesse potentielle",
+  "notificationsPotentialPregnancySubtitle": "Règles en retard de plus de 14 jours",
+  "notificationsBatteryCriticalTitle": "Batterie Bangle critique",
+  "notificationsBatteryCriticalSubtitle": "Batterie en dessous de 5%",
+  "notificationsQuietHoursTitle": "Heures calmes",
+  "notificationsQuietHoursSubtitle": "Pause des notifications habituelles pendant votre sommeil",
+  "notificationsStartTimeLabel": "Heure de début",
+  "notificationsEndTimeLabel": "Heure de fin",
+  "notificationsAllowCriticalAlertsLabel": "Autoriser les alertes critiques",
+  "notificationsLoadErrorTitle": "Impossible de charger les paramètres de notification",
+  "retryLabel": "Réessayer",
+  "notificationsNowLabel": "Maintenant",
+  "notificationsTodayLabel": "Aujourd'hui",
+  "notificationsYesterdayLabel": "Hier",
+  "notificationsMinutesAgoLabel": "Il y a {count} min",
+  "@notificationsMinutesAgoLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editProfileLabel": "Modifier le profil",
+  "healthDataLabel": "Données de santé",
+  "connectedDevicesLabel": "Appareils connectés",
+  "manageSubscriptionLabel": "Gérer l’abonnement",
+  "appleWatchSyncLabel": "Synchronisation Apple Watch",
+  "darkModeLabel": "Mode sombre",
+  "privacyPolicyLabel": "Politique de confidentialité",
+  "exportMyDataLabel": "Exporter mes données",
+  "deleteAccountLabel": "Supprimer le compte",
+  "signOutLabel": "Se déconnecter",
+  "accountSectionLabel": "COMPTE",
+  "preferencesSectionLabel": "PRÉFÉRENCES",
+  "privacyAndDataSectionLabel": "CONFIDENTIALITÉ & DONNÉES",
+  "noEmailAvailable": "Aucun e-mail disponible",
+  "localeEnglishGlobal": "Anglais",
+  "localeEnglishUk": "Anglais (Royaume-Uni)",
+  "localeEnglishUs": "Anglais (États-Unis)",
+  "localeEnglishCanada": "Anglais (Canada)",
+  "localeEnglishAustralia": "Anglais (Australie)",
+  "localeSpanishGlobal": "Espagnol",
+  "localeSpanishSpain": "Espagnol (Espagne)",
+  "localeSpanishLatam": "Espagnol (Amérique latine)",
+  "localeFrenchGlobal": "Français",
+  "localeFrenchFrance": "Français (France)",
+  "localeFrenchCanada": "Français (Canada)",
+  "localeGermanGlobal": "Allemand",
+  "localeGermanGermany": "Allemand (Allemagne)",
+  "localeGermanAustria": "Allemand (Autriche)",
+  "localeGermanSwitzerland": "Allemand (Suisse)",
+  "localePortugueseGlobal": "Portugais",
+  "localePortugueseBrazil": "Portugais (Brésil)",
+  "localePortuguesePortugal": "Portugais (Portugal)",
+  "acceptLabel": "Accepter",
+  "sendLabel": "Envoyer",
+  "bloomTitle": "Vyla AI",
+  "bloomDataUsageNoticeTitle": "Avis sur l’utilisation des données",
+  "bloomConsentTitle": "Utiliser Vyla AI",
+  "bloomDataUsageNoticeBody": "Vyla AI utilise les données de votre cycle pour répondre à vos questions. Les données sont traitées uniquement sur les serveurs de Vyla.",
+  "bloomConsentBody": "Autorisez le chat Vyla AI à utiliser vos informations pour répondre à vos besoins de santé.",
+  "bloomSuggestedQuestionsTitle": "QUESTIONS SUGGÉRÉES",
+  "bloomSuggestionCycleLong": "Pourquoi mon dernier cycle a-t-il été long ?",
+  "bloomSuggestionLhTesting": "Quand dois-je commencer les tests LH ?",
+  "bloomSuggestionEggWhiteMucus": "Que signifie la glaire cervicale en blanc d'œuf ?",
+  "bloomConversationHelper": "Commencez une conversation et Vyla AI gardera le même fil pour les questions de suivi.",
+  "bloomUsedDataLabel": "Vyla is a prediction application not a medical device",
+  "bloomSavedToLogsTitle": "Enregistré dans vos journaux",
+  "bloomThinkingLabel": "Réflexion en cours...",
+  "bloomMedicalDisclaimer": "Ce n’est pas un avis médical — consultez votre médecin pour des questions cliniques",
+  "bloomAskQuestionHint": "Posez une question...",
+  "bloomConsentRequiredHint": "Acceptez le consentement pour utiliser Vyla AI",
+  "insightsTitle": "Vos statistiques de cycle",
+  "insightsBasedOnTrackedCycles": "Basé sur {count} cycles suivis",
+  "@insightsBasedOnTrackedCycles": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "insightsBasedOnTrackedCycleData": "Basé sur vos données de cycle suivies",
+  "insightsLoadingMessage": "Chargement de vos statistiques de cycle...",
+  "insightsAverageCycleLabel": "CYCLE MOY",
+  "insightsPeriodLabel": "RÈGLES",
+  "insightsTrackedLabel": "SUIVI",
+  "insightsRegularityLabel": "RÉGULARITÉ",
+  "insightsDaysSuffix": "jours",
+  "insightsCyclesSuffix": "cycles suivis",
+  "insightsPercentSuffix": "%",
+  "insightsTemperatureTrendTitle": "Tendance de la température",
+  "insightsHrvTitle": "Variabilité de la fréquence cardiaque",
+  "insightsSymptomPatternsTitle": "Schémas de symptômes",
+  "insightsMostCommonLabel": "Le plus fréquent",
+  "insightsEnergyDipsLabel": "Baisses d'énergie",
+  "insightsNoDataYet": "Pas encore de données",
+  "insightsNoTemperatureTrendYet": "Pas encore de tendance de température",
+  "insightsNoHrvTrendYet": "Pas encore de tendance HRV",
+  "notificationsFilterAll": "Toutes",
+  "notificationsFilterReminders": "Rappels",
+  "notificationsFilterInsights": "Analyses",
+  "notificationsFilterUpdates": "Mises à jour",
+  "notificationsFilterSystem": "Système",
+  "notificationsSectionToday": "Aujourd'hui",
+  "notificationsSectionYesterday": "Hier",
+  "notificationsSectionEarlier": "Plus tôt",
+  "deleteAccountConfirmTitle": "Supprimer votre compte ?",
+  "deleteAccountConfirmBody": "Votre nom, adresse e-mail, date de naissance et mensurations corporelles seront définitivement supprimés. Les journaux de santé sont conservés sous forme anonymisée conformément à la loi. Cette action est irréversible.",
+  "deleteAccountConfirmButton": "Oui, supprimer mon compte",
+  "deleteAccountConfirmCancel": "Conserver mon compte",
+  "deleteAccountSuccessMessage": "Votre compte a été supprimé.",
+  "deviceDefaultLabel": "Langue du système",
+  "profileTitle": "Profil",
+  "profileSubtitle": "Gérez votre compte et vos préférences",
+  "profileEditPersonalInfoSubtitle": "Mettez à jour vos informations personnelles",
+  "profileCycleReportSubtitle": "Générez et partagez votre rapport de cycle",
+  "profileConnectedDevicesSubtitle": "Gérez vos appareils connectés",
+  "profileManageSubscriptionSubtitle": "Voir le plan et les détails de facturation",
+  "profileThemeSubtitle": "Choisir le thème et l'affichage",
+  "profilePrivacySubtitle": "Gérez vos données et confidentialité",
+  "profileTermsSubtitle": "Lire nos conditions d'utilisation",
+  "profileDeleteAccountSubtitle": "Supprimer définitivement votre compte et vos données",
+  "currentPasswordLabel": "Mot de passe actuel",
+  "currentPasswordHint": "Saisissez votre mot de passe actuel",
+  "changePasswordNewHint": "Utilisez au moins 8 caractères",
+  "changePasswordConfirmNewLabel": "Confirmer le nouveau mot de passe",
+  "changePasswordConfirmHint": "Ressaisissez votre nouveau mot de passe",
+  "changePasswordInfo": "La modification de votre mot de passe met immédiatement à jour le mot de passe de connexion de ce compte.",
+  "changePasswordFillAllFields": "Remplissez tous les champs de mot de passe.",
+  "changePasswordLengthError": "Le nouveau mot de passe doit contenir au moins 8 caractères.",
+  "changePasswordUpdateFailed": "Impossible de mettre à jour le mot de passe.",
+  "changePasswordUpdated": "Mot de passe mis à jour avec succès.",
+  "changePasswordHeroSubtitle": "Confirmez votre mot de passe actuel et choisissez-en un nouveau pour ce compte.",
+  "editProfileHeaderSubtitle": "Mettez à jour vos informations et gérez votre compte",
+  "editProfilePersonalInfo": "Informations personnelles",
+  "editProfileAccountSecurity": "Compte et sécurité",
+  "editProfileEmailReadOnlyHint": "L'adresse e-mail est gérée depuis votre compte de connexion.",
+  "editProfileNotificationsSubtitle": "Gérez vos rappels et alertes.",
+  "editProfileSelectDateOfBirth": "Sélectionner la date de naissance",
+  "editProfileSheetSubtitle": "Modifier {field}",
+  "@editProfileSheetSubtitle": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "notSetLabel": "Non défini",
+  "updateLabel": "Mettre à jour",
+  "manageLabel": "Gérer",
+  "healthDataLoadErrorTitle": "Impossible de charger les paramètres du rapport.",
+  "healthDataIncludeLhHistorySubtitle": "Afficher l'historique de détection des pics de LH",
+  "healthDataIncludeTemperatureChartSubtitle": "Afficher le graphique BBT et le schéma biphasique",
+  "healthDataIncludeSymptomSummarySubtitle": "Afficher les symptômes suivis par phase",
+  "healthDataSecureLinkCopied": "Lien sécurisé copié",
+  "healthDataReportSummaryCopied": "Résumé du rapport copié",
+  "generatingLabel": "Génération en cours…",
+  "subscriptionLoadingPlans": "Chargement des plans d'abonnement…",
+  "subscriptionPricingUnavailable": "Les tarifs d'abonnement ne sont pas encore disponibles pour ce pays.",
+  "subscriptionPaymentsUnavailable": "Les paiements sont temporairement indisponibles.",
+  "subscriptionUnableToOpenCheckout": "Impossible d'ouvrir le paiement.",
+  "sessionExpiredSignInAgain": "Votre session a expiré. Veuillez vous reconnecter.",
+  "subscriptionCancelTitle": "Résilier l'abonnement",
+  "subscriptionCancelPrompt": "Cela arrêtera le renouvellement de votre abonnement Premium actuel. Votre accès Premium restera actif jusqu'à la fin de la période de facturation en cours.",
+  "subscriptionKeepPlan": "Conserver le plan",
+  "subscriptionCancelAction": "Résilier l'abonnement",
+  "subscriptionCanceled": "Abonnement résilié.",
+  "subscriptionContinueFree": "Continuer avec la version gratuite",
+  "subscriptionCurrentPlan": "Plan actuel",
+  "subscriptionGetPremiumPlus": "Obtenir Premium",
+  "subscriptionBestToStart": "LE MEILLEUR POUR COMMENCER",
+  "subscriptionYearlyLabel": "Annuel",
+  "subscriptionMonthlyLabel": "Mensuel",
+  "subscriptionYearLabelShort": "an",
+  "subscriptionMonthLabelShort": "mois",
+  "subscriptionSaveYearly": "Économiser avec l'abonnement annuel",
+  "subscriptionSavePercent": "Économisez {percent} %",
+  "@subscriptionSavePercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "subscriptionTrustFooter": "Paiements sécurisés.\nAnnulation à tout moment.",
+  "subscriptionManagementRenews": "Votre plan {plan} se renouvelle à {amount} par {interval}.",
+  "@subscriptionManagementRenews": {
+    "placeholders": {
+      "plan": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "interval": {
+        "type": "String"
+      }
+    }
+  },
+  "subscriptionManagementActive": "Votre plan {plan} est actif. Vous pouvez mettre à niveau depuis les plans ci-dessus ou annuler le renouvellement automatique ici.",
+  "@subscriptionManagementActive": {
+    "placeholders": {
+      "plan": {
+        "type": "String"
+      }
+    }
+  },
+  "subscriptionTrialEndingTitle": "Fin de l'essai",
+  "subscriptionTrialEndingBody": "Cette route est prête pour les messages d'essai et les actions de mise à niveau pilotées par le serveur.",
+  "subscriptionPaymentIssueTitle": "Problème de paiement",
+  "subscriptionPaymentIssueBody": "Cette route est le point de récupération dédié pour les renouvellements échoués et les nouvelles tentatives de paiement.",
+  "subscriptionFinishingPayment": "Finalisation du paiement…",
+  "subscriptionCheckoutCanceledTitle": "Paiement annulé",
+  "subscriptionCheckoutCanceledBody": "Votre paiement a été annulé. Vous pouvez choisir un autre plan à tout moment.",
+  "subscriptionBackToPlans": "Retour aux plans",
+  "paywallUpgradeTitle": "Passez à la version supérieure",
+  "paywallUpgradeSubtitle": "Le routage du paywall est centralisé pour que les réponses 402 aboutissent à un flux de mise à niveau cohérent.",
+  "paywallViewPlans": "Voir les plans",
+  "paywallStressMonitoringRequiresPremium": "La surveillance du stress nécessite Premium.",
+  "paywallAiChatRequiresPremium": "Le chat IA Vyla nécessite Premium.",
+  "paywallOvulationShiftRequiresPremiumPlus": "Les analyses de décalage d'ovulation nécessitent Premium.",
+  "paywallGenericUpgrade": "Cette fonctionnalité nécessite un plan supérieur.",
+  "inviteAndEarnTitle": "Inviter & gagner",
+  "signInToViewReferrals": "Connectez-vous pour voir les parrainages.",
+  "referralCodeCopied": "Code de parrainage copié",
+  "scheduledPlanChangeCanceled": "Changement de forfait planifié annulé.",
+  "subscriptionRenewalRestarted": "Renouvellement d'abonnement redémarré.",
+  "backToHomeLabel": "Retour à l'accueil",
+  "choosePlanLabel": "Choisir un forfait",
+  "temperatureMethodOral": "Oral",
+  "temperatureMethodVaginal": "Vaginal",
+  "temperatureMethodWearable": "Dispositif portable",
+  "temperatureMethodUnknown": "Inconnu"
+}

@@ -8,12 +8,7 @@ from typing import Any
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from passlib.hash import argon2, bcrypt, bcrypt_sha256
-
-try:
-    from mnemonic import Mnemonic
-except ImportError:  # pragma: no cover - dependency is installed in runtime/test env
-    Mnemonic = None
+from passlib.hash import bcrypt, bcrypt_sha256
 
 from phora.core.config import get_settings
 
@@ -85,29 +80,6 @@ def new_ulid() -> str:
         chars.append(_CROCKFORD_ALPHABET[value & 0x1F])
         value >>= 5
     return "".join(reversed(chars))
-
-
-def generate_recovery_phrase() -> str:
-    if Mnemonic is None:  # pragma: no cover - dependency is installed in runtime/test env
-        raise RuntimeError("mnemonic dependency is required for recovery phrase generation")
-    return Mnemonic("english").to_mnemonic(secrets.token_bytes(32))
-
-
-def normalize_recovery_phrase(phrase: str) -> str:
-    return " ".join(phrase.lower().strip().split())
-
-
-def hash_recovery_phrase(phrase: str) -> str:
-    normalized = normalize_recovery_phrase(phrase)
-    return argon2.using(type="ID", rounds=3, memory_cost=65536, parallelism=1, salt_size=16).hash(normalized)
-
-
-def verify_recovery_phrase(phrase: str, hashed: str) -> bool:
-    normalized = normalize_recovery_phrase(phrase)
-    try:
-        return argon2.verify(normalized, hashed)
-    except Exception:  # pragma: no cover - invalid hashes should just fail closed
-        return False
 
 
 def hash_ip_for_rate_limit(ip_address: str) -> str:

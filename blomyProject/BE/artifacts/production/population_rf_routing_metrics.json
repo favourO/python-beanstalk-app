@@ -1,0 +1,153 @@
+{
+  "records": 49922,
+  "subjects": 219,
+  "sources": {
+    "fedcycle": 44248,
+    "mcphases": 5674
+  },
+  "phase_counts": {
+    "menstrual": 9027,
+    "follicular": 16709,
+    "ovulatory": 1569,
+    "luteal": 22617
+  },
+  "routing_strategy": "source_domain",
+  "models": {
+    "fedcycle": {
+      "source": "fedcycle",
+      "records": 44248,
+      "train_records": 34913,
+      "test_records": 9335,
+      "model_version": "rf-v1",
+      "backend": "sklearn",
+      "phase_accuracy": 0.877986,
+      "cycles_evaluated": 321,
+      "ovulation_day_mae": 2.202492211838006,
+      "within_1_day_accuracy": 0.429907,
+      "within_2_day_accuracy": 0.623053,
+      "macro_f1": 0.739747,
+      "per_class_metrics": {
+        "menstrual": {
+          "support": 1673,
+          "precision": 0.882629,
+          "recall": 0.898984,
+          "f1": 0.890731
+        },
+        "follicular": {
+          "support": 3251,
+          "precision": 0.87037,
+          "recall": 0.867425,
+          "f1": 0.868895
+        },
+        "ovulatory": {
+          "support": 324,
+          "precision": 0.316206,
+          "recall": 0.246914,
+          "f1": 0.277296
+        },
+        "luteal": {
+          "support": 4087,
+          "precision": 0.916385,
+          "recall": 0.92782,
+          "f1": 0.922067
+        }
+      },
+      "confusion_matrix": {
+        "menstrual": {
+          "menstrual": 1504,
+          "follicular": 169,
+          "ovulatory": 0,
+          "luteal": 0
+        },
+        "follicular": {
+          "menstrual": 200,
+          "follicular": 2820,
+          "ovulatory": 59,
+          "luteal": 172
+        },
+        "ovulatory": {
+          "menstrual": 0,
+          "follicular": 70,
+          "ovulatory": 80,
+          "luteal": 174
+        },
+        "luteal": {
+          "menstrual": 0,
+          "follicular": 181,
+          "ovulatory": 114,
+          "luteal": 3792
+        }
+      }
+    },
+    "mcphases": {
+      "source": "mcphases",
+      "records": 5674,
+      "train_records": 4551,
+      "test_records": 1123,
+      "model_version": "rf-v1",
+      "backend": "sklearn",
+      "phase_accuracy": 0.554764,
+      "cycles_evaluated": 12,
+      "ovulation_day_mae": 5.25,
+      "within_1_day_accuracy": 0.833333,
+      "within_2_day_accuracy": 0.833333,
+      "macro_f1": 0.42799,
+      "per_class_metrics": {
+        "menstrual": {
+          "support": 222,
+          "precision": 0.615385,
+          "recall": 0.216216,
+          "f1": 0.32
+        },
+        "follicular": {
+          "support": 333,
+          "precision": 0.431034,
+          "recall": 0.525526,
+          "f1": 0.473613
+        },
+        "ovulatory": {
+          "support": 11,
+          "precision": 0.4,
+          "recall": 0.181818,
+          "f1": 0.25
+        },
+        "luteal": {
+          "support": 557,
+          "precision": 0.62776,
+          "recall": 0.714542,
+          "f1": 0.668346
+        }
+      },
+      "confusion_matrix": {
+        "menstrual": {
+          "menstrual": 48,
+          "follicular": 81,
+          "ovulatory": 0,
+          "luteal": 93
+        },
+        "follicular": {
+          "menstrual": 19,
+          "follicular": 175,
+          "ovulatory": 1,
+          "luteal": 138
+        },
+        "ovulatory": {
+          "menstrual": 0,
+          "follicular": 4,
+          "ovulatory": 2,
+          "luteal": 5
+        },
+        "luteal": {
+          "menstrual": 11,
+          "follicular": 146,
+          "ovulatory": 2,
+          "luteal": 398
+        }
+      }
+    }
+  },
+  "promotion_summary": {
+    "fedcycle": true,
+    "mcphases": true
+  }
+}

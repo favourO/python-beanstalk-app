@@ -8,6 +8,7 @@ from html import escape
 from pathlib import Path
 
 from phora.core.config import Settings
+from phora.services.email_i18n import translate
 
 logger = logging.getLogger(__name__)
 _ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
@@ -42,54 +43,22 @@ _LEAF_BRANCH_SVG = (
 
 _SHIELD_SVG = (
     '<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
-    '<circle cx="24" cy="24" r="24" fill="#FFE4D0"/>'
+    '<circle cx="24" cy="24" r="24" fill="#F1EEFF"/>'
     '<path d="M24 12 L33 16 L33 24 C33 29.5 29 34 24 36 C19 34 15 29.5 15 24 L15 16 Z"'
-    ' stroke="#FF8A4C" stroke-width="1.6" fill="none" stroke-linejoin="round"/>'
+    ' stroke="#5336E8" stroke-width="1.8" fill="none" stroke-linejoin="round"/>'
     '<path d="M19.5 24 L23 27.5 L29.5 20.5"'
-    ' stroke="#FF8A4C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+    ' stroke="#5336E8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
     '</svg>'
 )
 
-_QUESTION_SVG = (
-    '<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
-    '<circle cx="20" cy="20" r="18" stroke="#FF8A4C" stroke-width="1.5" fill="none"/>'
-    '<text x="20" y="27" text-anchor="middle"'
-    ' font-family="Georgia,\'Times New Roman\',serif" font-size="18" fill="#FF8A4C">?</text>'
+_ACCOUNT_CONFIRMED_ICON_SVG = (
+    '<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+    '<circle cx="32" cy="32" r="30" fill="#FDE9F1"/>'
+    '<path d="M20 33 L28 41 L45 23" stroke="#7B235D" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
     '</svg>'
 )
 
-_FOOTER_LEAF_SVG = (
-    '<svg width="20" height="22" viewBox="0 0 20 22" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
-    '<path d="M10 20 C10 20,3.5 13,3.5 8 C3.5 4.5,6.5 2,10 2 C13.5 2,16.5 4.5,16.5 8 C16.5 13,10 20,10 20Z"'
-    ' fill="#FF8A4C" opacity="0.75"/>'
-    '<path d="M10 6 L10 17" stroke="white" stroke-width="1" stroke-linecap="round"/>'
-    '</svg>'
-)
 
-_IG_SVG = (
-    '<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
-    '<circle cx="18" cy="18" r="17" stroke="#FF8A4C" stroke-width="1.4" fill="none"/>'
-    '<rect x="11" y="11" width="14" height="14" rx="4" stroke="#FF8A4C" stroke-width="1.2" fill="none"/>'
-    '<circle cx="18" cy="18" r="3.8" stroke="#FF8A4C" stroke-width="1.2" fill="none"/>'
-    '<circle cx="23.5" cy="12.5" r="1.1" fill="#FF8A4C"/>'
-    '</svg>'
-)
-
-_FB_SVG = (
-    '<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
-    '<circle cx="18" cy="18" r="17" stroke="#FF8A4C" stroke-width="1.4" fill="none"/>'
-    '<text x="19" y="24" text-anchor="middle"'
-    ' font-family="Arial,sans-serif" font-size="15" font-weight="bold" fill="#FF8A4C">f</text>'
-    '</svg>'
-)
-
-_VYLA_SOCIAL_SVG = (
-    '<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
-    '<circle cx="18" cy="18" r="17" stroke="#FF8A4C" stroke-width="1.4" fill="none"/>'
-    '<path d="M18 27 C18 27,11.5 20,11.5 15 C11.5 11.5,14.5 9,18 9 C21.5 9,24.5 11.5,24.5 15 C24.5 20,18 27,18 27Z"'
-    ' fill="#FF8A4C" opacity="0.70"/>'
-    '</svg>'
-)
 
 
 class EmailDeliveryError(RuntimeError):
@@ -102,33 +71,82 @@ class EmailService:
 
     # ── Public send methods ───────────────────────────────────────────────────
 
-    def send_signup_otp(self, recipient: str, code: str) -> None:
-        subject = "Your Vyla verification code"
+    def send_signup_otp(self, recipient: str, code: str, locale: str = "en") -> None:
+        t = lambda key: translate(locale, key)  # noqa: E731
+        expiry = self.settings.otp_expiration_minutes
+        subject = t("signup_subject")
         text_body = (
-            "Verify your email address to finish signing up for Vyla.\n\n"
+            f"{t('signup_text_intro')}\n\n"
             f"Your one-time verification code is: {code}\n\n"
-            f"This code expires in {self.settings.otp_expiration_minutes} minutes.\n\n"
+            f"{t('otp_expires').format(expiry=expiry)}\n\n"
             "If you did not request this code, you can safely ignore this email."
         )
         html_body = self._render_otp_html(
             code=code,
-            heading="Verify it’s you",
-            subtext="Enter the verification code below to secure your Vyla account.",
+            heading=t("signup_heading"),
+            subtext=t("signup_subtext"),
+            locale=locale,
         )
         self._send(recipient, subject, text_body, html_body=html_body, inline_images=[_LOGO_PATH])
 
-    def send_password_reset_otp(self, recipient: str, code: str) -> None:
-        subject = "Reset your Vyla password"
+    def send_set_password_otp(self, recipient: str, code: str, locale: str = "en") -> None:
+        t = lambda key: translate(locale, key)  # noqa: E731
+        expiry = self.settings.otp_expiration_minutes
+        subject = t("reset_subject")
         text_body = (
-            "Use this one-time code to reset your Vyla password.\n\n"
-            f"Your password reset code is: {code}\n\n"
-            f"This code expires in {self.settings.otp_expiration_minutes} minutes."
+            f"You requested to set a password for your account.\n\n"
+            f"Your verification code is: {code}\n\n"
+            f"{t('otp_expires').format(expiry=expiry)}"
         )
         html_body = self._render_otp_html(
             code=code,
-            heading="Reset your password",
-            subtext="Enter the code below to reset your Vyla password.",
+            heading="Set Your Password",
+            subtext="Use this code to set a password for your account.",
+            locale=locale,
         )
+        self._send(recipient, subject, text_body, html_body=html_body, inline_images=[_LOGO_PATH])
+
+    def send_password_reset_otp(self, recipient: str, code: str, locale: str = "en") -> None:
+        t = lambda key: translate(locale, key)  # noqa: E731
+        expiry = self.settings.otp_expiration_minutes
+        subject = t("reset_subject")
+        text_body = (
+            f"{t('reset_text_intro')}\n\n"
+            f"Your password reset code is: {code}\n\n"
+            f"{t('otp_expires').format(expiry=expiry)}"
+        )
+        html_body = self._render_otp_html(
+            code=code,
+            heading=t("reset_heading"),
+            subtext=t("reset_subtext"),
+            locale=locale,
+        )
+        self._send(recipient, subject, text_body, html_body=html_body, inline_images=[_LOGO_PATH])
+
+    def send_account_deletion_otp(self, recipient: str, code: str, locale: str = "en") -> None:
+        expiry = self.settings.otp_expiration_minutes
+        subject = "Confirm account deletion - Vyla"
+        text_body = (
+            "Use this one-time passcode to confirm deleting your Vyla account.\n\n"
+            f"Your confirmation code is: {code}\n\n"
+            f"This code expires in {expiry} minutes.\n\n"
+            "If you did not request this, change your password and contact support."
+        )
+        html_body = self._render_otp_html(
+            code=code,
+            heading="Confirm account deletion",
+            subtext="Use this one-time passcode to confirm deleting your Vyla account.",
+            locale=locale,
+        )
+        self._send(recipient, subject, text_body, html_body=html_body, inline_images=[_LOGO_PATH])
+
+    def send_account_confirmed(self, recipient: str) -> None:
+        subject = "Your Vyla account is confirmed"
+        text_body = (
+            "Your account is confirmed.\n\n"
+            "Welcome to Vyla. Your email has been verified and your account is now active."
+        )
+        html_body = self._render_account_confirmed_html()
         self._send(recipient, subject, text_body, html_body=html_body, inline_images=[_LOGO_PATH])
 
     # ── SMTP delivery ─────────────────────────────────────────────────────────
@@ -230,7 +248,8 @@ class EmailService:
 
     # ── HTML template ─────────────────────────────────────────────────────────
 
-    def _render_otp_html(self, code: str, heading: str, subtext: str) -> str:
+    def _render_otp_html(self, code: str, heading: str, subtext: str, locale: str = "en") -> str:
+        t = lambda key: translate(locale, key)  # noqa: E731
         safe_heading = escape(heading)
         safe_subtext = escape(subtext)
         safe_digits = [escape(c) for c in code]
@@ -239,9 +258,8 @@ class EmailService:
 
         digit_cells = "".join(
             f'<td class="dt" style="padding:0 6px;">'
-            f'<div class="db" style="width:72px;height:84px;line-height:84px;text-align:center;'
-            f'border-radius:16px;background-color:#ffffff;border:1.5px solid #FFD5B8;'
-            f'font-family:Georgia,\'Times New Roman\',serif;font-size:40px;font-weight:700;color:#3A1A08;">'
+            f'<div class="db" style="width:72px;height:76px;line-height:76px;text-align:center;'
+            f'font-family:Arial,\'Helvetica Neue\',Helvetica,sans-serif;font-size:44px;font-weight:800;color:#5336E8;text-shadow:0 2px 0 #B8A9FF;">'
             f'{d}</div></td>'
             for d in safe_digits
         )
@@ -258,92 +276,52 @@ class EmailService:
 <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
 <style>{_EMAIL_CSS}</style>
 </head>
-<body style="margin:0;padding:0;background-color:#FFF6F0;">
+<body style="margin:0;padding:0;background-color:#F4F2FF;">
 
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#FFF6F0" style="background-color:#FFF6F0;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#F4F2FF" style="background-color:#F4F2FF;">
 <tr>
-<td class="eo" align="center" style="padding:28px 16px 36px;">
-
-  <!-- Pill label -->
-  <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto 14px auto;">
-  <tr>
-    <td style="padding:6px 18px;background-color:#FFE6D6;border-radius:20px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#A06A52;white-space:nowrap;">
-      Your verification code &nbsp;&#9679;
-    </td>
-  </tr>
-  </table>
-
-  <!-- Main card -->
+<td class="eo" align="center" style="padding:8px 6px;">
   <table role="presentation" align="center" width="640" cellspacing="0" cellpadding="0" border="0"
-    style="max-width:640px;width:100%;background-color:#ffffff;border-radius:24px;border:1px solid #FFE0CC;-webkit-box-shadow:0 8px 48px rgba(74,44,26,0.10);box-shadow:0 8px 48px rgba(74,44,26,0.10);overflow:hidden;">
-
-    <!-- ── HEADER: peach blob with logo + heading + leaf ── -->
+    style="max-width:640px;width:100%;background-color:#ffffff;border-radius:20px;border:1px solid #ECE8FF;box-shadow:0 18px 48px rgba(45,35,120,0.08);overflow:hidden;">
     <tr>
-      <td style="background-color:#FFE8D4;border-radius:0 0 60px 60px;padding:0;">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-        <tr>
-          <!-- Left balance spacer -->
-          <td class="lc" width="72" style="width:72px;">&nbsp;</td>
-          <!-- Center: logo + heading + subtext -->
-          <td align="center" style="padding:36px 0 40px;">
-            <img src="__CID_vyla-logo.png__" alt="Vyla" width="160" height="auto"
-              style="display:block;width:160px;height:auto;margin:0 auto 24px;"/>
-            <h1 style="margin:0 0 14px;font-family:Georgia,'Times New Roman',serif;font-size:30px;font-weight:700;color:#3A1A08;line-height:1.2;text-align:center;">
+      <td class="cb" align="center" style="padding:42px 44px 44px;background-color:#ffffff;">
+        <img src="__CID_vyla-logo.png__" alt="Vyla" width="132" height="auto"
+          style="display:block;width:132px;height:auto;margin:0 auto 28px;"/>
+        <div style="width:156px;height:100px;margin:0 auto 30px;border-radius:12px;background:#DCD5FF;position:relative;border:1px solid #CEC4FF;">
+          <div style="width:92px;height:62px;margin:0 auto;background:#F4F1FF;border-radius:0 0 18px 18px;border:1px solid #D8D0FF;"></div>
+          <div style="width:62px;height:62px;line-height:62px;text-align:center;margin:-92px auto 0;border-radius:50%;background:#ffffff;border:3px solid #DDD5FF;color:#5336E8;font-size:28px;">&#128274;</div>
+        </div>
+        <h1 style="margin:0 0 18px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:34px;font-weight:800;color:#191A33;line-height:1.2;text-align:center;">
               {safe_heading}
-            </h1>
-            <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#7A4A32;text-align:center;max-width:360px;">
+        </h1>
+        <p style="margin:0 auto 30px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:16px;line-height:1.7;color:#515779;text-align:center;max-width:430px;">
               {safe_subtext}
-            </p>
-          </td>
-          <!-- Right: leaf branch decoration -->
-          <td class="lc" width="72" valign="top" style="width:72px;padding-top:8px;vertical-align:top;">
-            {_LEAF_BRANCH_SVG}
-          </td>
-        </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- ── BODY ── -->
-    <tr>
-      <td class="cb" style="padding:32px 44px 36px;background-color:#ffffff;">
-
-        <!-- OTP block -->
+        </p>
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-          style="background-color:#FFF6F0;border-radius:20px;border:1px solid #FFE0CC;margin-bottom:24px;">
+          style="background:#F7F5FF;border-radius:14px;margin-bottom:28px;">
         <tr>
-          <td align="center" style="padding:28px 16px 24px;">
-            <p style="margin:0 0 20px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:13px;color:#A06A52;letter-spacing:0.04em;">
-              Your One-Time Password (OTP) is:
-            </p>
+          <td align="center" style="padding:24px 14px;">
             <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
-            <tr>
-              {digit_cells}
-            </tr>
+              <tr>{digit_cells}</tr>
             </table>
-            <p style="margin:20px 0 0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#A06A52;text-align:center;">
-              This code is valid for <strong style="color:#FF8A4C;">{expiry}&nbsp;minutes</strong> and can only be used once.
-            </p>
           </td>
         </tr>
         </table>
-
-        <!-- Security card -->
+        <p style="margin:0 0 28px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#515779;text-align:center;">
+          &#9201; This code expires in <strong style="color:#5336E8;">{expiry} minutes</strong>.
+        </p>
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-          style="background-color:#FFFAF8;border-radius:18px;border:1px solid #FFE0CC;margin-bottom:28px;">
+          style="background:#FCFBFF;border-radius:14px;border:1px solid #DDD7FF;margin-bottom:32px;">
         <tr>
-          <td style="padding:20px 22px;">
+          <td style="padding:22px 26px;">
             <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
             <tr>
-              <td valign="middle" width="62" style="padding-right:16px;vertical-align:middle;">
+              <td valign="middle" width="56" style="padding-right:16px;vertical-align:middle;">
                 {_SHIELD_SVG}
               </td>
               <td valign="middle" style="vertical-align:middle;">
-                <p style="margin:0 0 5px;font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:700;color:#3A1A08;line-height:1.3;">
-                  Keep your account safe
-                </p>
-                <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#A06A52;">
-                  Never share this code with anyone.<br/>Vyla will never ask for your OTP.
+                <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:16px;line-height:1.65;color:#515779;">
+                  {t('security_body')}
                 </p>
               </td>
             </tr>
@@ -351,66 +329,103 @@ class EmailService:
           </td>
         </tr>
         </table>
-
-        <!-- Help section -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-        <tr>
-          <td align="center" style="padding-bottom:10px;">
-            {_QUESTION_SVG}
-          </td>
-        </tr>
-        <tr>
-          <td align="center">
-            <p style="margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:700;color:#3A1A08;">
-              Didn&#8217;t request this?
-            </p>
-            <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#A06A52;max-width:400px;">
-              If you didn&#8217;t request a code, you can safely ignore this email<br/>
-              or <a href="mailto:support@vyla.health" style="color:#FF8A4C;text-decoration:none;font-weight:600;">contact our support team</a> if you have concerns.
-            </p>
-          </td>
-        </tr>
-        </table>
-
-      </td>
-    </tr>
-
-    <!-- ── FOOTER ── -->
-    <tr>
-      <td align="center" style="padding:22px 32px 28px;background-color:#FFF6F0;border-top:1px solid #FFE0CC;">
-        <!-- Leaf icon -->
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto 14px auto;">
-        <tr>
-          <td align="center">{_FOOTER_LEAF_SVG}</td>
-        </tr>
-        </table>
-        <!-- Social icons -->
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto 16px auto;">
-        <tr>
-          <td style="padding:0 8px;">{_IG_SVG}</td>
-          <td style="padding:0 8px;">{_FB_SVG}</td>
-          <td style="padding:0 8px;">{_VYLA_SOCIAL_SVG}</td>
-        </tr>
-        </table>
-        <!-- Copyright -->
-        <p style="margin:0 0 8px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#A06A52;">
-          &#169; {year} Vyla Health Ltd. All rights reserved.
+        <div style="height:1px;background:#E9E5FF;margin:0 0 28px;"></div>
+        <p style="margin:0 0 18px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#515779;text-align:center;">
+              {t('not_requested_body')}
         </p>
-        <!-- Links -->
-        <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:12px;color:#FF8A4C;">
-          <a href="#" style="color:#FF8A4C;text-decoration:none;">Privacy Policy</a>
-          <span style="color:#FFD5B8;padding:0 6px;">&#8226;</span>
-          <a href="#" style="color:#FF8A4C;text-decoration:none;">Terms of Use</a>
-          <span style="color:#FFD5B8;padding:0 6px;">&#8226;</span>
-          <a href="mailto:support@vyla.health" style="color:#FF8A4C;text-decoration:none;">Contact Us</a>
+        <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#515779;text-align:center;">
+          - The <strong style="color:#5336E8;">Vyla</strong> Team
         </p>
       </td>
     </tr>
-
   </table>
 </td>
 </tr>
 </table>
 
+</body>
+</html>"""
+
+    def _render_account_confirmed_html(self) -> str:
+        year = _date.today().year
+        return f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Your account is confirmed</title>
+<style>{_EMAIL_CSS}</style>
+</head>
+<body style="margin:0;padding:0;background-color:#FFF7FA;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#FFF7FA" style="background-color:#FFF7FA;">
+<tr>
+<td class="eo" align="center" style="padding:0 10px 28px;">
+  <table role="presentation" align="center" width="640" cellspacing="0" cellpadding="0" border="0"
+    style="max-width:640px;width:100%;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #F8DFEA;">
+    <tr>
+      <td class="cb" align="center" style="padding:30px 34px 28px;">
+        <img src="__CID_vyla-logo.png__" alt="Vyla" width="112" height="auto"
+          style="display:block;width:112px;height:auto;margin:0 auto 18px;"/>
+        {_ACCOUNT_CONFIRMED_ICON_SVG}
+        <h1 style="margin:18px 0 10px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:28px;line-height:1.25;font-weight:800;color:#4A153C;text-align:center;">
+          Your account is confirmed! &#127881;
+        </h1>
+        <p style="margin:0 auto 8px;max-width:420px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1E1732;text-align:center;">
+          Welcome to Vyla! Your email has been verified and your account is now active.
+        </p>
+        <p style="margin:0 auto 22px;max-width:420px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1E1732;text-align:center;">
+          You are one step closer to understanding your body and living your best, healthiest life.
+        </p>
+
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+          style="background:#FFF2F5;border-radius:12px;margin:0 0 18px;">
+        <tr>
+          <td align="center" style="padding:22px 14px;border-right:1px solid #F4CAD8;">
+            <div style="font-size:34px;line-height:1;color:#FF6F86;">&#128197;</div>
+            <p style="margin:10px 0 5px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:13px;font-weight:800;color:#2B1830;">Track Your Cycle</p>
+            <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:12px;line-height:1.45;color:#1E1732;">Log periods, symptoms, and moods with ease.</p>
+          </td>
+          <td align="center" style="padding:22px 14px;border-right:1px solid #F4CAD8;">
+            <div style="font-size:34px;line-height:1;color:#FF6F86;">&#128200;</div>
+            <p style="margin:10px 0 5px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:13px;font-weight:800;color:#2B1830;">Understand Your Patterns</p>
+            <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:12px;line-height:1.45;color:#1E1732;">Get insights into cycle trends and body changes.</p>
+          </td>
+          <td align="center" style="padding:22px 14px;">
+            <div style="font-size:34px;line-height:1;color:#FF6F86;">&#10048;</div>
+            <p style="margin:10px 0 5px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:13px;font-weight:800;color:#2B1830;">Feel Your Best</p>
+            <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:12px;line-height:1.45;color:#1E1732;">Personalized tips for fitness, wellness, and self-care.</p>
+          </td>
+        </tr>
+        </table>
+
+        <p style="margin:0 0 18px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1E1732;text-align:center;">
+          We are so happy to have you on this journey to better health.<br/>
+          <strong>You have got this!</strong> &#128170;
+        </p>
+        <table role="presentation" width="86%" cellspacing="0" cellpadding="0" border="0"
+          style="background:#FFF5F7;border-radius:10px;">
+        <tr>
+          <td width="72" align="center" style="padding:16px 10px;">{_SHIELD_SVG}</td>
+          <td align="left" style="padding:16px 18px 16px 0;">
+            <p style="margin:0 0 4px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:13px;font-weight:800;color:#4A153C;">Your privacy matters</p>
+            <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#1E1732;">Your data is safe with us. We will never share your information without your permission.</p>
+          </td>
+        </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" style="padding:16px 24px 22px;border-top:1px solid #F8DFEA;">
+        <p style="margin:0 0 4px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:12px;color:#1E1732;">
+          If you did not create an account with Vyla, you can safely ignore this email.
+        </p>
+        <p style="margin:0;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:11px;color:#6B5064;">&#169; {year} Vyla Health</p>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+</table>
 </body>
 </html>"""

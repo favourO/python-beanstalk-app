@@ -1,0 +1,60 @@
+<svg width="96" height="128" viewBox="0 0 96 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(38 52) rotate(90) scale(58 52)">
+      <stop stop-color="#5F5F5F"/>
+      <stop offset="0.45" stop-color="#2B2B2B"/>
+      <stop offset="1" stop-color="#171717"/>
+    </radialGradient>
+    <linearGradient id="strap" x1="41" y1="8" x2="72" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#212121"/>
+      <stop offset="0.25" stop-color="#050505"/>
+      <stop offset="0.6" stop-color="#151515"/>
+      <stop offset="1" stop-color="#020202"/>
+    </linearGradient>
+    <linearGradient id="case" x1="28" y1="28" x2="57" y2="96" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B8B8B"/>
+      <stop offset="0.18" stop-color="#0D0D0D"/>
+      <stop offset="0.4" stop-color="#ECECEC"/>
+      <stop offset="0.6" stop-color="#151515"/>
+      <stop offset="0.82" stop-color="#747474"/>
+      <stop offset="1" stop-color="#090909"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="32" y1="31" x2="49" y2="89" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#020202"/>
+      <stop offset="1" stop-color="#000000"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="28" y1="28" x2="54" y2="95" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity="0.98"/>
+      <stop offset="0.2" stop-color="#D5D5D5" stop-opacity="0.95"/>
+      <stop offset="0.52" stop-color="#F7F7F7" stop-opacity="0.88"/>
+      <stop offset="0.78" stop-color="#A9A9A9" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#4B4B4B" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="highlight" x1="29" y1="28" x2="42" y2="62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="8" y="0" width="80" height="128" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#000000" flood-opacity="0.36"/>
+    </filter>
+    <pattern id="weave" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(26)">
+      <rect width="7" height="7" fill="transparent"/>
+      <rect x="0" y="0" width="3" height="7" rx="1.5" fill="#8C8C8C" fill-opacity="0.72"/>
+      <rect x="4" y="0" width="3" height="7" rx="1.5" fill="#0E0E0E" fill-opacity="0.85"/>
+    </pattern>
+  </defs>
+  <rect width="96" height="128" rx="20" fill="url(#bgGlow)"/>
+  <g filter="url(#shadow)">
+    <path d="M51 14C60 11 72 15 77 27C81 36 80 49 77 62L70 97C68 108 61 116 52 116C43 116 34 108 31 95L24 63C21 48 21 33 28 24C34 17 42 15 51 14Z" fill="url(#strap)"/>
+    <path d="M51 14C60 11 72 15 77 27C81 36 80 49 77 62L70 97C68 108 61 116 52 116C43 116 34 108 31 95L24 63C21 48 21 33 28 24C34 17 42 15 51 14Z" fill="url(#weave)" fill-opacity="0.88"/>
+    <path d="M42 15C46 13 51 12 56 12C48 14 41 19 37 28C33 37 32 48 34 59L40 98C41 106 45 112 49 115C44 113 39 108 36 101L28 68C24 52 23 38 27 27C30 20 35 17 42 15Z" fill="#FFFFFF" fill-opacity="0.18"/>
+    <path d="M70 17C74 20 77 24 79 30C83 40 83 52 80 67L73 101C71 110 67 116 62 119C67 115 71 108 73 99L79 65C82 50 81 37 77 28C75 23 73 19 70 17Z" fill="#000000" fill-opacity="0.38"/>
+    <g transform="rotate(8 42 62)">
+      <path d="M27 23C27 18.6 30.6 15 35 15H49C53.4 15 57 18.6 57 23V27.5C57 29.1 57.6 30.6 58.8 31.8L62 35C63.9 36.9 65 39.5 65 42.2V81.8C65 84.5 63.9 87.1 62 89L58.8 92.2C57.6 93.4 57 94.9 57 96.5V101C57 105.4 53.4 109 49 109H35C30.6 109 27 105.4 27 101V96.6C27 95 26.4 93.4 25.2 92.3L22.4 89.5C20.2 87.3 19 84.4 19 81.3V42.7C19 39.6 20.2 36.7 22.4 34.5L25.2 31.7C26.4 30.6 27 29 27 27.4V23Z" fill="url(#case)"/>
+      <path d="M30 24.5C30 20.9 32.9 18 36.5 18H47.5C51.1 18 54 20.9 54 24.5V26.2C54 28.1 54.7 29.9 56 31.2L58.7 33.9C60.6 35.8 61.7 38.4 61.7 41.1V82.9C61.7 85.6 60.6 88.2 58.7 90.1L56 92.8C54.7 94.1 54 95.9 54 97.8V99.5C54 103.1 51.1 106 47.5 106H36.5C32.9 106 30 103.1 30 99.5V97.7C30 95.9 29.3 94.1 28 92.8L25.7 90.5C23.5 88.3 22.3 85.3 22.3 82.2V41.8C22.3 38.7 23.5 35.7 25.7 33.5L28 31.2C29.3 29.9 30 28.1 30 26.3V24.5Z" stroke="url(#edge)" stroke-width="2.6"/>
+      <path d="M33.5 27.5C33.5 24.6 35.8 22.3 38.7 22.3H45.3C48.2 22.3 50.5 24.6 50.5 27.5V28.6C50.5 30.6 51.3 32.5 52.7 33.9L54.6 35.8C56.4 37.6 57.5 40 57.5 42.6V81.4C57.5 84 56.4 86.4 54.6 88.2L52.7 90.1C51.3 91.5 50.5 93.4 50.5 95.4V96.5C50.5 99.4 48.2 101.7 45.3 101.7H38.7C35.8 101.7 33.5 99.4 33.5 96.5V95.5C33.5 93.4 32.7 91.5 31.3 90.1L29.6 88.4C27.6 86.4 26.5 83.8 26.5 81V43C26.5 40.2 27.6 37.6 29.6 35.6L31.3 33.9C32.7 32.5 33.5 30.6 33.5 28.5V27.5Z" fill="url(#screen)"/>
+      <path d="M35 28.4C36.9 24.3 40.8 22.2 44.8 22.1C40.7 24.2 37.9 28.7 37.4 34.6C35.8 33.3 35.1 31.2 35 28.4Z" fill="url(#highlight)"/>
+      <path d="M26.6 33.8C27.5 31.9 28.4 31.1 29.7 30.2V34.1C29.7 35.8 29 37.5 27.8 38.7L26.3 40.2C25 41.5 24.3 43.2 24.3 45V79C24.3 82.1 25.5 84.9 27.8 87.1L29.6 88.9C30.9 90.2 31.7 91.9 31.7 93.8V98.7C29.1 96.5 27.7 93.8 27 91.1L21.5 68C18.8 56.8 19.2 43.5 21.7 36.9C22.9 33.8 24.4 31.9 26.6 33.8Z" fill="#000000" fill-opacity="0.45"/>
+    </g>
+  </g>
+</svg>

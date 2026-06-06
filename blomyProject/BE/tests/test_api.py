@@ -74,9 +74,10 @@ def test_prediction_service_derives_ovulatory_phase_from_ovulation_day():
     )
 
 
-def test_home_health_snapshot_prompts_wearable_connection_when_disconnected():
+def test_home_health_snapshot_prompts_wearable_connection_when_disconnected(monkeypatch):
     service = HomeService.__new__(HomeService)
-    snapshot = service._build_health_snapshot(WearableType.NONE, None, None, None, None, None, None, None, None, None, None, None)
+    monkeypatch.setattr(service, "_latest_wearable_sync_time", lambda user_id: None)
+    snapshot = service._build_health_snapshot("test-user", WearableType.NONE, None, None, None, None, None, None, None, None, None, None, None)
 
     assert snapshot.wearable_connected is False
     assert snapshot.wearable_type is None
@@ -130,7 +131,7 @@ def test_prediction_endpoint_falls_back_cleanly_when_ml_is_disabled(tmp_path, mo
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -198,7 +199,7 @@ def test_prediction_flow(tmp_path, monkeypatch):
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -444,6 +445,11 @@ def test_prediction_flow(tmp_path, monkeypatch):
             "most_common": "cramps",
             "energy_dips": "Day 4",
         },
+        "period_ranges": [
+            {"start_date": "2026-02-04", "end_date": "2026-02-08"},
+            {"start_date": "2026-03-04", "end_date": "2026-03-08"},
+            {"start_date": "2026-04-01", "end_date": "2026-04-05"},
+        ],
     }
 
 
@@ -455,7 +461,7 @@ def test_post_signup_onboarding_accepts_mobile_payload_shape(tmp_path, monkeypat
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -533,7 +539,7 @@ def test_post_signup_onboarding_complete_persists_full_payload(tmp_path, monkeyp
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -616,7 +622,7 @@ def test_onboarding_progress_round_trip_and_complete_clears_draft(tmp_path, monk
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -720,7 +726,7 @@ def test_home_payload_aggregates_prediction_cycle_and_sensor_data(tmp_path, monk
 
     sent_codes: dict[str, str] = {}
 
-    def capture(self, recipient: str, code: str) -> None:
+    def capture(self, recipient: str, code: str, locale: str = "en") -> None:
         sent_codes[recipient] = code
 
     monkeypatch.setattr(EmailService, "send_signup_otp", capture)
@@ -871,7 +877,8 @@ def test_home_payload_aggregates_prediction_cycle_and_sensor_data(tmp_path, monk
         "message": "This is a good day for moderate to intense work if you feel good.",
         "reason": "Follicular and ovulation phases are commonly associated with higher perceived energy.",
     }
-    assert body["health_snapshot"] == {
+    snapshot = body["health_snapshot"]
+    assert {k: snapshot[k] for k in snapshot if k != "latest_synced_at"} == {
         "wearable_connected": True,
         "wearable_type": "fitbit",
         "body_signal_state": "readings_available",
@@ -1040,6 +1047,8 @@ def test_daily_log_section_save_and_fetch(tmp_path, monkeypatch):
         "user_id": user_id,
         "date": "2026-04-14",
         "period": {
+            "start_date": None,
+            "end_date": None,
             "intensity": "Medium",
             "colour": "Red",
             "symptoms": ["Bloating", "Back Pain"],
@@ -1058,6 +1067,48 @@ def test_daily_log_section_save_and_fetch(tmp_path, monkeypatch):
         "intimacy": None,
         "notes": None,
     }
+
+
+def test_period_range_save_persists_cycle_end_date(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'period-range.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+
+    app = create_app()
+    client = TestClient(app)
+
+    user_id = "01TESTPERIODRANGE000000000"
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id=user_id,
+                email="period-range@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        db.commit()
+
+    headers = {"Authorization": f"Bearer {create_token(user_id, 'access', 30)}"}
+    response = client.post(
+        "/api/v1/log/daily/period",
+        headers=headers,
+        json={
+            "date": "2026-05-27",
+            "period": {
+                "start_date": "2026-05-24",
+                "end_date": "2026-05-28",
+                "intensity": "Medium",
+            },
+        },
+    )
+    assert response.status_code == 200
+
+    stats_response = client.get("/api/v1/cycle/stats", headers=headers)
+    assert stats_response.status_code == 200
+    assert stats_response.json()["period_ranges"] == [
+        {"start_date": "2026-05-24", "end_date": "2026-05-28"},
+    ]
 
 
 def test_growth_share_config_and_generate(tmp_path, monkeypatch):

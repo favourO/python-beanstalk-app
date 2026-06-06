@@ -64,10 +64,10 @@ export default function TermsPage() {
         {/* Intro */}
         <div className="space-y-4 mb-14 p-6 bg-white rounded-2xl border border-[#FFD9C2]">
           <P>
-            These Terms of Use ("Terms") govern your access to and use of the Vyla mobile application, the website at <strong>vyla.health</strong>, connected wearable features, AI features, reports, sharing tools, and related services (collectively, the "Services").
+            These Terms of Use (&quot;Terms&quot;) govern your access to and use of the Vyla mobile application, the website at <strong>vyla.health</strong>, connected wearable features, AI features, reports, sharing tools, and related services (collectively, the &quot;Services&quot;).
           </P>
           <P>
-            These Terms are a legal agreement between you and <strong>DemyCorp Ltd</strong>, trading as Vyla ("Vyla," "we," "us," or "our"). By creating an account, using the Services, or clicking to accept these Terms, you agree to be bound by them.
+            These Terms are a legal agreement between you and <strong>DemyCorp Ltd</strong>, trading as Vyla (&quot;Vyla,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). By creating an account, using the Services, or clicking to accept these Terms, you agree to be bound by them.
           </P>
           <P>
             If you do not agree to these Terms, do not use the Services.
@@ -205,7 +205,7 @@ export default function TermsPage() {
             "your purchase may be subject to additional terms imposed by the applicable billing platform; and",
             "access to paid features may change if your subscription expires, is canceled, is refunded, or becomes delinquent.",
           ]} />
-          <P>If your subscription is offered on a recurring basis, it may renew automatically unless canceled in accordance with the applicable billing platform's rules. You are responsible for managing cancellation through the relevant checkout provider, app store account, or any subscription settings we provide.</P>
+          <P>If your subscription is offered on a recurring basis, it may renew automatically unless canceled in accordance with the applicable billing platform&apos;s rules. You are responsible for managing cancellation through the relevant checkout provider, app store account, or any subscription settings we provide.</P>
           <P>Prices, plan features, trial availability, and country-specific billing options may change.</P>
         </Section>
 
@@ -226,7 +226,7 @@ export default function TermsPage() {
 
         {/* Section 12 */}
         <Section id="your-content" title="12. Your Content">
-          <P>You retain ownership of the information and content you submit to Vyla, including logs, images, notes, prompts, reports you generate, and other materials ("User Content").</P>
+          <P>You retain ownership of the information and content you submit to Vyla, including logs, images, notes, prompts, reports you generate, and other materials (&quot;User Content&quot;).</P>
           <P>You grant Vyla a worldwide, non-exclusive, royalty-free license to host, store, reproduce, process, adapt, transmit, and display User Content as necessary to:</P>
           <Ul items={[
             "operate and provide the Services;",
@@ -287,7 +287,7 @@ export default function TermsPage() {
         {/* Section 17 */}
         <Section id="disclaimers" title="17. Disclaimers">
           <div className="bg-white border border-[#FFD9C2] rounded-xl p-5 space-y-4">
-            <P>TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE.</P>
+            <P>TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SERVICES ARE PROVIDED &quot;AS IS&quot; AND &quot;AS AVAILABLE,&quot; WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE.</P>
             <P>WITHOUT LIMITING THE FOREGOING, VYLA DISCLAIMS ALL IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, AND QUIET ENJOYMENT, AND DOES NOT WARRANT THAT:</P>
             <Ul items={[
               "the Services will meet your requirements;",

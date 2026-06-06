@@ -3,8 +3,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import httpx
 from sqlalchemy.orm import Session
@@ -20,6 +23,11 @@ class StripeBillingError(ValueError):
 
 class StripeWebhookError(ValueError):
     pass
+
+
+def _format_price(amount_minor: int, currency: str) -> str:
+    symbol = {"GBP": "£", "USD": "$", "EUR": "€"}.get(currency.upper(), "")
+    return f"{symbol}{amount_minor / 100:.2f}"
 
 
 class StripeBillingService:
@@ -68,10 +76,16 @@ class StripeBillingService:
             "metadata[plan_id]": plan_id,
             "metadata[interval]": interval,
             "metadata[country]": price_details["country"],
+            "metadata[pricing_tier]": price_details["pricing_tier"],
+            "metadata[pricing_strategy]": price_details["pricing_strategy"],
+            "metadata[fallback_applied]": str(price_details["fallback_applied"]).lower(),
             "subscription_data[metadata][user_id]": user.id,
             "subscription_data[metadata][plan_id]": plan_id,
             "subscription_data[metadata][interval]": interval,
             "subscription_data[metadata][country]": price_details["country"],
+            "subscription_data[metadata][pricing_tier]": price_details["pricing_tier"],
+            "subscription_data[metadata][pricing_strategy]": price_details["pricing_strategy"],
+            "subscription_data[metadata][fallback_applied]": str(price_details["fallback_applied"]).lower(),
         }
 
         response = self._stripe_post("/v1/checkout/sessions", data=payload)
@@ -93,6 +107,9 @@ class StripeBillingService:
         country: str,
         plan_id: str,
         interval: str,
+        wearable_sku: str | None = None,
+        wearable_price_minor: int = 0,
+        shipping_address: dict | None = None,
     ) -> dict[str, Any]:
         if not self.settings.stripe_secret_key:
             raise StripeBillingError("Stripe secret key is not configured.")
@@ -128,6 +145,26 @@ class StripeBillingService:
                 customer_payload["name"] = user.profile.full_name
             customer = self._stripe_post("/v1/customers", data=customer_payload)
             customer_id = customer["id"]
+        else:
+            # Cancel any incomplete subscriptions on this customer before creating a new one.
+            # Incomplete subscriptions lock in the customer's currency and block new subscriptions
+            # in a different currency ("You cannot combine currencies on a single customer").
+            self._cancel_incomplete_subscriptions(customer_id, price_details["currency"])
+
+        # If wearable add-on requested, create an invoice item on the customer
+        # so it is included in the first subscription invoice (Stripe billing add-on pattern).
+        if wearable_sku and wearable_price_minor > 0:
+            self._stripe_post(
+                "/v1/invoiceitems",
+                data={
+                    "customer": customer_id,
+                    "amount": str(wearable_price_minor),
+                    "currency": price_details["currency"],
+                    "description": "Vyla Wearable (one-time)",
+                    "metadata[wearable_sku]": wearable_sku,
+                    "metadata[user_id]": user.id,
+                },
+            )
 
         subscription_payload = {
             "customer": customer_id,
@@ -136,10 +173,20 @@ class StripeBillingService:
             "payment_settings[save_default_payment_method]": "on_subscription",
             "expand[0]": "latest_invoice.payment_intent",
             "metadata[user_id]": user.id,
+            "metadata[account_mode]": user.account_mode,
             "metadata[plan_id]": plan_id,
             "metadata[interval]": interval,
             "metadata[country]": str(price_details["country"]),
+            "metadata[pricing_tier]": str(price_details["pricing_tier"]),
+            "metadata[pricing_strategy]": str(price_details["pricing_strategy"]),
+            "metadata[fallback_applied]": str(price_details["fallback_applied"]).lower(),
         }
+        if wearable_sku:
+            subscription_payload["metadata[wearable_sku]"] = wearable_sku
+            if shipping_address:
+                import json as _json
+                subscription_payload["metadata[shipping_address]"] = _json.dumps(shipping_address)[:500]
+
         stripe_subscription = self._stripe_post("/v1/subscriptions", data=subscription_payload)
         payment_intent = self._subscription_payment_intent(stripe_subscription)
         payment_intent_client_secret = payment_intent.get("client_secret") if payment_intent else None
@@ -183,6 +230,85 @@ class StripeBillingService:
             "currency": price_details["currency"],
             "amount_minor": price_details["price_minor"],
             "display_price": price_details["display_price"],
+            "provider_payment_intent_id": payment_intent.get("id"),
+        }
+
+    def create_payment_sheet_wearable_purchase(
+        self,
+        *,
+        user_id: str,
+        wearable_sku: str,
+        wearable_price_minor: int,
+        currency: str,
+        shipping_address: dict | None = None,
+    ) -> dict[str, Any]:
+        if not self.settings.stripe_secret_key:
+            raise StripeBillingError("Stripe secret key is not configured.")
+        if not self.settings.stripe_publishable_key:
+            raise StripeBillingError("Stripe publishable key is not configured.")
+        if wearable_price_minor <= 0:
+            raise StripeBillingError("Wearable price is unavailable.")
+
+        user = self.db.query(User).filter(User.id == user_id).one_or_none()
+        if not user or not user.email:
+            raise StripeBillingError("A verified email is required before starting Stripe checkout.")
+
+        customer_payload = {
+            "email": user.email,
+            "metadata[user_id]": user.id,
+        }
+        if user.profile and user.profile.full_name:
+            customer_payload["name"] = user.profile.full_name
+        customer = self._stripe_post("/v1/customers", data=customer_payload)
+        customer_id = customer["id"]
+
+        import json as _json
+        metadata = {
+            "user_id": user.id,
+            "wearable_sku": wearable_sku,
+            "checkout_type": "wearable_only",
+        }
+        if shipping_address:
+            metadata["shipping_address"] = _json.dumps(shipping_address)[:500]
+
+        payment_intent = self._stripe_post(
+            "/v1/payment_intents",
+            data={
+                "amount": str(wearable_price_minor),
+                "currency": currency.lower(),
+                "customer": customer_id,
+                "automatic_payment_methods[enabled]": "true",
+                **{f"metadata[{key}]": value for key, value in metadata.items()},
+            },
+        )
+        payment_intent_client_secret = payment_intent.get("client_secret")
+        if not payment_intent_client_secret:
+            raise StripeBillingError("Stripe did not return a payment intent client secret.")
+
+        ephemeral_key = self._stripe_post(
+            "/v1/ephemeral_keys",
+            data={"customer": customer_id},
+            stripe_version=self._EPHEMERAL_KEY_API_VERSION,
+        )
+        ephemeral_key_secret = ephemeral_key.get("secret")
+        if not ephemeral_key_secret:
+            raise StripeBillingError("Stripe did not return a customer ephemeral key.")
+
+        return {
+            "payment_intent_client_secret": payment_intent_client_secret,
+            "customer_id": customer_id,
+            "customer_ephemeral_key_secret": ephemeral_key_secret,
+            "publishable_key": self.settings.stripe_publishable_key,
+            "customer_email": user.email,
+            "provider_subscription_id": "",
+            "provider_product_id": "",
+            "provider_price_id": "",
+            "plan_id": "wearable_only",
+            "interval": "one_time",
+            "currency": currency.upper(),
+            "amount_minor": wearable_price_minor,
+            "display_price": _format_price(wearable_price_minor, currency),
+            "provider_payment_intent_id": payment_intent.get("id"),
         }
 
     def sync_payment_sheet_subscription(self, *, user_id: str, provider_subscription_id: str) -> Subscription:
@@ -231,6 +357,8 @@ class StripeBillingService:
             self._handle_subscription_event(data_object)
         elif event_type in {"invoice.paid", "invoice.payment_failed"}:
             self._handle_invoice_event(data_object)
+        elif event_type == "payment_intent.succeeded":
+            self._handle_payment_intent_succeeded(data_object)
 
         self.db.commit()
         return {"status": "ok"}
@@ -250,6 +378,7 @@ class StripeBillingService:
                     data={"cancel_at_period_end": "true"},
                 )
             subscription.status = response.get("status") or ("canceled" if immediate else "active")
+            subscription.cancel_at_period_end = bool(response.get("cancel_at_period_end")) and not immediate
             period_end = response.get("current_period_end")
             if immediate:
                 subscription.current_period_end = None
@@ -257,6 +386,192 @@ class StripeBillingService:
                 subscription.current_period_end = datetime.fromtimestamp(period_end, tz=UTC)
         else:
             subscription.status = "canceled"
+            subscription.cancel_at_period_end = False
+        subscription.pending_billing_interval = None
+        subscription.pending_provider_price_id = None
+        subscription.pending_amount = None
+        subscription.pending_currency = None
+        subscription.pending_change_effective_at = None
+
+    def restart_subscription(self, subscription: Subscription) -> None:
+        if subscription.provider != "stripe":
+            raise StripeBillingError("Subscription is not managed by Stripe.")
+        if not self.settings.stripe_secret_key:
+            raise StripeBillingError("Stripe secret key is not configured.")
+        if not subscription.provider_subscription_id:
+            raise StripeBillingError("Stripe subscription id is missing.")
+        response = self._stripe_post(
+            f"/v1/subscriptions/{subscription.provider_subscription_id}",
+            data={"cancel_at_period_end": "false"},
+        )
+        subscription.status = response.get("status") or subscription.status
+        subscription.cancel_at_period_end = bool(response.get("cancel_at_period_end"))
+        period_end = response.get("current_period_end")
+        if period_end:
+            subscription.current_period_end = datetime.fromtimestamp(period_end, tz=UTC)
+
+    def change_subscription_interval(
+        self,
+        subscription: Subscription,
+        *,
+        country: str,
+        interval: str,
+    ) -> None:
+        if subscription.provider != "stripe":
+            raise StripeBillingError("Subscription is not managed by Stripe.")
+        if not self.settings.stripe_secret_key:
+            raise StripeBillingError("Stripe secret key is not configured.")
+        if not subscription.provider_subscription_id:
+            raise StripeBillingError("Stripe subscription id is missing.")
+        if interval not in {"month", "year"}:
+            raise StripeBillingError("interval must be month or year")
+        if subscription.billing_interval == interval:
+            return
+
+        price_details = resolve_stripe_price(
+            country=country,
+            plan_id="premium_plus",
+            interval=interval,
+        )
+        stripe_subscription = self._stripe_get(
+            f"/v1/subscriptions/{subscription.provider_subscription_id}",
+            params={"expand[]": "items.data.price"},
+        )
+        items = ((stripe_subscription.get("items") or {}).get("data")) or []
+        if not items:
+            raise StripeBillingError("Stripe subscription has no billable items.")
+        current_item = items[0]
+        current_price = (current_item.get("price") or {}).get("id") or subscription.provider_price_id
+        if not current_price:
+            raise StripeBillingError("Current Stripe subscription price id is missing.")
+        quantity = int(current_item.get("quantity") or 1)
+        period_start = stripe_subscription.get("current_period_start")
+        period_end = stripe_subscription.get("current_period_end")
+        if not period_end:
+            raise StripeBillingError("Stripe subscription period end is missing.")
+
+        self._schedule_interval_change(
+            stripe_subscription=stripe_subscription,
+            current_price_id=str(current_price),
+            current_interval=subscription.billing_interval or "month",
+            target_price_id=str(price_details["provider_price_id"]),
+            target_interval=interval,
+            quantity=quantity,
+            current_period_start=period_start,
+            current_period_end=period_end,
+            country=str(price_details["country"]),
+        )
+        subscription.current_period_end = datetime.fromtimestamp(period_end, tz=UTC)
+        subscription.cancel_at_period_end = False
+        subscription.pending_billing_interval = interval
+        subscription.pending_provider_price_id = str(price_details["provider_price_id"])
+        subscription.pending_currency = str(price_details["currency"])
+        subscription.pending_amount = float(price_details["price_minor"]) / 100
+        subscription.pending_change_effective_at = subscription.current_period_end
+
+    def cancel_scheduled_interval_change(self, subscription: Subscription) -> None:
+        if subscription.provider != "stripe":
+            raise StripeBillingError("Subscription is not managed by Stripe.")
+        if not self.settings.stripe_secret_key:
+            raise StripeBillingError("Stripe secret key is not configured.")
+        if not subscription.provider_subscription_id:
+            raise StripeBillingError("Stripe subscription id is missing.")
+        if not subscription.pending_billing_interval:
+            raise StripeBillingError("No scheduled plan change to cancel.")
+        if not subscription.provider_price_id:
+            raise StripeBillingError("Current subscription price id is missing.")
+
+        stripe_subscription = self._stripe_get(
+            f"/v1/subscriptions/{subscription.provider_subscription_id}",
+            params={"expand[]": "schedule"},
+        )
+        schedule_id = self._subscription_schedule_id(stripe_subscription)
+        if schedule_id:
+            self._stripe_post(
+                f"/v1/subscription_schedules/{schedule_id}/release",
+                data={},
+            )
+        subscription.status = stripe_subscription.get("status") or subscription.status
+        subscription.cancel_at_period_end = bool(stripe_subscription.get("cancel_at_period_end"))
+        period_end = stripe_subscription.get("current_period_end")
+        if period_end:
+            subscription.current_period_end = datetime.fromtimestamp(period_end, tz=UTC)
+        subscription.pending_billing_interval = None
+        subscription.pending_provider_price_id = None
+        subscription.pending_amount = None
+        subscription.pending_currency = None
+        subscription.pending_change_effective_at = None
+
+    def _schedule_interval_change(
+        self,
+        *,
+        stripe_subscription: dict[str, Any],
+        current_price_id: str,
+        current_interval: str,
+        target_price_id: str,
+        target_interval: str,
+        quantity: int,
+        current_period_start: int | None,
+        current_period_end: int,
+        country: str,
+    ) -> None:
+        subscription_id = stripe_subscription.get("id")
+        if not subscription_id:
+            raise StripeBillingError("Stripe subscription id is missing.")
+
+        schedule_id = self._subscription_schedule_id(stripe_subscription)
+        if schedule_id:
+            schedule = self._stripe_get(f"/v1/subscription_schedules/{schedule_id}")
+        else:
+            schedule = self._stripe_post(
+                "/v1/subscription_schedules",
+                data={"from_subscription": subscription_id},
+            )
+            schedule_id = str(schedule["id"])
+
+        current_phase = schedule.get("current_phase") or {}
+        phase_start = current_phase.get("start_date") or current_period_start
+        if not phase_start:
+            raise StripeBillingError("Stripe subscription period start is missing.")
+
+        self._stripe_post(
+            f"/v1/subscription_schedules/{schedule_id}",
+            data={
+                "end_behavior": "release",
+                "proration_behavior": "none",
+                "phases[0][start_date]": str(phase_start),
+                "phases[0][end_date]": str(current_period_end),
+                "phases[0][items][0][price]": current_price_id,
+                "phases[0][items][0][quantity]": str(quantity),
+                "phases[0][metadata][plan_id]": "premium_plus",
+                "phases[0][metadata][interval]": current_interval,
+                "phases[0][metadata][country]": country,
+                "phases[1][items][0][price]": target_price_id,
+                "phases[1][items][0][quantity]": str(quantity),
+                "phases[1][iterations]": "1",
+                "phases[1][metadata][plan_id]": "premium_plus",
+                "phases[1][metadata][interval]": target_interval,
+                "phases[1][metadata][country]": country,
+            },
+        )
+
+    def _subscription_schedule_id(self, stripe_subscription: dict[str, Any]) -> str | None:
+        schedule = stripe_subscription.get("schedule")
+        if isinstance(schedule, dict):
+            return schedule.get("id")
+        if isinstance(schedule, str) and schedule:
+            return schedule
+        return None
+
+    def _pending_change_is_active(self, subscription: Subscription) -> bool:
+        effective = subscription.pending_change_effective_at
+        if effective and effective.tzinfo is None:
+            effective = effective.replace(tzinfo=UTC)
+        return bool(
+            subscription.pending_billing_interval
+            and effective
+            and effective > datetime.now(UTC)
+        )
 
     def _verify_event(self, *, payload: bytes, signature: str | None) -> dict[str, Any]:
         secrets = self._webhook_secrets()
@@ -336,22 +651,31 @@ class StripeBillingService:
         )
         subscription.provider = "stripe"
         subscription.provider_customer_id = stripe_subscription.get("customer")
-        subscription.provider_price_id = price_id
         subscription.status = stripe_subscription.get("status") or subscription.status
-        subscription.currency = (stripe_subscription.get("currency") or price.get("currency") or subscription.currency or "").upper() or None
-        subscription.billing_interval = ((price.get("recurring") or {}).get("interval")) or metadata.get("interval") or subscription.billing_interval
-        if derived_metadata:
-            subscription.tier = derived_metadata["plan_id"]
-            subscription.billing_interval = subscription.billing_interval or derived_metadata["interval"]
-        elif metadata.get("plan_id"):
-            subscription.tier = metadata["plan_id"]
-
-        unit_amount = price.get("unit_amount")
-        if unit_amount is not None:
-            subscription.amount = float(unit_amount) / 100
+        subscription.cancel_at_period_end = bool(stripe_subscription.get("cancel_at_period_end"))
         period_end = stripe_subscription.get("current_period_end")
         if period_end:
             subscription.current_period_end = datetime.fromtimestamp(period_end, tz=UTC)
+
+        pending_is_active = self._pending_change_is_active(subscription)
+        if not pending_is_active:
+            subscription.provider_price_id = price_id
+            subscription.currency = (stripe_subscription.get("currency") or price.get("currency") or subscription.currency or "").upper() or None
+            subscription.billing_interval = ((price.get("recurring") or {}).get("interval")) or metadata.get("interval") or subscription.billing_interval
+            unit_amount = price.get("unit_amount")
+            if unit_amount is not None:
+                subscription.amount = float(unit_amount) / 100
+            subscription.pending_billing_interval = None
+            subscription.pending_provider_price_id = None
+            subscription.pending_amount = None
+            subscription.pending_currency = None
+            subscription.pending_change_effective_at = None
+        if derived_metadata:
+            subscription.tier = derived_metadata["plan_id"]
+            if not pending_is_active:
+                subscription.billing_interval = subscription.billing_interval or derived_metadata["interval"]
+        elif metadata.get("plan_id"):
+            subscription.tier = metadata["plan_id"]
 
     def _handle_invoice_event(self, stripe_invoice: dict[str, Any]) -> None:
         invoice = self.db.query(Invoice).filter(Invoice.provider_invoice_id == stripe_invoice.get("id")).one_or_none()
@@ -385,23 +709,55 @@ class StripeBillingService:
         if subscription:
             subscription.provider = "stripe"
             subscription.provider_customer_id = stripe_invoice.get("customer") or subscription.provider_customer_id
-            if price.get("id"):
-                subscription.provider_price_id = price["id"]
             if metadata.get("plan_id"):
                 subscription.tier = metadata["plan_id"]
-            subscription.currency = (stripe_invoice.get("currency") or price.get("currency") or subscription.currency or "").upper() or None
-            subscription.billing_interval = ((price.get("recurring") or {}).get("interval")) or metadata.get("interval") or subscription.billing_interval
-            unit_amount = price.get("unit_amount")
-            if unit_amount is not None:
-                subscription.amount = float(unit_amount) / 100
             period_end = self._invoice_period_end(stripe_invoice)
             if period_end:
                 subscription.current_period_end = datetime.fromtimestamp(period_end, tz=UTC)
+            if not self._pending_change_is_active(subscription):
+                if price.get("id"):
+                    subscription.provider_price_id = price["id"]
+                subscription.currency = (stripe_invoice.get("currency") or price.get("currency") or subscription.currency or "").upper() or None
+                subscription.billing_interval = ((price.get("recurring") or {}).get("interval")) or metadata.get("interval") or subscription.billing_interval
+                unit_amount = price.get("unit_amount")
+                if unit_amount is not None:
+                    subscription.amount = float(unit_amount) / 100
+                subscription.pending_billing_interval = None
+                subscription.pending_provider_price_id = None
+                subscription.pending_amount = None
+                subscription.pending_currency = None
+                subscription.pending_change_effective_at = None
 
         if subscription and stripe_invoice.get("status") == "paid":
             subscription.status = "active"
+            # Auto-create wearable order if this subscription has a wearable add-on.
+            wearable_sku = metadata.get("wearable_sku")
+            if wearable_sku and subscription.user_id:
+                self._create_wearable_order_if_absent(
+                    user_id=subscription.user_id,
+                    subscription_id=subscription.id,
+                    wearable_sku=wearable_sku,
+                    payment_intent_id=stripe_invoice.get("payment_intent"),
+                    shipping_address_json=self._parse_shipping_address(metadata),
+                )
         elif subscription and stripe_invoice.get("status") in {"open", "uncollectible"}:
             subscription.status = "payment_failed"
+
+    def _handle_payment_intent_succeeded(self, payment_intent: dict[str, Any]) -> None:
+        metadata = payment_intent.get("metadata") or {}
+        if metadata.get("checkout_type") != "wearable_only":
+            return
+        user_id = metadata.get("user_id")
+        wearable_sku = metadata.get("wearable_sku")
+        if not user_id or not wearable_sku:
+            return
+        self._create_wearable_order_if_absent(
+            user_id=user_id,
+            subscription_id=None,
+            wearable_sku=wearable_sku,
+            payment_intent_id=payment_intent.get("id"),
+            shipping_address_json=self._parse_shipping_address(metadata),
+        )
 
     def _invoice_subscription_id(self, stripe_invoice: dict[str, Any]) -> str | None:
         if stripe_invoice.get("subscription"):
@@ -419,19 +775,71 @@ class StripeBillingService:
                 return line["subscription"]
         return None
 
+    def confirm_wearable_payment(
+        self,
+        *,
+        user_id: str,
+        payment_intent_id: str,
+        wearable_sku: str,
+        shipping_address_json: dict,
+        provider_subscription_id: str | None = None,
+    ) -> None:
+        if not self.settings.stripe_secret_key:
+            raise StripeBillingError("Stripe secret key is not configured.")
+        if not payment_intent_id:
+            raise StripeBillingError("Missing Stripe payment intent.")
+        if not wearable_sku:
+            raise StripeBillingError("Missing wearable SKU.")
+
+        payment_intent = self._stripe_get(f"/v1/payment_intents/{payment_intent_id}")
+        if payment_intent.get("status") != "succeeded":
+            raise StripeBillingError("Wearable payment has not succeeded yet.")
+
+        metadata = payment_intent.get("metadata") or {}
+        metadata_user_id = metadata.get("user_id")
+        if metadata_user_id and metadata_user_id != user_id:
+            raise StripeBillingError("Payment intent does not belong to this user.")
+
+        subscription_id = None
+        if provider_subscription_id:
+            subscription = (
+                self.db.query(Subscription)
+                .filter(
+                    Subscription.provider_subscription_id == provider_subscription_id,
+                    Subscription.user_id == user_id,
+                )
+                .one_or_none()
+            )
+            if not subscription:
+                raise StripeBillingError("Subscription does not belong to this user.")
+            subscription_id = subscription.id
+        elif not metadata_user_id:
+            raise StripeBillingError("Payment intent ownership could not be verified.")
+
+        self._create_wearable_order_if_absent(
+            user_id=user_id,
+            subscription_id=subscription_id,
+            wearable_sku=wearable_sku,
+            payment_intent_id=payment_intent_id,
+            shipping_address_json=shipping_address_json,
+            suppress_errors=False,
+        )
+
     def _invoice_metadata(self, stripe_invoice: dict[str, Any]) -> dict[str, str]:
         sources = [
+            stripe_invoice,
             stripe_invoice.get("subscription_details") or {},
             ((stripe_invoice.get("parent") or {}).get("subscription_details") or {}),
         ]
         lines = ((stripe_invoice.get("lines") or {}).get("data")) or []
         sources.extend(lines)
 
+        merged: dict[str, str] = {}
         for source in sources:
             metadata = source.get("metadata") or {}
             if metadata:
-                return metadata
-        return {}
+                merged.update({key: value for key, value in metadata.items() if value not in (None, "")})
+        return merged
 
     def _invoice_price(self, stripe_invoice: dict[str, Any]) -> dict[str, Any]:
         lines = ((stripe_invoice.get("lines") or {}).get("data")) or []
@@ -469,6 +877,20 @@ class StripeBillingService:
             return current_period_end > datetime.now(UTC)
         return False
 
+    def _cancel_incomplete_subscriptions(self, customer_id: str, target_currency: str) -> None:
+        """Cancel incomplete Stripe subscriptions so they don't block a new currency subscription."""
+        try:
+            existing = self._stripe_get("/v1/subscriptions", params={"customer": customer_id, "status": "incomplete"})
+            for sub in existing.get("data", []):
+                sub_currency = (sub.get("currency") or "").upper()
+                if sub_currency and sub_currency != target_currency.upper():
+                    try:
+                        self._stripe_delete(f"/v1/subscriptions/{sub['id']}")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
     def _subscription_payment_intent(self, stripe_subscription: dict[str, Any]) -> dict[str, Any] | None:
         latest_invoice = stripe_subscription.get("latest_invoice")
         if not isinstance(latest_invoice, dict):
@@ -492,9 +914,15 @@ class StripeBillingService:
         subscription.provider_price_id = str(price_details["provider_price_id"])
         subscription.tier = plan_id
         subscription.status = stripe_subscription.get("status") or "incomplete"
+        subscription.cancel_at_period_end = bool(stripe_subscription.get("cancel_at_period_end"))
         subscription.currency = str(price_details["currency"])
         subscription.amount = float(price_details["price_minor"]) / 100
         subscription.billing_interval = interval
+        subscription.pending_billing_interval = None
+        subscription.pending_provider_price_id = None
+        subscription.pending_amount = None
+        subscription.pending_currency = None
+        subscription.pending_change_effective_at = None
         period_end = stripe_subscription.get("current_period_end")
         if period_end:
             subscription.current_period_end = datetime.fromtimestamp(period_end, tz=UTC)
@@ -608,3 +1036,52 @@ class StripeBillingService:
                 pass
             raise StripeBillingError(f"Stripe API error: {message}")
         return response.json()
+
+    # ── Wearable commerce helpers ──────────────────────────────────────────────
+
+    def _create_wearable_order_if_absent(
+        self,
+        *,
+        user_id: str,
+        subscription_id: str | None,
+        wearable_sku: str,
+        payment_intent_id: str | None,
+        shipping_address_json: dict,
+        suppress_errors: bool = True,
+    ) -> None:
+        from phora.models.wearable_commerce import WearableOrder
+        from phora.services.wearable_commerce import WearableCommerceService
+        existing = (
+            self.db.query(WearableOrder)
+            .filter(
+                WearableOrder.user_id == user_id,
+                WearableOrder.provider_payment_intent_id == payment_intent_id,
+            )
+            .one_or_none()
+        ) if payment_intent_id else None
+        if existing:
+            return
+        try:
+            svc = WearableCommerceService(self.db)
+            svc.create_order(
+                user_id=user_id,
+                subscription_id=subscription_id,
+                sku=wearable_sku,
+                shipping_address=shipping_address_json,
+                payment_intent_id=payment_intent_id,
+            )
+        except Exception:
+            logger.exception("Failed to auto-create wearable order for user %s", user_id)
+            if not suppress_errors:
+                raise
+
+    @staticmethod
+    def _parse_shipping_address(metadata: dict) -> dict:
+        import json as _json
+        raw = metadata.get("shipping_address", "")
+        if not raw:
+            return {}
+        try:
+            return _json.loads(raw)
+        except Exception:
+            return {}

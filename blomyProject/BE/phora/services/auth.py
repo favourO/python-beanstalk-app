@@ -8,28 +8,25 @@ import struct
 from urllib.parse import quote
 from datetime import date, timedelta
 
+from sqlalchemy import delete as sql_delete
 from sqlalchemy.orm import Session
 
 from phora.core.config import Settings
 from phora.core.security import (
     create_token,
     decode_token_safe,
-    generate_recovery_phrase,
     hash_token,
     hash_password,
-    hash_recovery_phrase,
     make_unusable_password,
     new_ulid,
-    normalize_recovery_phrase,
     verify_password,
-    verify_recovery_phrase,
 )
 from phora.models import EmailOtpCode, User, UserMFATOTP
+from phora.models.notification import NotificationDevice
 from phora.models.user import RefreshTokenSession
 from phora.repositories.core import AuditRepository, OtpRepository, RefreshTokenRepository, TOTPRepository, UserRepository
 from phora.schemas.auth import (
     AppleLoginRequest,
-    AnonymousRegisterResponse,
     AuthResponse,
     AuthUserResponse,
     ChangePasswordRequest,
@@ -39,7 +36,6 @@ from phora.schemas.auth import (
     ForgotPasswordResponse,
     GoogleLoginRequest,
     LoginRequest,
-    RecoveryPhraseLoginRequest,
     ResetPasswordRequest,
     ResetPasswordResponse,
     ResendOtpRequest,
@@ -88,7 +84,7 @@ class AuthService:
         self.refresh_tokens = RefreshTokenRepository(db)
         self.audit = AuditRepository(db)
 
-    def signup(self, payload: SignupRequest) -> SignupResponse:
+    def signup(self, payload: SignupRequest, locale: str = "en") -> SignupResponse:
         email = payload.email.lower().strip()
         self._require_signup_email_allowed(email)
         existing = self.users.by_email(email)
@@ -114,7 +110,7 @@ class AuthService:
 
         code = self._issue_otp(user, email, purpose="signup_verification")
         try:
-            self.email_service.send_signup_otp(email, code)
+            self.email_service.send_signup_otp(email, code, locale=locale)
         except EmailDeliveryError:
             self.db.rollback()
             raise
@@ -149,6 +145,10 @@ class AuthService:
         user.email_verified = True
         self.audit.log(user.id, "auth.email_verified", {"email": email})
         self.db.commit()
+        try:
+            self.email_service.send_account_confirmed(email)
+        except EmailDeliveryError:
+            logger.warning("Account confirmation email failed", extra={"user_id": user.id})
         return self._auth_response(user, is_new_user=True)
 
     def login(self, payload: LoginRequest) -> AuthResponse:
@@ -169,40 +169,7 @@ class AuthService:
         self._require_valid_totp(user, payload.totp_code)
         return self._auth_response(user, is_new_user=user.profile.onboarding_completed_at is None if user.profile else True)
 
-    def register_anonymous(self) -> dict[str, str]:
-        phrase = generate_recovery_phrase()
-        phrase_hash = hash_recovery_phrase(phrase)
-        user = User(
-            id=new_ulid(),
-            email=None,
-            password_hash=phrase_hash,
-            account_mode="anonymous",
-            token_generation=0,
-            email_verified=False,
-        )
-        self.db.add(user)
-        self.db.flush()
-        self.users.ensure_profile(user.id)
-        self.audit.log(user.id, "anonymous_user_registered", {"account_mode": "anonymous"})
-        tokens = self._issue_tokens(user)
-        return {**tokens, "recovery_phrase": phrase}
-
-    def login_with_recovery_phrase(self, payload: RecoveryPhraseLoginRequest) -> dict[str, str]:
-        normalised = normalize_recovery_phrase(payload.recovery_phrase)
-        # TODO: Replace O(n) scan with a deterministic lookup.
-        # Option: derive a lookup key from the phrase using a fast PRF
-        # (e.g. HMAC-SHA256(server_secret, normalised_phrase)) stored as
-        # an indexed column, while keeping the Argon2id hash for verification.
-        # This reduces login to O(1) without storing the phrase or a reversible
-        # form of it. Implement before anonymous user count exceeds ~10,000.
-        for user in self.users.anonymous_users():
-            if verify_recovery_phrase(normalised, user.password_hash):
-                self._require_valid_totp(user, payload.totp_code)
-                self.audit.log(user.id, "anonymous_login", {"account_mode": "anonymous"})
-                return self._issue_tokens(user)
-        raise ValueError("Invalid recovery phrase")
-
-    def resend_otp(self, payload: ResendOtpRequest) -> SignupResponse:
+    def resend_otp(self, payload: ResendOtpRequest, locale: str = "en") -> SignupResponse:
         email = payload.email.lower().strip()
         user = self.users.by_email(email)
         if not user:
@@ -210,9 +177,9 @@ class AuthService:
         code = self._issue_otp(user, email, purpose=payload.purpose)
         try:
             if payload.purpose == "password_reset":
-                self.email_service.send_password_reset_otp(email, code)
+                self.email_service.send_password_reset_otp(email, code, locale=locale)
             else:
-                self.email_service.send_signup_otp(email, code)
+                self.email_service.send_signup_otp(email, code, locale=locale)
         except EmailDeliveryError:
             self.db.rollback()
             raise
@@ -331,7 +298,7 @@ class AuthService:
             allow_existing=False,
         )
 
-    def start_password_reset(self, payload: ForgotPasswordRequest) -> ForgotPasswordResponse:
+    def start_password_reset(self, payload: ForgotPasswordRequest, locale: str = "en") -> ForgotPasswordResponse:
         email = payload.email.lower().strip()
         response = ForgotPasswordResponse()
         user = self.users.by_email(email)
@@ -347,7 +314,7 @@ class AuthService:
 
         code = self._issue_otp(user, email, purpose="password_reset")
         try:
-            self.email_service.send_password_reset_otp(email, code)
+            self.email_service.send_password_reset_otp(email, code, locale=locale)
         except EmailDeliveryError:
             self.db.rollback()
             raise
@@ -376,6 +343,49 @@ class AuthService:
         self.audit.log(user.id, "auth.password_reset_completed", {"email": email})
         self.db.commit()
         return ResetPasswordResponse()
+
+    def send_set_password_otp(self, user_id: str, locale: str = "en") -> None:
+        user = self._require_user(user_id)
+        if not (not user.password_hash or user.password_hash.startswith("!phora-unusable-password$")):
+            raise PermissionError("This account already has a password. Use Change Password instead.")
+
+        last = self.otps.latest_active_for_user(user.id, "set_password")
+        if last:
+            created_at = last.created_at if last.created_at.tzinfo else last.created_at.replace(tzinfo=utcnow().tzinfo)
+            if (utcnow() - created_at).total_seconds() < 60:
+                return
+
+        code = self._issue_otp(user, user.email, purpose="set_password")
+        try:
+            self.email_service.send_set_password_otp(user.email, code, locale=locale)
+        except EmailDeliveryError:
+            self.db.rollback()
+            raise
+        self.audit.log(user.id, "auth.set_password_otp_sent", {"email": user.email})
+        self.db.commit()
+
+    def set_password_with_otp(self, user_id: str, payload: "SetPasswordRequest") -> "SetPasswordResponse":
+        from phora.schemas.auth import SetPasswordResponse
+
+        user = self._require_user(user_id)
+        if not (not user.password_hash or user.password_hash.startswith("!phora-unusable-password$")):
+            raise PermissionError("This account already has a password. Use Change Password instead.")
+
+        otp = self.otps.latest_active(user.email, "set_password")
+        if not otp:
+            raise ValueError("Invalid or expired verification code.")
+        expires_at = otp.expires_at if otp.expires_at.tzinfo else otp.expires_at.replace(tzinfo=utcnow().tzinfo)
+        if expires_at < utcnow():
+            raise ValueError("Invalid or expired verification code.")
+        if otp.code_hash != self._hash_code(payload.otp_code.strip()):
+            raise ValueError("Invalid or expired verification code.")
+
+        otp.consumed_at = utcnow()
+        user.password_hash = hash_password(payload.new_password)
+        user.email_verified = True
+        self.audit.log(user.id, "auth.set_password_completed", {"email": user.email})
+        self.db.commit()
+        return SetPasswordResponse()
 
     def change_password(self, user_id: str, payload: ChangePasswordRequest) -> ChangePasswordResponse:
         user = self._require_user(user_id)
@@ -630,7 +640,7 @@ class AuthService:
         given_name = decoded.get("given_name") or ""
         family_name = decoded.get("family_name") or ""
         inferred_first_name = (given_name or (name.split(" ")[0] if name else email.split("@")[0]) or "User").strip()
-        inferred_last_name = (family_name or (name.split(" ")[-1] if name else "") or " ").strip() or " "
+        inferred_last_name = (family_name or (name.split(" ")[-1] if name and " " in name else "")).strip()
         signup_method = metadata.signup_method.value if metadata and metadata.signup_method else created_via.split("_")[0]
 
         user = self.users.by_email(email)
@@ -758,6 +768,73 @@ class AuthService:
         user.token_generation += 1
         self.refresh_tokens.revoke_all_for_user(user.id, utcnow())
         self.audit.log(user.id, "auth.signed_out", {"email": user.email})
+        self.db.commit()
+
+    def request_delete_account_otp(self, user_id: str, locale: str = "en") -> None:
+        user = self._require_user(user_id)
+        if not user.email:
+            raise ValueError("Email address required")
+        code = self._issue_otp(user, user.email, purpose="account_deletion")
+        try:
+            self.email_service.send_account_deletion_otp(user.email, code, locale=locale)
+        except EmailDeliveryError:
+            self.db.rollback()
+            raise
+        self.audit.log(user.id, "account.delete_otp_requested", {"email": user.email})
+        self.db.commit()
+
+    def delete_account(self, user_id: str, otp_code: str) -> None:
+        """
+        Anonymise all PII and mark the account as deleted.
+
+        Health data (cycle logs, sensor readings, predictions) is retained in
+        de-identified form for ML quality and legal/audit purposes — following
+        the Flo / Natural Cycles model and GDPR Art. 17(3)(b) exemption for
+        scientific research purposes. All direct identifiers are removed.
+        """
+        user = self._require_user(user_id)
+        if not user.email:
+            raise ValueError("Email address required")
+        otp = self.otps.latest_active(user.email, "account_deletion")
+        if not otp:
+            raise ValueError("No confirmation code found")
+        expires_at = otp.expires_at if otp.expires_at.tzinfo else otp.expires_at.replace(tzinfo=utcnow().tzinfo)
+        if expires_at < utcnow():
+            raise ValueError("Confirmation code expired")
+        if otp.code_hash != self._hash_code(otp_code.strip()):
+            raise ValueError("Invalid confirmation code")
+        otp.consumed_at = utcnow()
+        now = utcnow()
+
+        # --- revoke all sessions ---
+        user.token_generation += 1
+        self.refresh_tokens.revoke_all_for_user(user.id, now)
+
+        # --- anonymise User row ---
+        user.email = f"deleted-{user.id}@deleted.vyla.health"
+        user.password_hash = secrets.token_hex(64)  # unguessable, login impossible
+        user.deleted_at = now
+
+        # --- anonymise UserProfile (remove all direct identifiers) ---
+        profile = self.users.ensure_profile(user.id)
+        profile.full_name = None
+        profile.date_of_birth = None
+        profile.height_cm = None
+        profile.weight_kg = None
+        profile.bmi = None
+
+        # --- purge OTP codes (contain plaintext emails) ---
+        self.db.execute(sql_delete(EmailOtpCode).where(EmailOtpCode.user_id == user.id))
+
+        # --- purge device tokens (FCM tokens are device identifiers) ---
+        self.db.execute(sql_delete(NotificationDevice).where(NotificationDevice.user_id == user.id))
+
+        # --- purge TOTP secret ---
+        totp = self.totp.by_user_id(user.id)
+        if totp:
+            self.db.delete(totp)
+
+        self.audit.log(user.id, "account.deleted", {"account_mode": user.account_mode})
         self.db.commit()
 
     def _require_valid_totp(self, user: User, code: str | None) -> None:

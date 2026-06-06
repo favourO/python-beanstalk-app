@@ -42,6 +42,8 @@ export const api = {
     request<T>(path, token, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, token: string, body?: unknown) =>
     request<T>(path, token, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+  patch: <T>(path: string, token: string, body?: unknown) =>
+    request<T>(path, token, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   del: (path: string, token: string) =>
     fetch(`${BASE}${PREFIX}${path}`, {
       method: "DELETE",
@@ -144,6 +146,150 @@ export type WearableUserItem = {
 };
 export type WearableListOut = { items: WearableUserItem[]; total: number };
 
+export type WearableShippingAddress = {
+  full_name: string | null;
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  county: string | null;
+  postcode: string | null;
+  country: string | null;
+  phone: string | null;
+};
+
+export type WearableTimelineEntry = {
+  status: string;
+  title: string;
+  description: string;
+  completed_at: string | null;
+};
+
+export type WearableOrder = {
+  id: string;
+  order_number: string;
+  wearable_sku: string;
+  wearable_name: string;
+  wearable_price: number;
+  wearable_currency: string;
+  display_price: string;
+  payment_status: string;
+  fulfillment_status: string;
+  tracking_number: string | null;
+  tracking_url: string | null;
+  courier: string | null;
+  estimated_delivery_date: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  shipping_address: WearableShippingAddress;
+  timeline: WearableTimelineEntry[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type WearableOrderListOut = {
+  orders: WearableOrder[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type WearableInventoryItem = {
+  id: string;
+  sku: string;
+  product_name: string;
+  total_stock: number;
+  available_stock: number;
+  reserved_stock: number;
+  low_stock_threshold: number;
+  low_stock: boolean;
+  price_minor: number;
+  currency: string;
+  currency_symbol: string;
+  display_price: string;
+  is_active: boolean;
+  allowed_country_codes: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type WearableInventoryOut = { items: WearableInventoryItem[] };
+
+export type WearableAvailabilityOut = {
+  sku: string;
+  product_name: string;
+  available: boolean;
+  available_stock: number;
+  low_stock: boolean;
+  low_stock_threshold: number;
+  price_minor: number;
+  currency: string;
+  currency_symbol: string;
+  display_price: string;
+  country: string | null;
+  country_code: string | null;
+  availability_reason: string;
+  supported_country_codes: string[];
+};
+
+export type WearableAnalyticsOut = {
+  total_orders: number;
+  paid_orders: number;
+  pending_orders: number;
+  dispatched_orders: number;
+  delivered_orders: number;
+  cancelled_orders: number;
+  revenue_minor: number;
+  currency: string;
+  low_stock_items: number;
+  active_inventory_items: number;
+  fulfillment_counts: Record<string, number>;
+  payment_counts: Record<string, number>;
+};
+
+export type WearableStatusOptionsOut = {
+  fulfillment_statuses: string[];
+  payment_statuses: string[];
+};
+
+export type WearableTrackingUpdate = {
+  fulfillment_status: string;
+  tracking_number?: string;
+  tracking_url?: string;
+  courier?: string;
+  estimated_delivery_date?: string;
+};
+
+export type WearableInventoryUpdate = {
+  sku: string;
+  total_stock?: number;
+  available_stock?: number;
+  price_minor?: number;
+  low_stock_threshold?: number;
+  is_active?: boolean;
+  allowed_country_codes?: string[];
+};
+
+export const wearableAdminApi = {
+  getOrders: (token: string, params: URLSearchParams) =>
+    api.get<WearableOrderListOut>(`/admin/wearable/orders?${params}`, token),
+  getOrderDetails: (token: string, id: string) =>
+    api.get<WearableOrder>(`/admin/wearable/orders/${id}`, token),
+  updateStatus: (token: string, id: string, body: WearableTrackingUpdate) =>
+    api.patch<WearableOrder>(`/admin/wearable/orders/${id}/status`, token, body),
+  updateTracking: (token: string, id: string, body: Omit<WearableTrackingUpdate, "fulfillment_status">) =>
+    api.patch<WearableOrder>(`/admin/wearable/orders/${id}/tracking`, token, body),
+  getInventory: (token: string) =>
+    api.get<WearableInventoryOut>("/admin/wearable/inventory", token),
+  updateInventory: (token: string, body: WearableInventoryUpdate) =>
+    api.patch<WearableAvailabilityOut>("/admin/wearable/inventory", token, body),
+  updateCountryAvailability: (token: string, sku: string, allowedCountryCodes: string[]) =>
+    api.patch<WearableInventoryOut>(`/admin/wearable/inventory/${encodeURIComponent(sku)}/country-availability`, token, { allowed_country_codes: allowedCountryCodes }),
+  getAnalytics: (token: string) =>
+    api.get<WearableAnalyticsOut>("/admin/wearable/analytics", token),
+  getStatusOptions: (token: string) =>
+    api.get<WearableStatusOptionsOut>("/admin/wearable/status-options", token),
+};
+
 export type NotificationItem = {
   id: string; user_id: string; notification_type: string; category: string;
   channel: string; title: string; status: string; priority: string;
@@ -173,9 +319,12 @@ export type AiThreadListOut = { items: AiThreadItem[]; total: number; page: numb
 
 export type ContactMessageItem = {
   id: string; name: string; email: string; subject: string; message: string;
-  read: boolean; created_at: string;
+  read: boolean; replied_at: string | null; created_at: string;
 };
 export type ContactListOut = { items: ContactMessageItem[]; total: number; unread: number };
+
+export type DownloadRequestItem = { id: string; email: string; created_at: string };
+export type DownloadRequestListOut = { items: DownloadRequestItem[]; total: number };
 
 export type BlogPostItem = {
   id: string;

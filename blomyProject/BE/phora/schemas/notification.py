@@ -21,6 +21,9 @@ class NotificationPreferencesResponse(BaseModel):
     lh_test_reminder: bool = False
     weekly_summary: bool = True
     feature_tips: bool = True
+    blog_posts: bool = True
+    wearable_ovulation_reminder: bool = True
+    update_reminders: bool = True
     quiet_hours_enabled: bool = True
     quiet_hours_start: str = "22:00"
     quiet_hours_end: str = "08:00"
@@ -72,6 +75,9 @@ class NotificationPreferencesUpdateRequest(BaseModel):
     lh_test_reminder: bool | None = None
     weekly_summary: bool | None = None
     feature_tips: bool | None = None
+    blog_posts: bool | None = None
+    wearable_ovulation_reminder: bool | None = None
+    update_reminders: bool | None = None
     quiet_hours_enabled: bool | None = None
     quiet_hours_start: str | None = None
     quiet_hours_end: str | None = None
@@ -106,6 +112,9 @@ class QuietHoursSettingsResponse(BaseModel):
 
 class NotificationSettingsResponse(BaseModel):
     all_notifications: bool = True
+    blog_posts: bool = True
+    wearable_ovulation_reminder: bool = True
+    update_reminders: bool = True
     predictions: NotificationSettingsSectionResponse
     health_insights: NotificationSettingsSectionResponse
     reminders: NotificationSettingsSectionResponse
@@ -134,6 +143,9 @@ class NotificationSettingsUpdateRequest(BaseModel):
     daily_symptom_reminder: bool | None = None
     bangle_sync_reminder: bool | None = None
     lh_test_reminder: bool | None = None
+    blog_posts: bool | None = None
+    wearable_ovulation_reminder: bool | None = None
+    update_reminders: bool | None = None
     quiet_hours: QuietHoursSettingsUpdateRequest | None = None
 
 

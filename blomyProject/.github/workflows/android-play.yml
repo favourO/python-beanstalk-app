@@ -39,7 +39,6 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version-file: phora/pubspec.yaml
           channel: stable
           cache: true
 
@@ -80,24 +79,15 @@ jobs:
             --obfuscate \
             --split-debug-info=build/symbols/prod \
             --dart-define-from-file=env/prod.json
-
-      - name: Sign App Bundle
-        uses: r0adkll/sign-android-release@v1
-        id: sign
-        with:
-          releaseDirectory: phora/build/app/outputs/bundle/release
-          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # Gradle signs the bundle via signingConfigs in build.gradle.kts
 
       - name: Upload to Play Store
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.vyla.health
-          releaseFiles: ${{ steps.sign.outputs.signedReleaseFile }}
+          releaseFiles: phora/build/app/outputs/bundle/release/app-release.aab
           track: ${{ github.event.inputs.track || 'internal' }}
           status: completed
           inAppUpdatePriority: 2
-          mappingFile: phora/build/symbols/prod/app.android-arm64.symbols
+          mappingFile: phora/build/app/outputs/mapping/release/mapping.txt

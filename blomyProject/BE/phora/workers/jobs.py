@@ -1,11 +1,13 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from phora.db.session import get_session_factory
 from phora.core.config import get_settings
+from phora.models.notification import NotificationPreference
 from phora.repositories.core import PredictionRepository, UserRepository
 from phora.schemas.notification import NotificationTriggerRequest
 from phora.services.daily_insights import DailyInsightService
+from phora.services.notification_i18n import translate
 from phora.services.notification_service import NotificationService
 from phora.workers.celery_app import celery_app
 
@@ -108,16 +110,21 @@ def send_push_notification(user_id: str, notification_type: str) -> dict:
 def morning_lh_reminder(user_id: str) -> dict:
     with get_session_factory()() as db:
         service = NotificationService(db)
+        locale = service._user_locale(user_id)
         created = service.trigger_notification(
             user_id,
             payload=NotificationTriggerRequest(
                 notification_type="lh_test_reminder",
-                title="Consider taking an LH test",
-                body="You're in your fertile window. LH tests can confirm ovulation timing.",
+                title=translate(locale, "morning_lh_reminder_title"),
+                body=translate(locale, "morning_lh_reminder_body"),
                 category="reminders",
                 priority="low",
                 action_url="/cycle/lh",
-                action_labels=["Log LH result", "Remind me tomorrow", "Not using LH tests"],
+                action_labels=[
+                    translate(locale, "log_lh_test"),
+                    translate(locale, "remind_me_tomorrow"),
+                    translate(locale, "morning_lh_reminder_skip"),
+                ],
             ),
         )
         return {"status": "ok", "job": "morning_lh_reminder", "user_id": user_id, "created": created.created}
@@ -169,6 +176,63 @@ def _is_local_hour(timezone_name: str | None, hour: int) -> bool:
         tz = ZoneInfo("UTC")
     local_now = datetime.now(UTC).astimezone(tz)
     return local_now.hour == hour
+
+
+@celery_app.task
+def send_wearable_ovulation_reminder(user_id: str) -> dict:
+    with get_session_factory()() as db:
+        pref = db.query(NotificationPreference).filter(NotificationPreference.user_id == user_id).first()
+        if not pref or not getattr(pref, "wearable_ovulation_reminder", True) or not pref.all_notifications:
+            return {"status": "skipped", "reason": "preference_off", "user_id": user_id}
+
+        snapshot = PredictionRepository(db).latest_for_user(user_id)
+        if not snapshot:
+            return {"status": "skipped", "reason": "no_snapshot", "user_id": user_id}
+
+        phase = snapshot.current_phase
+        if phase not in {"menstrual", "ovulatory", "late_follicular"}:
+            return {"status": "skipped", "reason": f"phase={phase}", "user_id": user_id}
+
+        from phora.models.timeseries import WearableMetric
+        from sqlalchemy import select as sa_select
+        cutoff = datetime.now(UTC) - timedelta(days=3)
+        has_recent = db.scalar(
+            sa_select(WearableMetric.id).where(
+                WearableMetric.user_id == user_id,
+                WearableMetric.measured_at >= cutoff,
+            ).limit(1)
+        )
+        if has_recent:
+            return {"status": "skipped", "reason": "wearable_active", "user_id": user_id}
+
+        service = NotificationService(db)
+        locale = service._user_locale(user_id)
+        phase_label = "period" if phase == "menstrual" else "ovulation window"
+        created = service.trigger_notification(
+            user_id,
+            payload=NotificationTriggerRequest(
+                notification_type="wearable_ovulation_reminder",
+                title=translate(locale, "wearable_reminder_title") or f"Track your {phase_label}",
+                body=translate(locale, "wearable_reminder_body") or f"Connect your Vyla or Apple Watch during your {phase_label} for more accurate insights.",
+                category="reminders",
+                priority="low",
+                action_url="/connected-devices",
+            ),
+        )
+        return {"status": "ok", "job": "send_wearable_ovulation_reminder", "user_id": user_id, "created": created.created}
+
+
+@celery_app.task
+def send_all_wearable_ovulation_reminders() -> dict:
+    queued = 0
+    with get_session_factory()() as db:
+        for user_id in UserRepository(db).active_user_ids():
+            profile = UserRepository(db).ensure_profile(user_id)
+            if not _is_local_hour(profile.timezone, 8):
+                continue
+            send_wearable_ovulation_reminder.delay(user_id)
+            queued += 1
+    return {"status": "queued", "job": "send_all_wearable_ovulation_reminders", "queued": queued}
 
 
 @celery_app.task

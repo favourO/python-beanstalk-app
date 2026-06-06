@@ -15,8 +15,12 @@ export const FAQ_ITEMS = [
     a: "Yes. You can manually log your basal body temperature (BBT) each morning. Vyla displays your BBT trends alongside your cycle phases so you can notice temperature shifts that typically occur around ovulation.",
   },
   {
-    q: "Can I use Vyla with Oura Ring or other wearables?",
-    a: "Yes. Vyla integrates with Oura Ring to pull in temperature trends and wellness signals, which can enhance cycle phase awareness. Wearable integration is available on Vyla Premium.",
+    q: "What is the Vyla Band?",
+    a: "The Vyla Band is Vyla's own dedicated health wearable built specifically for women's cycle tracking. It tracks temperature, heart rate, HRV, sleep, and activity 24/7 and syncs directly to Vyla. Add it to your first annual Premium upgrade for just £25.",
+  },
+  {
+    q: "Can I use Vyla with Apple Watch or Fitbit?",
+    a: "Yes. Vyla integrates with Apple Watch Series 8 and above (via Apple Health) and Fitbit devices to pull in temperature trends, heart rate, and wellness signals that enhance cycle phase awareness. Wearable integration is available on Vyla Premium.",
   },
   {
     q: "Is my cycle data private and secure?",

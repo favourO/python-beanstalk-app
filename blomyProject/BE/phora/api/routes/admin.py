@@ -8,28 +8,61 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from phora.api.deps import get_current_admin_user, get_db
+from phora.db.session import get_session_factory
 from phora.core.config import get_settings
+from phora.services.email import EmailService
 from phora.core.security import create_token, new_ulid, verify_password
 from phora.models.ai import MedicalChatMessage, MedicalChatThread
 from phora.models.audit import AuditEvent
-from phora.models.billing import FlutterwaveWebhookErrorLog, Invoice, Subscription, StripeWebhookErrorLog
+from phora.models.billing import Invoice, Subscription, StripeWebhookErrorLog
 from phora.models.cycle import CycleRecord, DailyLog
 from phora.models.growth import PremiumGrant, ReferralAttribution, ReferralProfile
-from phora.models.notification import NotificationDevice, NotificationHistory
+from phora.models.notification import NotificationDevice, NotificationHistory, NotificationPreference
 from phora.models.prediction import PredictionSnapshot
 from phora.models.timeseries import WearableMetric
 from phora.models.blog import BlogPost
-from phora.models.contact import ContactMessage
+from phora.models.contact import ContactMessage, DownloadRequest
 from phora.models.user import OnboardingProgress, User, UserProfile
 from phora.schemas.blog import BlogPostCreate, BlogPostListOut, BlogPostOut, BlogPostUpdate
+from phora.schemas.notification import NotificationTriggerRequest
+from phora.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _dispatch_blog_notifications(post_id: str, title: str, excerpt: str, slug: str) -> None:
+    """Send in-app notification to all users who opted into blog post alerts."""
+    with get_session_factory()() as db:
+        opted_in = (
+            db.query(User.id)
+            .outerjoin(NotificationPreference, NotificationPreference.user_id == User.id)
+            .filter(User.deleted_at.is_(None))
+            .filter(or_(NotificationPreference.id.is_(None), NotificationPreference.blog_posts.is_(True)))
+            .all()
+        )
+        svc = NotificationService(db)
+        for (user_id,) in opted_in:
+            try:
+                svc.trigger_notification(
+                    user_id,
+                    payload=NotificationTriggerRequest(
+                        notification_type="blog_post",
+                        title=f"New article: {title}",
+                        body=excerpt[:120] if excerpt else title,
+                        category="app_engagement",
+                        priority="low",
+                        action_url=f"/blog?post={slug}",
+                        force_delivery=False,
+                    ),
+                )
+            except Exception:
+                db.rollback()
 
 
 # ---------------------------------------------------------------------------
@@ -187,24 +220,6 @@ class InvoiceListOut(BaseModel):
     total: int
     page: int
     page_size: int
-
-
-class FlwErrorItem(BaseModel):
-    id: str
-    event_type: str | None
-    transaction_id: str | None
-    tx_ref: str | None
-    provider_customer_id: str | None
-    user_id: str | None
-    error_message: str
-    signature_present: bool
-    legacy_hash_present: bool
-    created_at: str
-
-
-class FlwErrorListOut(BaseModel):
-    items: list[FlwErrorItem]
-    total: int
 
 
 class StripeErrorItem(BaseModel):
@@ -393,7 +408,6 @@ def get_overview(
     anonymous_users = db.scalar(
         select(func.count(User.id)).where(User.account_mode == "anonymous", User.deleted_at.is_(None))
     ) or 0
-
     premium_users = db.scalar(
         select(func.count(Subscription.id)).where(
             Subscription.tier != "free",
@@ -437,12 +451,6 @@ def get_overview(
         select(func.coalesce(func.sum(Invoice.total), 0.0)).where(Invoice.status == "paid")
     ) or 0.0
 
-    flw_errors = db.scalar(
-        select(func.count(FlutterwaveWebhookErrorLog.id)).where(
-            FlutterwaveWebhookErrorLog.created_at >= month_ago
-        )
-    ) or 0
-
     stripe_errors = db.scalar(
         select(func.count(StripeWebhookErrorLog.id)).where(
             StripeWebhookErrorLog.created_at >= month_ago
@@ -477,7 +485,7 @@ def get_overview(
         daily_logs_today=daily_logs_today,
         predictions_today=predictions_today,
         total_invoiced_gbp=float(total_invoiced_gbp),
-        flutterwave_errors_30d=flw_errors,
+        flutterwave_errors_30d=0,
         stripe_errors_30d=stripe_errors,
         referrals_total=referrals_total,
         referrals_qualified=referrals_qualified,
@@ -770,34 +778,6 @@ def list_invoices(
             created_at=inv.created_at.isoformat(),
         ))
     return InvoiceListOut(items=items, total=total, page=page, page_size=page_size)
-
-
-@router.get("/billing/webhook-errors/flutterwave", response_model=FlwErrorListOut)
-def list_flw_webhook_errors(
-    limit: int = Query(default=50, ge=1, le=200),
-    db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin_user),
-) -> FlwErrorListOut:
-    total = db.scalar(select(func.count(FlutterwaveWebhookErrorLog.id))) or 0
-    rows = db.scalars(
-        select(FlutterwaveWebhookErrorLog).order_by(FlutterwaveWebhookErrorLog.created_at.desc()).limit(limit)
-    ).all()
-    items = [
-        FlwErrorItem(
-            id=r.id,
-            event_type=r.event_type,
-            transaction_id=r.transaction_id,
-            tx_ref=r.tx_ref,
-            provider_customer_id=r.provider_customer_id,
-            user_id=r.user_id,
-            error_message=r.error_message,
-            signature_present=r.signature_present,
-            legacy_hash_present=r.legacy_hash_present,
-            created_at=r.created_at.isoformat(),
-        )
-        for r in rows
-    ]
-    return FlwErrorListOut(items=items, total=total)
 
 
 @router.get("/billing/webhook-errors/stripe", response_model=StripeErrorListOut)
@@ -1117,6 +1097,112 @@ def mark_contact_read(
     return ActionResponse(ok=True, message="Marked as read")
 
 
+class ContactReplyRequest(BaseModel):
+    message: str
+
+
+@router.post("/contacts/{contact_id}/reply", response_model=ActionResponse)
+def reply_to_contact(
+    contact_id: str,
+    payload: ContactReplyRequest,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> ActionResponse:
+    msg = db.get(ContactMessage, contact_id)
+    if not msg:
+        raise HTTPException(status_code=404, detail="Contact message not found")
+    msg.read = True
+    msg.replied_at = datetime.now(UTC)
+    db.commit()
+    settings = get_settings()
+    svc = EmailService(settings)
+    background.add_task(_send_admin_reply_email, svc, msg.name, msg.email, msg.subject, payload.message)
+    return ActionResponse(ok=True, message="Reply sent")
+
+
+def _send_admin_reply_email(svc: EmailService, name: str, email: str, original_subject: str, reply_body: str) -> None:
+    from html import escape
+    import logging
+    _log = logging.getLogger(__name__)
+    safe_name = escape(name)
+    safe_reply = escape(reply_body).replace("\n", "<br/>")
+    text = f"Hi {name},\n\nThank you for contacting Vyla. Here is our response to your message regarding '{original_subject}':\n\n{reply_body}\n\nWarm regards,\nThe Vyla Team\n\nvyla.health"
+    html = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Re: {escape(original_subject)}</title></head>
+<body style="margin:0;padding:0;background-color:#FFF6F0;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#FFF6F0">
+<tr><td align="center" style="padding:28px 16px;">
+  <table role="presentation" align="center" width="600" cellspacing="0" cellpadding="0" border="0"
+    style="max-width:600px;width:100%;background:#ffffff;border-radius:24px;border:1px solid #FFE0CC;overflow:hidden;">
+    <tr>
+      <td style="background-color:#FFE8D4;padding:32px 44px 28px;text-align:center;">
+        <h1 style="margin:0 0 12px;font-family:Georgia,serif;font-size:26px;font-weight:700;color:#3A1A08;">Reply from Vyla</h1>
+        <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;line-height:1.7;color:#7A4A32;">Hi {safe_name}, we&rsquo;ve responded to your message about <strong>{escape(original_subject)}</strong>.</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:32px 44px 36px;background:#ffffff;">
+        <p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:14px;line-height:1.85;color:#4A2E1E;white-space:pre-line;">{safe_reply}</p>
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin:24px auto 0;">
+        <tr><td style="background-color:#FF7A33;border-radius:12px;">
+          <a href="https://vyla.health" style="display:inline-block;padding:14px 32px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;">Visit Vyla</a>
+        </td></tr></table>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:20px 32px;background:#FFF6F0;border-top:1px solid #FFE0CC;text-align:center;">
+        <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:12px;color:#A06A52;">
+          &copy; {datetime.now(UTC).year} Vyla Health, a product of Demycorp Ltd. All rights reserved.
+        </p>
+        <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;">
+          <a href="https://vyla.health/privacy" style="color:#FF7A33;text-decoration:none;">Privacy Policy</a>
+          <span style="color:#FFD5B8;padding:0 6px;">&#8226;</span>
+          <a href="https://vyla.health/terms" style="color:#FF7A33;text-decoration:none;">Terms of Use</a>
+          <span style="color:#FFD5B8;padding:0 6px;">&#8226;</span>
+          <a href="mailto:support@vyla.health" style="color:#FF7A33;text-decoration:none;">Contact Us</a>
+        </p>
+      </td>
+    </tr>
+  </table>
+</td></tr></table>
+</body></html>"""
+    try:
+        svc._send(email, f"Re: {original_subject} — Vyla", text, html_body=html)
+    except Exception:
+        _log.exception("Failed to send admin reply to %s", email)
+
+
+# ---------------------------------------------------------------------------
+# Download requests
+# ---------------------------------------------------------------------------
+
+class DownloadRequestItem(BaseModel):
+    id: str
+    email: str
+    created_at: str
+
+class DownloadRequestListOut(BaseModel):
+    items: list[DownloadRequestItem]
+    total: int
+
+@router.get("/download-requests", response_model=DownloadRequestListOut)
+def list_download_requests(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+) -> DownloadRequestListOut:
+    stmt = select(DownloadRequest)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = db.scalars(stmt.order_by(DownloadRequest.created_at.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+    return DownloadRequestListOut(
+        items=[DownloadRequestItem(id=r.id, email=r.email, created_at=r.created_at.isoformat()) for r in rows],
+        total=total,
+    )
+
+
 @router.get("/audit-events", response_model=AuditEventListOut)
 def list_audit_events(
     page: int = Query(default=1, ge=1),
@@ -1172,6 +1258,7 @@ def admin_list_blog_posts(
 @router.post("/blog", response_model=BlogPostOut, status_code=status.HTTP_201_CREATED)
 def admin_create_blog_post(
     payload: BlogPostCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ) -> BlogPostOut:
@@ -1197,6 +1284,8 @@ def admin_create_blog_post(
     _audit(db, admin.id, "blog.post.create", {"slug": payload.slug, "title": payload.title})
     db.commit()
     db.refresh(post)
+    if post.published:
+        background_tasks.add_task(_dispatch_blog_notifications, post.id, post.title, post.excerpt or "", post.slug)
     return BlogPostOut.from_model(post)
 
 
@@ -1216,6 +1305,7 @@ def admin_get_blog_post(
 def admin_update_blog_post(
     post_id: str,
     payload: BlogPostUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ) -> BlogPostOut:
@@ -1242,6 +1332,7 @@ def admin_update_blog_post(
         post.tags = ",".join(payload.tags) if payload.tags else None
     if payload.author_name is not None:
         post.author_name = payload.author_name
+    was_published = post.published
     if payload.published is not None:
         if payload.published and not post.published:
             post.published_at = datetime.now(UTC)
@@ -1251,6 +1342,8 @@ def admin_update_blog_post(
     _audit(db, admin.id, "blog.post.update", {"id": post_id, "slug": post.slug})
     db.commit()
     db.refresh(post)
+    if post.published and not was_published:
+        background_tasks.add_task(_dispatch_blog_notifications, post.id, post.title, post.excerpt or "", post.slug)
     return BlogPostOut.from_model(post)
 
 

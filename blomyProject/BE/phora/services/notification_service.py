@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 
 from phora.core.config import Settings, get_settings
-from phora.models import NotificationDevice, NotificationHistory, NotificationPreference, UserProfile
+from phora.models import CycleRecord, NotificationDevice, NotificationHistory, NotificationPreference, UserProfile
 from phora.models.enums import Goal, WearableType
 from phora.repositories.core import (
     AuditRepository,
@@ -64,6 +64,7 @@ NOTIFICATION_RULES: dict[str, NotificationRule] = {
     "lh_test_reminder": NotificationRule("reminders", "low", "lh_test_reminder", "Fertility reminder"),
     "weekly_summary": NotificationRule("app_engagement", "low", "weekly_summary", "Vyla weekly summary"),
     "feature_tips": NotificationRule("app_engagement", "low", "feature_tips", "Vyla tip"),
+    "blog_post": NotificationRule("app_engagement", "low", "blog_posts", "New Vyla article"),
     "prediction_accuracy_milestone": NotificationRule("app_engagement", "low", None, "Vyla update", user_configurable=False),
     "heavy_bleeding": NotificationRule("critical_alerts", "critical", None, "Health alert", critical=True, user_configurable=False),
     "potential_pregnancy": NotificationRule("critical_alerts", "critical", None, "Cycle alert", critical=True, user_configurable=False),
@@ -248,7 +249,7 @@ class NotificationService:
 
         if next_period:
             next_period_date = date.fromisoformat(next_period)
-            if next_period_date - today == timedelta(days=3):
+            if next_period_date - today == timedelta(days=1):
                 locale = self._user_locale(user_id)
                 created_item = self._create_notification(
                     user_id=user_id,
@@ -326,7 +327,7 @@ class NotificationService:
                 if created_item:
                     created.append(created_item)
 
-        if ovulation_date and date.fromisoformat(ovulation_date) == today:
+        if ovulation_date and date.fromisoformat(ovulation_date) - today == timedelta(days=1):
             locale = self._user_locale(user_id)
             confidence_pct = int(round(snapshot.confidence * 100))
             created_item = self._create_notification(
@@ -379,7 +380,7 @@ class NotificationService:
 
         if next_period:
             next_period_date = date.fromisoformat(next_period)
-            if next_period_date - local_today == timedelta(days=3):
+            if next_period_date - local_today == timedelta(days=1):
                 locale = self._user_locale(user_id)
                 created_item = self._create_notification(
                     user_id=user_id,
@@ -402,13 +403,19 @@ class NotificationService:
                 if created_item:
                     created.append(created_item)
 
-        if current_phase == "menstrual" or cycle_day <= (cycle.menses_length or 5):
+        period_end_date = self._current_period_end_date(cycle, local_today)
+        if period_end_date is not None:
             locale = self._user_locale(user_id)
+            period_care_body = translate(
+                locale,
+                "period_care_body",
+                end_date=self._format_month_day(period_end_date, locale),
+            )
             created_item = self._create_notification(
                 user_id=user_id,
                 notification_type="period_care_reminder",
                 title=translate(locale, "period_care_title"),
-                body=f"{nutrition} {activity}",
+                body=f"{period_care_body} {nutrition} {activity}",
                 action_url="/log",
                 action_labels=[
                     translate(locale, "log_period"),
@@ -417,6 +424,7 @@ class NotificationService:
                 payload_data={
                     "phase": current_phase,
                     "cycle_day": cycle_day,
+                    "current_period_end_date": period_end_date.isoformat(),
                     "nutrition_recommendation": nutrition,
                     "activity_recommendation": activity,
                     "foods_to_eat": insight_payload.get("foods_to_eat") or [],
@@ -431,6 +439,20 @@ class NotificationService:
         dispatched = self.dispatch_pending(user_id=user_id, now=moment)
         dispatched.created = len(created)
         return dispatched
+
+    @staticmethod
+    def _current_period_end_date(cycle: CycleRecord, today: date) -> date | None:
+        if cycle.period_end_date is not None:
+            if cycle.period_start_date <= today <= cycle.period_end_date:
+                return cycle.period_end_date
+            return None
+        menses_length = cycle.menses_length or 5
+        if menses_length <= 0:
+            return None
+        period_end = cycle.period_start_date + timedelta(days=menses_length - 1)
+        if cycle.period_start_date <= today <= period_end:
+            return period_end
+        return None
 
     def dispatch_pending(
         self,
@@ -602,6 +624,9 @@ class NotificationService:
             "temperature_logging_reminder": manual_bbt,
             "weekly_summary": True,
             "feature_tips": True,
+            "blog_posts": True,
+            "wearable_ovulation_reminder": True,
+            "update_reminders": True,
             "quiet_hours_enabled": True,
             "quiet_hours_start": "22:00",
             "quiet_hours_end": "08:00",
@@ -631,6 +656,9 @@ class NotificationService:
             lh_test_reminder=record.lh_test_reminder,
             weekly_summary=record.weekly_summary,
             feature_tips=record.feature_tips,
+            blog_posts=getattr(record, "blog_posts", True),
+            wearable_ovulation_reminder=getattr(record, "wearable_ovulation_reminder", True),
+            update_reminders=getattr(record, "update_reminders", True),
             quiet_hours_enabled=record.quiet_hours_enabled,
             quiet_hours_start=record.quiet_hours_start,
             quiet_hours_end=record.quiet_hours_end,
@@ -646,6 +674,9 @@ class NotificationService:
         locale = self._user_locale(user_id)
         return NotificationSettingsResponse(
             all_notifications=record.all_notifications,
+            blog_posts=getattr(record, "blog_posts", True),
+            wearable_ovulation_reminder=getattr(record, "wearable_ovulation_reminder", True),
+            update_reminders=getattr(record, "update_reminders", True),
             predictions=NotificationSettingsSectionResponse(
                 key="predictions",
                 title=translate(locale, "predictions_title"),
@@ -750,6 +781,8 @@ class NotificationService:
         rule = NOTIFICATION_RULES.get(notification_type)
         if rule and not rule.user_configurable:
             return True
+        if notification_type == "blog_post":
+            return bool(getattr(prefs, "blog_posts", True))
         if not prefs.all_notifications:
             return False
         if not rule or not rule.preference_field:

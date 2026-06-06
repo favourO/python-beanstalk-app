@@ -31,27 +31,23 @@ pytest
 
 ## Billing webhooks
 
-Flutterwave payment status is synced into the local subscription and invoice tables through:
+Stripe subscription webhooks should be sent to your deployed API URL:
 
 ```text
-POST /api/v1/billing/flutterwave/webhook
-```
-
-Configure Flutterwave to send webhook events to your deployed API URL, for example:
-
-```text
-https://api.example.com/api/v1/billing/flutterwave/webhook
+POST /api/v1/billing/stripe/webhook
 ```
 
 Required environment variables:
 
 ```bash
-PHORA_FLUTTERWAVE_SECRET_KEY=...
-PHORA_FLUTTERWAVE_WEBHOOK_SECRET_HASH=...
 PHORA_STRIPE_WEBHOOK_SECRET=whsec_...[,whsec_old_or_second_endpoint...]
+LOCAL_CURRENCY_PRICING_ENABLED=true
+AFRICA_FREE_LAUNCH_ENABLED=true
+DEFAULT_PRICING_COUNTRY=GB
+DEFAULT_CURRENCY=GBP
 ```
 
-The webhook handler verifies the request signature, verifies the transaction with Flutterwave, and then updates the matching `Subscription` and `Invoice` rows so the user becomes `active` after a successful charge.
+Stripe webhooks remain the source of truth for paid subscription activation. Africa free launch users are activated internally without Stripe subscription rows.
 
 ## Current scope
 

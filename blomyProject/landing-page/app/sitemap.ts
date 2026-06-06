@@ -32,7 +32,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.85,
     },
     {
-      url: `${BASE_URL}/oura-cycle-tracking/`,
+      url: `${BASE_URL}/apple-health-cycle-tracking/`,
+      lastModified: NOW,
+      changeFrequency: "monthly",
+      priority: 0.85,
+    },
+    {
+      url: `${BASE_URL}/fitbit-cycle-tracking/`,
       lastModified: NOW,
       changeFrequency: "monthly",
       priority: 0.8,
@@ -41,7 +47,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${BASE_URL}/wearable-cycle-insights/`,
       lastModified: NOW,
       changeFrequency: "monthly",
-      priority: 0.8,
+      priority: 0.75,
+    },
+    {
+      url: `${BASE_URL}/vyla-band/`,
+      lastModified: NOW,
+      changeFrequency: "monthly",
+      priority: 0.85,
     },
     {
       url: `${BASE_URL}/blog/`,
@@ -51,6 +63,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
     {
       url: `${BASE_URL}/contact/`,
+      lastModified: NOW,
+      changeFrequency: "yearly",
+      priority: 0.5,
+    },
+    {
+      url: `${BASE_URL}/support/`,
       lastModified: NOW,
       changeFrequency: "yearly",
       priority: 0.5,

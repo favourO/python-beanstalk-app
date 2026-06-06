@@ -7,6 +7,8 @@ from sqlalchemy import select
 from phora.api.app import create_app
 from phora.api.deps import get_ml_client
 from phora.api.routes import auth as auth_routes
+from phora.core.config import get_settings
+from phora.core.security import create_token, new_ulid
 from phora.db.session import get_session_factory, reset_db_state
 from phora.models import CycleRecord, DailyLog, User
 from phora.models.enums import LogType
@@ -62,14 +64,25 @@ def lh_image_client(tmp_path, monkeypatch):
     reset_db_state()
 
 
-def _register_anonymous_user(client: TestClient) -> tuple[str, str]:
-    response = client.post("/api/0.1.0/auth/register/anonymous")
-    assert response.status_code == 201
-    access_token = response.json()["access_token"]
+def _create_authenticated_user() -> tuple[str, str]:
     with get_session_factory()() as db:
-        user = db.scalar(select(User).where(User.account_mode == "anonymous"))
-        assert user is not None
+        user = User(
+            id=new_ulid(),
+            email=f"{new_ulid().lower()}@example.com",
+            password_hash="!phora-unusable-password$test",
+            email_verified=True,
+            token_generation=0,
+        )
+        db.add(user)
+        db.commit()
         user_id = user.id
+    access_token = create_token(
+        user_id,
+        "access",
+        get_settings().access_token_exp_minutes,
+        0,
+        {"jti": new_ulid()},
+    )
     return user_id, access_token
 
 
@@ -82,7 +95,7 @@ def _create_active_cycle(user_id: str, *, start_date: date) -> None:
 def test_lh_image_log_persists_valid_analysis(lh_image_client):
     app, client = lh_image_client
     app.dependency_overrides[get_ml_client] = lambda: AcceptingMlClient()
-    user_id, access_token = _register_anonymous_user(client)
+    user_id, access_token = _create_authenticated_user()
     _create_active_cycle(user_id, start_date=date(2026, 4, 1))
 
     response = client.post(
@@ -119,7 +132,7 @@ def test_lh_image_log_persists_valid_analysis(lh_image_client):
 
 def test_manual_lh_log_persists_test_time(lh_image_client):
     _, client = lh_image_client
-    user_id, access_token = _register_anonymous_user(client)
+    user_id, access_token = _create_authenticated_user()
     _create_active_cycle(user_id, start_date=date(2026, 4, 1))
 
     response = client.post(
@@ -147,7 +160,7 @@ def test_manual_lh_log_persists_test_time(lh_image_client):
 def test_lh_history_returns_manual_and_image_logs(lh_image_client):
     app, client = lh_image_client
     app.dependency_overrides[get_ml_client] = lambda: AcceptingMlClient()
-    user_id, access_token = _register_anonymous_user(client)
+    user_id, access_token = _create_authenticated_user()
     _create_active_cycle(user_id, start_date=date(2026, 4, 1))
 
     manual = client.post(
@@ -204,7 +217,7 @@ def test_lh_history_returns_manual_and_image_logs(lh_image_client):
 def test_lh_image_log_rejects_invalid_strip_without_persisting(lh_image_client):
     app, client = lh_image_client
     app.dependency_overrides[get_ml_client] = lambda: RejectingMlClient()
-    user_id, access_token = _register_anonymous_user(client)
+    user_id, access_token = _create_authenticated_user()
     _create_active_cycle(user_id, start_date=date(2026, 4, 1))
 
     response = client.post(
@@ -231,7 +244,7 @@ def test_lh_image_log_rejects_invalid_strip_without_persisting(lh_image_client):
 def test_lh_image_log_returns_manual_only_when_ml_unavailable(lh_image_client):
     app, client = lh_image_client
     app.dependency_overrides[get_ml_client] = lambda: FailingMlClient()
-    user_id, access_token = _register_anonymous_user(client)
+    user_id, access_token = _create_authenticated_user()
     _create_active_cycle(user_id, start_date=date(2026, 4, 1))
 
     response = client.post(

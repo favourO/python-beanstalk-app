@@ -1,0 +1,106 @@
+{
+  "fitbit": {
+    "A": {
+      "standard": {
+        "delta": 0.15,
+        "nights": 3
+      },
+      "perimenopause": {
+        "delta": 0.15,
+        "nights": 4
+      }
+    },
+    "B": {
+      "standard": {
+        "delta": 0.15,
+        "nights": 3
+      },
+      "perimenopause": {
+        "delta": 0.15,
+        "nights": 4
+      }
+    },
+    "C": {
+      "standard": {
+        "delta": 0.15,
+        "nights": 3
+      },
+      "perimenopause": {
+        "delta": 0.15,
+        "nights": 4
+      }
+    },
+    "D": {
+      "standard": {
+        "delta": 0.15,
+        "nights": 3
+      },
+      "perimenopause": {
+        "delta": 0.15,
+        "nights": 4
+      }
+    },
+    "E": {
+      "standard": {
+        "delta": 0.15,
+        "nights": 3
+      },
+      "perimenopause": {
+        "delta": 0.15,
+        "nights": 4
+      }
+    }
+  },
+  "manual_bbt": {
+    "A": {
+      "standard": {
+        "delta": 0.2,
+        "nights": 3
+      },
+      "perimenopause": {
+        "delta": 0.15,
+        "nights": 4
+      }
+    },
+    "B": {
+      "standard": {
+        "delta": 0.2,
+        "nights": 3
+      },
+      "perimenopause": {
+        "delta": 0.15,
+        "nights": 4
+      }
+    },
+    "C": {
+      "standard": {
+        "delta": 0.2,
+        "nights": 3
+      },
+      "perimenopause": {
+        "delta": 0.15,
+        "nights": 4
+      }
+    },
+    "D": {
+      "standard": {
+        "delta": 0.2,
+        "nights": 3
+      },
+      "perimenopause": {
+        "delta": 0.15,
+        "nights": 4
+      }
+    },
+    "E": {
+      "standard": {
+        "delta": 0.2,
+        "nights": 3
+      },
+      "perimenopause": {
+        "delta": 0.15,
+        "nights": 4
+      }
+    }
+  }
+}

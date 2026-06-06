@@ -73,6 +73,11 @@ class SymptomPatternsResponse(BaseModel):
     energy_dips: str | None = None
 
 
+class PeriodRangeResponse(BaseModel):
+    start_date: date
+    end_date: date
+
+
 class CycleStatsResponse(BaseModel):
     tracked_cycles: int
     first_period_start_date: date | None = None
@@ -82,3 +87,4 @@ class CycleStatsResponse(BaseModel):
     temperature_trend: list[CycleTrendPoint] = Field(default_factory=list)
     hrv_trend: list[CycleTrendPoint] = Field(default_factory=list)
     symptom_patterns: SymptomPatternsResponse = Field(default_factory=SymptomPatternsResponse)
+    period_ranges: list[PeriodRangeResponse] = Field(default_factory=list)

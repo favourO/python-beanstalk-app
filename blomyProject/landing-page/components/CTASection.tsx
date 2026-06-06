@@ -34,7 +34,7 @@ export default function CTASection() {
     if (!email) return;
     setError("");
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL ?? "https://vyla-stage-api.875kda1e0109p.eu-west-2.cs.amazonlightsail.com";
+      const base = process.env.NEXT_PUBLIC_API_URL ?? "https://stage.api.vyla.health";
       const res = await fetch(`${base}/api/v1/public/send-download`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

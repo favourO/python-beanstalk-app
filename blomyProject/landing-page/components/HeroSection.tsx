@@ -122,13 +122,14 @@ export default function HeroSection() {
             </a>
           </motion.div>
 
-          {/* Social proof */}
+          {/* Launch proof */}
           <motion.div
             {...fadeUp(0.4)}
-            className="flex items-center gap-3"
+            className="flex items-center gap-2.5"
           >
+            <span className="w-2 h-2 rounded-full bg-[#FF7A33] shrink-0 animate-pulse" aria-hidden="true" />
             <span className="text-[13px] font-medium text-[#A06A52]">
-              Free to start · 50,000+ users
+              Now live · Free to download · No credit card needed
             </span>
           </motion.div>
         </div>

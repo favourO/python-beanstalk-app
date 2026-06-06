@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from phora.core.config import Settings
 from phora.core.metrics import PREDICTION_COUNTER
-from phora.models import PredictionSnapshot
+from phora.models import CycleRecord, PredictionSnapshot
 from phora.repositories.core import AuditRepository, CycleRepository, PredictionRepository, SensorRepository, UserRepository
 from phora.schemas.ml import MlEnsembleResponse, PredictionAudit
 from phora.schemas.prediction import PredictionSnapshotResponse
@@ -189,10 +189,16 @@ class PredictionService:
         return self.to_response(snapshot)
 
     def to_response(self, snapshot: PredictionSnapshot) -> PredictionSnapshotResponse:
+        cycle = self.db.get(CycleRecord, snapshot.cycle_id) if snapshot.cycle_id else None
+        if cycle is None:
+            cycle = self.cycles.active_for_user(snapshot.user_id)
         return PredictionSnapshotResponse(
             prediction_id=snapshot.prediction_id,
             user_id=snapshot.user_id,
             cycle_id=snapshot.cycle_id,
+            cycle_start_date=cycle.period_start_date if cycle else None,
+            cycle_length_days=cycle.cycle_length_days if cycle else None,
+            period_length_days=cycle.menses_length if cycle else None,
             generated_at=snapshot.generated_at,
             current_phase=snapshot.current_phase,
             ovulation_estimate=snapshot.ovulation_estimate,
@@ -213,27 +219,46 @@ class PredictionService:
     def latest_prediction(self, user_id: str) -> PredictionSnapshotResponse:
         snapshot = self.predictions.latest_for_user(user_id)
         active_cycle = self.cycles.active_for_user(user_id)
-        if snapshot and active_cycle and snapshot.cycle_id == active_cycle.id:
+        profile = self.users.ensure_profile(user_id)
+        timezone = self._timezone(profile.timezone)
+        local_today = self._now_utc().astimezone(timezone).date()
+        snapshot_local_date = snapshot.generated_at.astimezone(timezone).date() if snapshot else None
+        if (
+            snapshot
+            and active_cycle
+            and snapshot.cycle_id == active_cycle.id
+            and snapshot_local_date == local_today
+        ):
             return self.to_response(snapshot)
         return self.run_prediction(user_id)
 
     def calendar(self, user_id: str) -> list[dict[str, Any]]:
         latest = self.latest_prediction(user_id)
-        cycle_start = datetime.fromisoformat(latest.ovulation_estimate["date"]).date() if latest.ovulation_estimate.get("date") else None
+        active_cycle = self.cycles.active_for_user(user_id)
+        cycle_start = active_cycle.period_start_date if active_cycle else latest.cycle_start_date
+        cycle_length = int(round(active_cycle.mu_cycle or active_cycle.cycle_length_days or 28)) if active_cycle else (latest.cycle_length_days or 28)
+        period_length = active_cycle.menses_length if active_cycle else (latest.period_length_days or 5)
+        ovulation_date = datetime.fromisoformat(latest.ovulation_estimate["date"]).date() if latest.ovulation_estimate.get("date") else None
         current_date = latest.generated_at.date()
         rows: list[dict[str, Any]] = []
-        for offset in range(30):
+        for offset in range(180):
             day = current_date + timedelta(days=offset)
-            is_ovulation_est = cycle_start == day if cycle_start else False
+            cycle_day = ((day - cycle_start).days % cycle_length) + 1 if cycle_start else offset + 1
+            is_ovulation_est = ovulation_date == day if ovulation_date else False
             is_fertile = False
             if latest.fertile_window.get("start") and latest.fertile_window.get("end"):
                 is_fertile = latest.fertile_window["start"] <= day.isoformat() <= latest.fertile_window["end"]
+            phase = self._derive_current_phase(
+                cycle_day,
+                ovulation_day=(cycle_length - 14),
+                menses_length=period_length,
+            )
             rows.append(
                 {
                     "date": day,
-                    "phase": latest.current_phase,
+                    "phase": phase,
                     "fertility_score": round(latest.confidence * (0.8 if is_fertile else 0.2), 2),
-                    "is_period": offset < 5,
+                    "is_period": cycle_day <= max(1, period_length or 5),
                     "is_fertile": is_fertile,
                     "is_ovulation_est": is_ovulation_est,
                 }

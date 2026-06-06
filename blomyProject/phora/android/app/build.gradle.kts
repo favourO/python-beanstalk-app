@@ -44,12 +44,27 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystoreFile = rootProject.file("app/vyla-release.jks")
-            if (keystoreFile.exists()) {
+            val keystoreFile = rootProject.file("app/vyla-release-20260525-new.jks")
+            val storePass = System.getenv("ANDROID_STORE_PASSWORD")
+            val alias = System.getenv("ANDROID_KEY_ALIAS")
+            val keyPass = System.getenv("ANDROID_KEY_PASSWORD")
+            val isReleaseBuild = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+            if (isReleaseBuild) {
+                if (!keystoreFile.exists()) {
+                    throw GradleException("Missing release keystore: android/app/vyla-release-20260525-new.jks")
+                }
+                if (storePass.isNullOrBlank() || alias.isNullOrBlank() || keyPass.isNullOrBlank()) {
+                    throw GradleException(
+                        "Missing Android release signing environment variables: " +
+                            "ANDROID_STORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD",
+                    )
+                }
+            }
+            if (keystoreFile.exists() && !storePass.isNullOrBlank() && !alias.isNullOrBlank() && !keyPass.isNullOrBlank()) {
                 storeFile = keystoreFile
-                storePassword = System.getenv("ANDROID_STORE_PASSWORD") ?: ""
-                keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: ""
-                keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
             }
         }
     }
@@ -58,12 +73,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            val releaseConfig = signingConfigs.getByName("release")
-            signingConfig = if (releaseConfig.storeFile?.exists() == true) {
-                releaseConfig
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

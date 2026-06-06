@@ -3,6 +3,14 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 
+class DeleteAccountResponse(BaseModel):
+    message: str = "Account scheduled for deletion. All personal information has been removed."
+
+
+class DeleteAccountRequest(BaseModel):
+    otp_code: str = Field(min_length=4, max_length=10)
+
+
 class AgeProfileResponse(BaseModel):
     date_of_birth: date | None = None
     age_at_menarche: int | None = None

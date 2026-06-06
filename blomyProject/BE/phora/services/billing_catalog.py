@@ -2,117 +2,214 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from phora.schemas.billing import BillingPlanOffer, BillingPlanOffersResponse, BillingPlanPriceOption
 
+PLAN_TYPE_PAID = "STRIPE_LOCAL_PAID"
+PLAN_TYPE_FREE = "AFRICA_FREE_LAUNCH"
+PRICING_STRATEGY = "AFFORDABILITY_BASED"
+
 _STRIPE_PRODUCT_IDS_LIVE = {
     "premium_plus": "prod_UHVBHeX529Udc0",
-}
-
-_STRIPE_PRICE_IDS_LIVE = {
-    ("AED", "premium_plus", "month"): "price_1TKRXfGRl5Hb5Dey5TSMZZaf",
-    ("AED", "premium_plus", "year"): "price_1TKRXfGRl5Hb5DeyWB6buS0a",
-    ("AUD", "premium_plus", "month"): "price_1TKRUzGRl5Hb5DeyArocwSHB",
-    ("AUD", "premium_plus", "year"): "price_1TKRUzGRl5Hb5Dey8z2SPfw6",
-    ("BRL", "premium_plus", "month"): "price_1TKRV0GRl5Hb5DeyfV0dUIAa",
-    ("BRL", "premium_plus", "year"): "price_1TKRV0GRl5Hb5DeyuEUcaC8p",
-    ("CAD", "premium_plus", "month"): "price_1TKRXOGRl5Hb5Dey9U3jwMWB",
-    ("CAD", "premium_plus", "year"): "price_1TKRXPGRl5Hb5Dey6UONxxjs",
-    ("CHF", "premium_plus", "month"): "price_1TKRXVGRl5Hb5DeyNqg2BS38",
-    ("CHF", "premium_plus", "year"): "price_1TKRXWGRl5Hb5DeyjfRbpjF9",
-    ("CZK", "premium_plus", "month"): "price_1TKRXPGRl5Hb5DeyqEx2dNt9",
-    ("CZK", "premium_plus", "year"): "price_1TKRXQGRl5Hb5DeyV7p1oxM4",
-    ("DKK", "premium_plus", "month"): "price_1TKRXQGRl5Hb5DeyaGIadf0R",
-    ("DKK", "premium_plus", "year"): "price_1TKRXQGRl5Hb5DeygLXaENsm",
-    ("GBP", "premium_plus", "month"): os.getenv("PHORA_STRIPE_PREMIUM_GBP_MONTH_PRICE_ID", ""),
-    ("EUR", "premium_plus", "month"): "price_1TKRQbGRl5Hb5DeytO3X0C7G",
-    ("HKD", "premium_plus", "month"): "price_1TKRXRGRl5Hb5DeyRKiEaLoX",
-    ("HKD", "premium_plus", "year"): "price_1TKRXRGRl5Hb5DeyQ3FrQpkO",
-    ("HUF", "premium_plus", "month"): "price_1TKRXSGRl5Hb5DeyCITSbGjy",
-    ("HUF", "premium_plus", "year"): "price_1TKRXSGRl5Hb5Deye60cyCO5",
-    ("IDR", "premium_plus", "month"): "price_1TKRXUGRl5Hb5DeyxQ0R0fXL",
-    ("IDR", "premium_plus", "year"): "price_1TKRXUGRl5Hb5Dey7m4huVoX",
-    ("INR", "premium_plus", "month"): "price_1TKRXTGRl5Hb5DeysK1l4iaO",
-    ("INR", "premium_plus", "year"): "price_1TKRXTGRl5Hb5DeyqILZgGFu",
-    ("JPY", "premium_plus", "month"): "price_1TKRXUGRl5Hb5DeyogPCOzpg",
-    ("JPY", "premium_plus", "year"): "price_1TKRXVGRl5Hb5DeyBQ1qO5bW",
-    ("MXN", "premium_plus", "month"): "price_1TKRXXGRl5Hb5DeySaaGgYbc",
-    ("MXN", "premium_plus", "year"): "price_1TKRXYGRl5Hb5DeyTb4QMfGO",
-    ("MYR", "premium_plus", "month"): "price_1TKRXWGRl5Hb5DeydD6kxBX1",
-    ("MYR", "premium_plus", "year"): "price_1TKRXXGRl5Hb5Dey4OaMyz3L",
-    ("NOK", "premium_plus", "month"): "price_1TKRXZGRl5Hb5DeyRvTKDi8K",
-    ("NOK", "premium_plus", "year"): "price_1TKRXZGRl5Hb5DeyRA0KCNps",
-    ("NZD", "premium_plus", "month"): "price_1TKRXYGRl5Hb5Dey4lCC8v5w",
-    ("NZD", "premium_plus", "year"): "price_1TKRXYGRl5Hb5Deyi9TRoe9n",
-    ("PLN", "premium_plus", "month"): "price_1TKRXaGRl5Hb5DeyP1s9ceLZ",
-    ("PLN", "premium_plus", "year"): "price_1TKRXaGRl5Hb5DeyD9oIfLeY",
-    ("RON", "premium_plus", "month"): "price_1TKRXbGRl5Hb5Deyqr7QannJ",
-    ("RON", "premium_plus", "year"): "price_1TKRXbGRl5Hb5DeyEP96wavs",
-    ("SEK", "premium_plus", "month"): "price_1TKRXdGRl5Hb5DeycaPNxsmF",
-    ("SEK", "premium_plus", "year"): "price_1TKRXdGRl5Hb5DeyQ44aV2WU",
-    ("SGD", "premium_plus", "month"): "price_1TKRXcGRl5Hb5DeyQoY0q38A",
-    ("SGD", "premium_plus", "year"): "price_1TKRXcGRl5Hb5Dey4yMhHSkO",
-    ("THB", "premium_plus", "month"): "price_1TKRXeGRl5Hb5DeyNeiwU5dx",
-    ("THB", "premium_plus", "year"): "price_1TKRXeGRl5Hb5DeyTzwYPUK1",
-    ("USD", "premium_plus", "month"): "price_1TIwFOGRl5Hb5DeyGaYnuDP0",
-    ("GBP", "premium_plus", "year"): os.getenv("PHORA_STRIPE_PREMIUM_GBP_YEAR_PRICE_ID", ""),
-    ("EUR", "premium_plus", "year"): "price_1TKRQaGRl5Hb5DeysnoxMDOT",
-    ("USD", "premium_plus", "year"): "price_1TIwFnGRl5Hb5Dey3nJzr4Dx",
 }
 _STRIPE_PRODUCT_IDS_TEST = {
     "premium_plus": "prod_UHWvb0SEUJR4Hk",
 }
 
-_STRIPE_PRICE_IDS_TEST = {
-    ("AED", "premium_plus", "month"): "price_1TKzK1GRl5Hb5DeyCCDsaJHv",
-    ("AED", "premium_plus", "year"): "price_1TKzK2GRl5Hb5DeyEx4B8zhU",
-    ("AUD", "premium_plus", "month"): "price_1TKzK2GRl5Hb5DeyRhTGhxRI",
-    ("AUD", "premium_plus", "year"): "price_1TKzK2GRl5Hb5DeyliwVZdMt",
-    ("BRL", "premium_plus", "month"): "price_1TKzK3GRl5Hb5DeySdxQLB9s",
-    ("BRL", "premium_plus", "year"): "price_1TKzK3GRl5Hb5Deyb2BSJylM",
-    ("CAD", "premium_plus", "month"): "price_1TKzK3GRl5Hb5DeyAnBcbSNR",
-    ("CAD", "premium_plus", "year"): "price_1TKzK4GRl5Hb5DeyKB33aNuj",
-    ("CHF", "premium_plus", "month"): "price_1TKzK4GRl5Hb5DeyVPFxPu8Q",
-    ("CHF", "premium_plus", "year"): "price_1TKzK4GRl5Hb5Dey9qhhL2sN",
-    ("CZK", "premium_plus", "month"): "price_1TKz69GRl5Hb5DeyCXknTQ8p",
-    ("CZK", "premium_plus", "year"): "price_1TKz69GRl5Hb5DeyFWY3R8qU",
-    ("DKK", "premium_plus", "month"): "price_1TKzK5GRl5Hb5Dey1caYdrPN",
-    ("DKK", "premium_plus", "year"): "price_1TKzK5GRl5Hb5Deyu0F41zII",
-    ("GBP", "premium_plus", "month"): "price_1TTR20GRl5Hb5Deyw0zaAes6",
-    ("USD", "premium_plus", "month"): "price_1TIxtDGRl5Hb5DeyaKYhDiIY",
-    ("EUR", "premium_plus", "month"): "price_1TIxtDGRl5Hb5DeygKFNxDKV",
-    ("HKD", "premium_plus", "month"): "price_1TKzK5GRl5Hb5DeyygygD5Jp",
-    ("HKD", "premium_plus", "year"): "price_1TKzK6GRl5Hb5Dey1otZ3mQo",
-    ("HUF", "premium_plus", "month"): "price_1TKzK6GRl5Hb5DeyVzUtISFO",
-    ("HUF", "premium_plus", "year"): "price_1TKzK6GRl5Hb5DeyKg3gHB25",
-    ("IDR", "premium_plus", "month"): "price_1TKzK7GRl5Hb5DeyvNeifarT",
-    ("IDR", "premium_plus", "year"): "price_1TKzK7GRl5Hb5DeyReYxP0sr",
-    ("INR", "premium_plus", "month"): "price_1TKzK7GRl5Hb5Dey9SThlVx7",
-    ("INR", "premium_plus", "year"): "price_1TKzK8GRl5Hb5Dey9KC4HLWF",
-    ("JPY", "premium_plus", "month"): "price_1TKzK8GRl5Hb5DeyrTv3nAHT",
-    ("JPY", "premium_plus", "year"): "price_1TKzK8GRl5Hb5DeylR9sEJXC",
-    ("MXN", "premium_plus", "month"): "price_1TKzK9GRl5Hb5Deyvm0od5dg",
-    ("MXN", "premium_plus", "year"): "price_1TKzK9GRl5Hb5DeylNU7U942",
-    ("MYR", "premium_plus", "month"): "price_1TKzK9GRl5Hb5DeyAUb0NJyo",
-    ("MYR", "premium_plus", "year"): "price_1TKzKAGRl5Hb5DeynvvmqvFk",
-    ("NOK", "premium_plus", "month"): "price_1TKzKAGRl5Hb5Dey651mesU5",
-    ("NOK", "premium_plus", "year"): "price_1TKzKAGRl5Hb5Deyvx6nQTNr",
-    ("NZD", "premium_plus", "month"): "price_1TKzKBGRl5Hb5DeyPbOTDO87",
-    ("NZD", "premium_plus", "year"): "price_1TKzKBGRl5Hb5DeyjKFH6wO6",
-    ("PLN", "premium_plus", "month"): "price_1TKzKBGRl5Hb5Dey7VXNoSHQ",
-    ("PLN", "premium_plus", "year"): "price_1TKzKCGRl5Hb5DeyYgtvAzSc",
-    ("RON", "premium_plus", "month"): "price_1TKzKCGRl5Hb5DeyLmboBsjU",
-    ("RON", "premium_plus", "year"): "price_1TKzKDGRl5Hb5DeyuRg8MfPH",
-    ("SEK", "premium_plus", "month"): "price_1TKzKDGRl5Hb5Deyoix6ILTA",
-    ("SEK", "premium_plus", "year"): "price_1TKzKDGRl5Hb5Dey7hBbSDM7",
-    ("SGD", "premium_plus", "month"): "price_1TKzKEGRl5Hb5Dey8pcdCZJn",
-    ("SGD", "premium_plus", "year"): "price_1TKzKEGRl5Hb5DeywEfa24c2",
-    ("THB", "premium_plus", "month"): "price_1TKzKEGRl5Hb5DeyKp7hVYRU",
-    ("THB", "premium_plus", "year"): "price_1TKzKFGRl5Hb5DeyzcblGfID",
-    ("GBP", "premium_plus", "year"): "price_1TTR20GRl5Hb5DeyR2UCLkOX",
-    ("USD", "premium_plus", "year"): "price_1TIxtWGRl5Hb5DeyuUNpCmW4",
-    ("EUR", "premium_plus", "year"): "price_1TIxtWGRl5Hb5DeyBjnF3y2e",
+_COUNTRY_ALIASES = {
+    "UK": "GB",
+    "GREATBRITAIN": "GB",
+    "ENGLAND": "GB",
+    "UNITEDKINGDOM": "GB",
+    "USA": "US",
+    "UNITEDSTATES": "US",
+    "UNITEDSTATESOFAMERICA": "US",
+    "CZECHREPUBLIC": "CZ",
+    "CZECHIA": "CZ",
+    "GERMANY": "DE",
+    "FRANCE": "FR",
+    "NETHERLANDS": "NL",
+    "IRELAND": "IE",
+    "SPAIN": "ES",
+    "ITALY": "IT",
+    "CANADA": "CA",
+    "AUSTRALIA": "AU",
+    "SWITZERLAND": "CH",
+    "DENMARK": "DK",
+    "NORWAY": "NO",
+    "SWEDEN": "SE",
+    "FINLAND": "FI",
+    "ICELAND": "IS",
+    "POLAND": "PL",
+    "PORTUGAL": "PT",
+    "GREECE": "GR",
+    "CROATIA": "HR",
+    "LITHUANIA": "LT",
+    "LATVIA": "LV",
+    "SLOVAKIA": "SK",
+    "SLOVENIA": "SI",
+    "INDIA": "IN",
+    "BRAZIL": "BR",
+    "MEXICO": "MX",
+    "TURKEY": "TR",
+    "TURKIYE": "TR",
+    "INDONESIA": "ID",
+    "PHILIPPINES": "PH",
+    "THAILAND": "TH",
+    "NIGERIA": "NG",
+    "SOUTHAFRICA": "ZA",
+    "GHANA": "GH",
+    "KENYA": "KE",
+    "ETHIOPIA": "ET",
+    "TANZANIA": "TZ",
+    "UGANDA": "UG",
+}
+
+_COUNTRY_NAMES = {
+    "GB": "United Kingdom",
+    "US": "United States",
+    "CA": "Canada",
+    "AU": "Australia",
+    "CH": "Switzerland",
+    "DK": "Denmark",
+    "NO": "Norway",
+    "SE": "Sweden",
+    "FI": "Finland",
+    "IS": "Iceland",
+    "DE": "Germany",
+    "FR": "France",
+    "NL": "Netherlands",
+    "IE": "Ireland",
+    "ES": "Spain",
+    "IT": "Italy",
+    "CZ": "Czech Republic",
+    "PL": "Poland",
+    "PT": "Portugal",
+    "GR": "Greece",
+    "HR": "Croatia",
+    "LT": "Lithuania",
+    "LV": "Latvia",
+    "SK": "Slovakia",
+    "SI": "Slovenia",
+    "IN": "India",
+    "BR": "Brazil",
+    "MX": "Mexico",
+    "TR": "Turkey",
+    "ID": "Indonesia",
+    "PH": "Philippines",
+    "TH": "Thailand",
+}
+
+_CURRENCY_SYMBOLS = {
+    "AUD": "A$",
+    "BRL": "R$",
+    "CAD": "C$",
+    "CHF": "CHF",
+    "CZK": "Kc",
+    "DKK": "kr",
+    "EUR": "€",
+    "GBP": "£",
+    "IDR": "Rp",
+    "INR": "₹",
+    "MXN": "MX$",
+    "NOK": "kr",
+    "PHP": "₱",
+    "PLN": "zł",
+    "SEK": "kr",
+    "THB": "฿",
+    "TRY": "₺",
+    "USD": "$",
+}
+
+_ZERO_DECIMAL_CURRENCIES = set()
+
+_USD_TO_CURRENCY = {
+    "USD": Decimal("1"),
+    "GBP": Decimal("0.79"),
+    "EUR": Decimal("0.92"),
+    "CAD": Decimal("1.35"),
+    "AUD": Decimal("1.50"),
+    "CHF": Decimal("0.90"),
+    "DKK": Decimal("6.86"),
+    "NOK": Decimal("10.50"),
+    "SEK": Decimal("10.40"),
+    "CZK": Decimal("22.80"),
+    "PLN": Decimal("4.00"),
+    "INR": Decimal("83.00"),
+    "BRL": Decimal("5.00"),
+    "MXN": Decimal("17.00"),
+    "TRY": Decimal("32.00"),
+    "IDR": Decimal("16000"),
+    "PHP": Decimal("56.00"),
+    "THB": Decimal("36.00"),
+}
+
+
+@dataclass(frozen=True)
+class FixedPrice:
+    amount_minor: int
+    display_amount: str
+    stripe_price_id: str
+
+    @property
+    def display_amount_value(self) -> int:
+        return self.amount_minor // 100 if self.amount_minor % 100 == 0 else self.amount_minor
+
+
+@dataclass(frozen=True)
+class CountryPricingProfile:
+    country: str
+    country_code: str
+    currency: str
+    pricing_tier: str
+    primary_provider: str | None
+    available_providers: tuple[str, ...]
+    monthly: FixedPrice
+    yearly: FixedPrice
+    fallback_applied: bool = False
+    fallback_reason: str | None = None
+
+    @property
+    def regional_subheadline(self) -> str:
+        if self.fallback_applied:
+            return f"Default pricing for {self.country}"
+        return f"Local pricing for {self.country}"
+
+
+_AFFORDABILITY_PRICES: dict[str, dict[str, str | int]] = {
+    "GB": {"currency": "GBP", "tier": "TIER_1_PREMIUM", "month": 299, "year": 3500, "m": "price_1TaYVaGRl5Hb5DeyQDl1oONm", "y": "price_1TaYWVGRl5Hb5DeypepmhPgc"},
+    "US": {"currency": "USD", "tier": "TIER_1_PREMIUM", "month": 299, "year": 3500, "m": "price_1TaYWVGRl5Hb5Deyl6kkG0zi", "y": "price_1TaYWVGRl5Hb5DeyfpOWtvDv"},
+    "CA": {"currency": "CAD", "tier": "TIER_1_PREMIUM", "month": 399, "year": 4500, "m": "price_1TaYWVGRl5Hb5DeylVwzpJLj", "y": "price_1TaYWVGRl5Hb5DeyKKUwnxAJ"},
+    "AU": {"currency": "AUD", "tier": "TIER_1_PREMIUM", "month": 499, "year": 5500, "m": "price_1TaYWXGRl5Hb5Dey0ibJRoAE", "y": "price_1TaYWuGRl5Hb5DeyN3cmBoiC"},
+    "CH": {"currency": "CHF", "tier": "TIER_1_PREMIUM", "month": 299, "year": 3500, "m": "price_1TaYWtGRl5Hb5DeyCrNuF6Mp", "y": "price_1TaYWtGRl5Hb5DeyTfPvOFnq"},
+    "DK": {"currency": "DKK", "tier": "TIER_1_PREMIUM", "month": 2200, "year": 26000, "m": "price_1TaYWtGRl5Hb5DeyPf2NpavY", "y": "price_1TaYWtGRl5Hb5DeyKbrCykZm"},
+    "NO": {"currency": "NOK", "tier": "TIER_1_PREMIUM", "month": 3500, "year": 39900, "m": "price_1TaYWtGRl5Hb5DeyZk652dLE", "y": "price_1TaYXHGRl5Hb5Dey8d37mBp3"},
+    "SE": {"currency": "SEK", "tier": "TIER_1_PREMIUM", "month": 3500, "year": 39900, "m": "price_1TaYXHGRl5Hb5DeyPjGnUIZp", "y": "price_1TaYXHGRl5Hb5DeylRMPUl7h"},
+    "FI": {"currency": "EUR", "tier": "TIER_1_PREMIUM", "month": 299, "year": 3500, "m": "price_1TaYXHGRl5Hb5Dey1ytrnj4Q", "y": "price_1TaYXHGRl5Hb5DeyMhUPbOi3"},
+    "IS": {"currency": "EUR", "tier": "TIER_1_PREMIUM", "month": 299, "year": 3500, "m": "price_1TaYXHGRl5Hb5Dey1ytrnj4Q", "y": "price_1TaYXHGRl5Hb5DeyMhUPbOi3"},
+    "DE": {"currency": "EUR", "tier": "TIER_2_STANDARD", "month": 249, "year": 2900, "m": "price_1TaYXHGRl5Hb5Deylzups3z7", "y": "price_1TaYXcGRl5Hb5Dey5tNdSL7D"},
+    "FR": {"currency": "EUR", "tier": "TIER_2_STANDARD", "month": 249, "year": 2900, "m": "price_1TaYXHGRl5Hb5Deylzups3z7", "y": "price_1TaYXcGRl5Hb5Dey5tNdSL7D"},
+    "NL": {"currency": "EUR", "tier": "TIER_2_STANDARD", "month": 249, "year": 2900, "m": "price_1TaYXHGRl5Hb5Deylzups3z7", "y": "price_1TaYXcGRl5Hb5Dey5tNdSL7D"},
+    "IE": {"currency": "EUR", "tier": "TIER_2_STANDARD", "month": 249, "year": 2900, "m": "price_1TaYXHGRl5Hb5Deylzups3z7", "y": "price_1TaYXcGRl5Hb5Dey5tNdSL7D"},
+    "ES": {"currency": "EUR", "tier": "TIER_2_STANDARD", "month": 199, "year": 2300, "m": "price_1TaYXdGRl5Hb5DeyqvhSKxuv", "y": "price_1TaYXcGRl5Hb5Deyn1HARZah"},
+    "IT": {"currency": "EUR", "tier": "TIER_2_STANDARD", "month": 199, "year": 2300, "m": "price_1TaYXdGRl5Hb5DeyqvhSKxuv", "y": "price_1TaYXcGRl5Hb5Deyn1HARZah"},
+    "CZ": {"currency": "CZK", "tier": "TIER_3_VALUE", "month": 4900, "year": 59000, "m": "price_1TaYXcGRl5Hb5Deytk7gUTwL", "y": "price_1TaYXcGRl5Hb5DeyoBzWtRRc"},
+    "PL": {"currency": "PLN", "tier": "TIER_3_VALUE", "month": 999, "year": 11900, "m": "price_1TaYXcGRl5Hb5Dey8MnRlL3C", "y": "price_1TaYXwGRl5Hb5Dey744NISA1"},
+    "PT": {"currency": "EUR", "tier": "TIER_3_VALUE", "month": 149, "year": 1700, "m": "price_1TaYXwGRl5Hb5DeynwhkmXyv", "y": "price_1TaYXxGRl5Hb5Deyamj5U2zY"},
+    "GR": {"currency": "EUR", "tier": "TIER_3_VALUE", "month": 149, "year": 1700, "m": "price_1TaYXwGRl5Hb5DeynwhkmXyv", "y": "price_1TaYXxGRl5Hb5Deyamj5U2zY"},
+    "HR": {"currency": "EUR", "tier": "TIER_3_VALUE", "month": 149, "year": 1700, "m": "price_1TaYXwGRl5Hb5DeynwhkmXyv", "y": "price_1TaYXxGRl5Hb5Deyamj5U2zY"},
+    "LT": {"currency": "EUR", "tier": "TIER_3_VALUE", "month": 149, "year": 1700, "m": "price_1TaYXwGRl5Hb5DeynwhkmXyv", "y": "price_1TaYXxGRl5Hb5Deyamj5U2zY"},
+    "LV": {"currency": "EUR", "tier": "TIER_3_VALUE", "month": 149, "year": 1700, "m": "price_1TaYXwGRl5Hb5DeynwhkmXyv", "y": "price_1TaYXxGRl5Hb5Deyamj5U2zY"},
+    "SK": {"currency": "EUR", "tier": "TIER_3_VALUE", "month": 149, "year": 1700, "m": "price_1TaYXwGRl5Hb5DeynwhkmXyv", "y": "price_1TaYXxGRl5Hb5Deyamj5U2zY"},
+    "SI": {"currency": "EUR", "tier": "TIER_3_VALUE", "month": 149, "year": 1700, "m": "price_1TaYXwGRl5Hb5DeynwhkmXyv", "y": "price_1TaYXxGRl5Hb5Deyamj5U2zY"},
+    "IN": {"currency": "INR", "tier": "TIER_4_GROWTH", "month": 9900, "year": 119900, "m": "price_1TaYXwGRl5Hb5DeymNEHmaaA", "y": "price_1TaYXwGRl5Hb5DeyKuAfBA20"},
+    "BR": {"currency": "BRL", "tier": "TIER_4_GROWTH", "month": 990, "year": 11900, "m": "price_1TaYXwGRl5Hb5Dey42PzENKj", "y": "price_1TaYYHGRl5Hb5DeyFFJ30K71"},
+    "MX": {"currency": "MXN", "tier": "TIER_4_GROWTH", "month": 4900, "year": 59000, "m": "price_1TaYYHGRl5Hb5DeyvzZtExX3", "y": "price_1TaYYHGRl5Hb5DeyeimcosuS"},
+    "TR": {"currency": "TRY", "tier": "TIER_4_GROWTH", "month": 4999, "year": 59900, "m": "price_1TaYYHGRl5Hb5Dey4D70KdQb", "y": "price_1TaYYHGRl5Hb5DeykKxwuAa8"},
+    "ID": {"currency": "IDR", "tier": "TIER_4_GROWTH", "month": 2900000, "year": 34900000, "m": "price_1TaYYHGRl5Hb5Dey9zuCZxRz", "y": "price_1TaYYUGRl5Hb5DeyVD90t0pw"},
+    "PH": {"currency": "PHP", "tier": "TIER_4_GROWTH", "month": 9900, "year": 119900, "m": "price_1TaYYUGRl5Hb5DeyRxeoD2Nh", "y": "price_1TaYYUGRl5Hb5Deyt4Ofy1dK"},
+    "TH": {"currency": "THB", "tier": "TIER_4_GROWTH", "month": 7900, "year": 94900, "m": "price_1TaYYUGRl5Hb5Dey9qB3Za9h", "y": "price_1TaYYUGRl5Hb5DeyklJMsgEM"},
 }
 
 
@@ -128,246 +225,23 @@ def _use_test_stripe_catalog() -> bool:
     if stripe_secret.startswith("sk_test_") or stripe_publishable.startswith("pk_test_"):
         return True
 
-    return os.getenv("PHORA_ENVIRONMENT", "").lower() in {"stage", "staging", "dev"}
+    environment = os.getenv("PHORA_ENVIRONMENT", "").lower()
+    if environment in {"prod", "production", "live"}:
+        return False
+    return True
 
 
 def _stripe_product_ids() -> dict[str, str]:
     return _STRIPE_PRODUCT_IDS_TEST if _use_test_stripe_catalog() else _STRIPE_PRODUCT_IDS_LIVE
 
 
-def _stripe_price_ids() -> dict[tuple[str, str, str], str]:
-    price_ids = dict(_STRIPE_PRICE_IDS_TEST if _use_test_stripe_catalog() else _STRIPE_PRICE_IDS_LIVE)
-    if not _use_test_stripe_catalog():
-        monthly_gbp = os.getenv("PHORA_STRIPE_PREMIUM_GBP_MONTH_PRICE_ID", "").strip()
-        yearly_gbp = os.getenv("PHORA_STRIPE_PREMIUM_GBP_YEAR_PRICE_ID", "").strip()
-        if monthly_gbp:
-            price_ids[("GBP", "premium_plus", "month")] = monthly_gbp
-        if yearly_gbp:
-            price_ids[("GBP", "premium_plus", "year")] = yearly_gbp
-    return price_ids
-
-
-def _stripe_price_id(currency: str, plan_id: str, interval: str) -> str | None:
-    return _stripe_price_ids().get((currency, plan_id, interval)) or None
-
-
-def _stripe_price_id_lookup() -> dict[str, dict[str, str]]:
-    return {
-        price_id: {"currency": currency, "plan_id": plan_id, "interval": interval}
-        for (currency, plan_id, interval), price_id in _stripe_price_ids().items()
-        if price_id
-    }
-
-
-@dataclass(frozen=True)
-class CountryPricingProfile:
-    country: str
-    currency: str
-    primary_provider: str | None
-    available_providers: tuple[str, ...]
-    regional_subheadline: str
-
-
-_CURRENCY_SYMBOLS = {
-    "AED": "AED",
-    "AUD": "A$",
-    "BRL": "R$",
-    "BGN": "лв",
-    "CAD": "C$",
-    "CHF": "CHF",
-    "CZK": "Kc",
-    "DKK": "kr",
-    "EUR": "EUR",
-    "GBP": "£",
-    "GHS": "GH₵",
-    "HKD": "HK$",
-    "HUF": "Ft",
-    "IDR": "Rp",
-    "INR": "₹",
-    "JPY": "¥",
-    "KES": "KSh",
-    "MAD": "MAD",
-    "MWK": "MK",
-    "MXN": "MX$",
-    "MYR": "RM",
-    "NGN": "₦",
-    "NOK": "kr",
-    "NZD": "NZ$",
-    "PLN": "zł",
-    "RON": "lei",
-    "RWF": "FRw",
-    "SEK": "kr",
-    "SGD": "S$",
-    "THB": "฿",
-    "TZS": "TSh",
-    "UGX": "USh",
-    "USD": "$",
-    "XAF": "FCFA",
-    "XOF": "CFA",
-    "ZAR": "R",
-    "ZMW": "ZK",
-}
-
-_ZERO_DECIMAL_CURRENCIES = {"JPY", "RWF", "UGX", "XAF", "XOF"}
-_BASE_STRIPE_PREMIUM_PLUS_USD = Decimal("4.99")
-_BASE_FLUTTERWAVE_PREMIUM_PLUS_USD = Decimal("2")
-
-# Static reference pricing rather than live FX. This keeps the mobile paywall
-# deterministic across clients and easy to review with product.
-_USD_TO_CURRENCY = {
-    "AED": Decimal("3.67"),
-    "AUD": Decimal("1.52"),
-    "BRL": Decimal("5.05"),
-    "BGN": Decimal("1.80"),
-    "CAD": Decimal("1.36"),
-    "CHF": Decimal("0.91"),
-    "CZK": Decimal("23.00"),
-    "DKK": Decimal("6.90"),
-    "EUR": Decimal("0.92"),
-    "GBP": Decimal("0.79"),
-    "GHS": Decimal("14.50"),
-    "HKD": Decimal("7.80"),
-    "HUF": Decimal("360"),
-    "IDR": Decimal("15800"),
-    "INR": Decimal("83"),
-    "JPY": Decimal("150"),
-    "KES": Decimal("130"),
-    "MAD": Decimal("9.90"),
-    "MWK": Decimal("1730"),
-    "MXN": Decimal("17.00"),
-    "MYR": Decimal("4.70"),
-    "NGN": Decimal("1500"),
-    "NOK": Decimal("10.70"),
-    "NZD": Decimal("1.64"),
-    "PLN": Decimal("4.00"),
-    "RON": Decimal("4.60"),
-    "RWF": Decimal("1300"),
-    "SEK": Decimal("10.60"),
-    "SGD": Decimal("1.35"),
-    "THB": Decimal("36.00"),
-    "TZS": Decimal("2550"),
-    "UGX": Decimal("3850"),
-    "USD": Decimal("1.00"),
-    "XAF": Decimal("600"),
-    "XOF": Decimal("600"),
-    "ZAR": Decimal("18.50"),
-    "ZMW": Decimal("27.00"),
-}
-
-_PRICE_OVERRIDES_MINOR = {
-    "GBP": {"premium_plus": 399},
-    "USD": {"premium_plus": 499},
-}
-
-_YEARLY_PRICE_OVERRIDES_MINOR = {
-    "GBP": {"premium_plus": 3500},
-    "USD": {"premium_plus": 4000},
-}
-
-_PLAN_FEATURES = {
-    "free": [
-        "Calendar and period tracking",
-        "Manual logging and reminders",
-        "Basic cycle insights",
-    ],
-    "premium_plus": [
-        "Everything in Free",
-        "Advanced cycle predictions",
-        "Premium insights and reminders",
-        "AI support features",
-        "Priority experience",
-    ],
-}
-
-_STRIPE_COUNTRIES = {
-    "AUSTRALIA": ("Australia", "AUD"),
-    "AUSTRIA": ("Austria", "EUR"),
-    "BELGIUM": ("Belgium", "EUR"),
-    "BRAZIL": ("Brazil", "BRL"),
-    "BULGARIA": ("Bulgaria", "EUR"),
-    "CANADA": ("Canada", "CAD"),
-    "CROATIA": ("Croatia", "EUR"),
-    "CYPRUS": ("Cyprus", "EUR"),
-    "CZECHREPUBLIC": ("Czech Republic", "CZK"),
-    "DENMARK": ("Denmark", "DKK"),
-    "ESTONIA": ("Estonia", "EUR"),
-    "FINLAND": ("Finland", "EUR"),
-    "FRANCE": ("France", "EUR"),
-    "GERMANY": ("Germany", "EUR"),
-    "GIBRALTAR": ("Gibraltar", "GBP"),
-    "GREECE": ("Greece", "EUR"),
-    "HONGKONG": ("Hong Kong", "HKD"),
-    "HUNGARY": ("Hungary", "HUF"),
-    "INDIA": ("India", "INR"),
-    "INDONESIA": ("Indonesia", "IDR"),
-    "IRELAND": ("Ireland", "EUR"),
-    "ITALY": ("Italy", "EUR"),
-    "JAPAN": ("Japan", "JPY"),
-    "LATVIA": ("Latvia", "EUR"),
-    "LIECHTENSTEIN": ("Liechtenstein", "CHF"),
-    "LITHUANIA": ("Lithuania", "EUR"),
-    "LUXEMBOURG": ("Luxembourg", "EUR"),
-    "MALAYSIA": ("Malaysia", "MYR"),
-    "MALTA": ("Malta", "EUR"),
-    "MEXICO": ("Mexico", "MXN"),
-    "NETHERLANDS": ("Netherlands", "EUR"),
-    "NEWZEALAND": ("New Zealand", "NZD"),
-    "NORWAY": ("Norway", "NOK"),
-    "POLAND": ("Poland", "PLN"),
-    "PORTUGAL": ("Portugal", "EUR"),
-    "ROMANIA": ("Romania", "RON"),
-    "SINGAPORE": ("Singapore", "SGD"),
-    "SLOVAKIA": ("Slovakia", "EUR"),
-    "SLOVENIA": ("Slovenia", "EUR"),
-    "SPAIN": ("Spain", "EUR"),
-    "SWEDEN": ("Sweden", "SEK"),
-    "SWITZERLAND": ("Switzerland", "CHF"),
-    "THAILAND": ("Thailand", "THB"),
-    "UNITEDARABEMIRATES": ("United Arab Emirates", "AED"),
-    "UNITEDKINGDOM": ("United Kingdom", "GBP"),
-    "UNITEDSTATES": ("United States", "USD"),
-}
-
-_FLUTTERWAVE_PREFERRED_COUNTRIES = {
-    "NIGERIA": ("Nigeria", "NGN"),
-    "GHANA": ("Ghana", "GHS"),
-    "KENYA": ("Kenya", "KES"),
-    "SOUTHAFRICA": ("South Africa", "ZAR"),
-    "UGANDA": ("Uganda", "UGX"),
-    "TANZANIA": ("Tanzania", "TZS"),
-    "RWANDA": ("Rwanda", "RWF"),
-    "MALAWI": ("Malawi", "MWK"),
-    "CAMEROON": ("Cameroon", "XAF"),
-    "IVORYCOAST": ("Ivory Coast", "XOF"),
-    "COTEDIVOIRE": ("Ivory Coast", "XOF"),
-    "SENEGAL": ("Senegal", "XOF"),
-    "ZAMBIA": ("Zambia", "ZMW"),
-    "BENIN": ("Benin", "XOF"),
-    "BURKINAFASO": ("Burkina Faso", "XOF"),
-    "GUINEABISSAU": ("Guinea-Bissau", "XOF"),
-    "MALI": ("Mali", "XOF"),
-    "NIGER": ("Niger", "XOF"),
-    "TOGO": ("Togo", "XOF"),
-    "CENTRALAFRICANREPUBLIC": ("Central African Republic", "XAF"),
-    "CHAD": ("Chad", "XAF"),
-    "CONGO": ("Congo", "XAF"),
-    "EQUATORIALGUINEA": ("Equatorial Guinea", "XAF"),
-    "GABON": ("Gabon", "XAF"),
-}
-
-_COUNTRY_ALIASES = {
-    "UK": "UNITEDKINGDOM",
-    "GREATBRITAIN": "UNITEDKINGDOM",
-    "ENGLAND": "UNITEDKINGDOM",
-    "USA": "UNITEDSTATES",
-    "UNITEDSTATESOFAMERICA": "UNITEDSTATES",
-    "UAE": "UNITEDARABEMIRATES",
-}
-
-
-def _normalize_country(value: str) -> str:
-    letters_only = "".join(char for char in value.upper().strip() if char.isalnum())
-    return _COUNTRY_ALIASES.get(letters_only, letters_only)
+def _normalize_country(value: str | None) -> str:
+    if not value:
+        return ""
+    compact = "".join(char for char in value.upper().strip() if char.isalnum())
+    if len(compact) == 2:
+        return compact
+    return _COUNTRY_ALIASES.get(compact, compact)
 
 
 def _format_minor_amount(currency: str, minor_amount: int) -> str:
@@ -375,75 +249,86 @@ def _format_minor_amount(currency: str, minor_amount: int) -> str:
     if currency in _ZERO_DECIMAL_CURRENCIES:
         amount = f"{minor_amount:,}"
     else:
-        major = Decimal(minor_amount) / Decimal("100")
-        if major == major.to_integral_value():
-            amount = f"{int(major):,}"
+        whole = minor_amount // 100
+        cents = minor_amount % 100
+        if cents == 0:
+            amount = f"{whole:,}"
         else:
-            amount = f"{major:,.2f}"
+            amount = f"{whole:,}.{cents:02d}"
     return f"{symbol}{amount}"
 
 
-def _price_minor_for(profile: CountryPricingProfile, tier: str) -> int:
-    override = _PRICE_OVERRIDES_MINOR.get(profile.currency, {}).get(tier)
-    if override is not None:
-        return override
-
-    usd_amount = _BASE_FLUTTERWAVE_PREMIUM_PLUS_USD if profile.primary_provider == "flutterwave" else _BASE_STRIPE_PREMIUM_PLUS_USD
-
-    rate = _USD_TO_CURRENCY.get(profile.currency, Decimal("1.0"))
-    converted = usd_amount * rate
-    if profile.currency in _ZERO_DECIMAL_CURRENCIES:
-        return int(converted.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    return int((converted.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)) * 100)
+def _default_country_code() -> str:
+    configured = _normalize_country(os.getenv("DEFAULT_PRICING_COUNTRY") or os.getenv("PHORA_DEFAULT_PRICING_COUNTRY", "GB"))
+    return configured if configured in _AFFORDABILITY_PRICES else "GB"
 
 
-def _yearly_price_minor(profile: CountryPricingProfile, tier: str) -> int:
-    override = _YEARLY_PRICE_OVERRIDES_MINOR.get(profile.currency, {}).get(tier)
-    if override is not None:
-        return override
+def _price_id(raw_price_id: str, country_code: str, interval: str) -> str:
+    env_name = f"PHORA_STRIPE_PRICE_{country_code}_{interval.upper()}"
+    configured = os.getenv(env_name, "").strip()
+    if configured:
+        return configured
+    if not raw_price_id:
+        raise RuntimeError(
+            f"No Stripe price configured for {country_code} {interval}. "
+            f"Set {env_name} or add a price ID to the catalog."
+        )
+    return raw_price_id
 
-    usd_amount = Decimal("18") if profile.primary_provider == "flutterwave" else Decimal("40")
-    rate = _USD_TO_CURRENCY.get(profile.currency, Decimal("1.0"))
-    converted = usd_amount * rate
-    if profile.currency in _ZERO_DECIMAL_CURRENCIES:
-        return int(converted.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    return int((converted.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)) * 100)
+
+def _profile_for_country(country: str | None, *, allow_fallback: bool = True) -> CountryPricingProfile:
+    country_code = _normalize_country(country)
+    fallback_applied = False
+    fallback_reason = None
+    local_enabled = (os.getenv("LOCAL_CURRENCY_PRICING_ENABLED") or os.getenv("PHORA_LOCAL_CURRENCY_PRICING_ENABLED", "true")).strip().lower()
+    if local_enabled in {"0", "false", "no", "off"}:
+        fallback_applied = country_code not in {"", _default_country_code()}
+        fallback_reason = "local_currency_pricing_disabled" if fallback_applied else None
+        country_code = _default_country_code()
+    elif country_code not in _AFFORDABILITY_PRICES:
+        if not allow_fallback:
+            raise ValueError(f"Stripe pricing is not configured for {country or 'unknown country'}.")
+        fallback_applied = True
+        fallback_reason = "unsupported_country"
+        country_code = _default_country_code()
+
+    raw = _AFFORDABILITY_PRICES[country_code]
+    currency = str(raw["currency"])
+    month = int(raw["month"])
+    year = int(raw["year"])
+    profile = CountryPricingProfile(
+        country=_COUNTRY_NAMES.get(country_code, country_code),
+        country_code=country_code,
+        currency=currency,
+        pricing_tier=str(raw["tier"]),
+        primary_provider="stripe",
+        available_providers=("stripe",),
+        monthly=FixedPrice(
+            amount_minor=month,
+            display_amount=_format_minor_amount(currency, month),
+            stripe_price_id=_price_id(str(raw["m"]), country_code, "month"),
+        ),
+        yearly=FixedPrice(
+            amount_minor=year,
+            display_amount=_format_minor_amount(currency, year),
+            stripe_price_id=_price_id(str(raw["y"]), country_code, "year"),
+        ),
+        fallback_applied=fallback_applied,
+        fallback_reason=fallback_reason,
+    )
+    return profile
 
 
 def _country_profile(country: str) -> CountryPricingProfile:
-    normalized = _normalize_country(country)
+    return _profile_for_country(country)
 
-    if normalized in _FLUTTERWAVE_PREFERRED_COUNTRIES:
-        display_country, currency = _FLUTTERWAVE_PREFERRED_COUNTRIES[normalized]
-        return CountryPricingProfile(
-            country=display_country,
-            currency=currency,
-            primary_provider="flutterwave",
-            available_providers=("flutterwave",),
-            regional_subheadline=f"Regional pricing for {display_country}",
-        )
 
-    if normalized in _STRIPE_COUNTRIES:
-        display_country, currency = _STRIPE_COUNTRIES[normalized]
-        return CountryPricingProfile(
-            country=display_country,
-            currency=currency if currency in _CURRENCY_SYMBOLS else "USD",
-            primary_provider="stripe",
-            available_providers=("stripe",),
-            regional_subheadline=f"Local pricing for {display_country}",
-        )
-
-    return CountryPricingProfile(
-        country=country.strip(),
-        currency="USD",
-        primary_provider=None,
-        available_providers=(),
-        regional_subheadline=f"Pricing is not yet localized for {country.strip()}",
-    )
+def stripe_supported_country_codes() -> set[str]:
+    return set(_AFFORDABILITY_PRICES)
 
 
 def build_plan_offers(country: str, include_free: bool = True) -> BillingPlanOffersResponse:
-    profile = _country_profile(country)
+    profile = _profile_for_country(country)
     currency_symbol = _CURRENCY_SYMBOLS.get(profile.currency, profile.currency)
 
     plans: list[BillingPlanOffer] = []
@@ -463,89 +348,114 @@ def build_plan_offers(country: str, include_free: bool = True) -> BillingPlanOff
                 billing_period="year",
                 highlighted=False,
                 cta_label="Current plan",
-                features=_PLAN_FEATURES["free"],
+                features=[
+                    "Calendar and period tracking",
+                    "Manual logging and reminders",
+                    "Basic cycle insights",
+                ],
             )
         )
 
-    for tier, name, description, highlighted, badge in (
-        ("premium_plus", "Premium", "Advanced insights and premium support", True, "POPULAR"),
-    ):
-        price_minor = _price_minor_for(profile, tier)
-        yearly_price_minor = _yearly_price_minor(profile, tier)
-        price_options = [
-            BillingPlanPriceOption(
-                interval="month",
-                provider_price_id=_stripe_price_id(profile.currency, tier, "month") if profile.primary_provider == "stripe" else None,
-                price_minor=price_minor,
-                display_price=_format_minor_amount(profile.currency, price_minor),
-            ),
-            BillingPlanPriceOption(
-                interval="year",
-                provider_price_id=_stripe_price_id(profile.currency, tier, "year") if profile.primary_provider == "stripe" else None,
-                price_minor=yearly_price_minor,
-                display_price=_format_minor_amount(profile.currency, yearly_price_minor),
-            ),
-        ]
-        plans.append(
-            BillingPlanOffer(
-                id=tier,
-                name=name,
-                description=description,
-                provider=profile.primary_provider,
-                provider_product_id=_stripe_product_ids().get(tier) if profile.primary_provider == "stripe" else None,
-                provider_price_id=price_options[0].provider_price_id,
-                price_minor=price_minor,
-                currency=profile.currency,
-                currency_symbol=currency_symbol,
-                display_price=price_options[0].display_price,
-                billing_period="month",
-                highlighted=highlighted,
-                badge=badge,
-                cta_label=f"Upgrade to {name}",
-                features=_PLAN_FEATURES[tier],
-                price_options=price_options,
-            )
+    price_options = [
+        BillingPlanPriceOption(
+            interval="month",
+            provider_price_id=profile.monthly.stripe_price_id,
+            price_minor=profile.monthly.amount_minor,
+            display_price=profile.monthly.display_amount,
+        ),
+        BillingPlanPriceOption(
+            interval="year",
+            provider_price_id=profile.yearly.stripe_price_id,
+            price_minor=profile.yearly.amount_minor,
+            display_price=profile.yearly.display_amount,
+        ),
+    ]
+    plans.append(
+        BillingPlanOffer(
+            id="premium_plus",
+            name="Premium",
+            description="Advanced insights and premium support",
+            provider="stripe",
+            provider_product_id=_stripe_product_ids()["premium_plus"],
+            provider_price_id=profile.monthly.stripe_price_id,
+            price_minor=profile.monthly.amount_minor,
+            currency=profile.currency,
+            currency_symbol=currency_symbol,
+            display_price=profile.monthly.display_amount,
+            billing_period="month",
+            highlighted=True,
+            badge="POPULAR",
+            cta_label="Upgrade to Premium",
+            features=[
+                "Everything in Free",
+                "Advanced cycle predictions",
+                "Premium insights and reminders",
+                "AI support features",
+                "Priority experience",
+            ],
+            price_options=price_options,
         )
+    )
 
     return BillingPlanOffersResponse(
         country=country.strip(),
-        normalized_country=profile.country,
-        supported=profile.primary_provider is not None,
-        primary_provider=profile.primary_provider,
-        available_providers=list(profile.available_providers),
+        normalized_country=profile.country_code,
+        supported=True,
+        primary_provider="stripe",
+        available_providers=["stripe"],
         currency=profile.currency,
         currency_symbol=currency_symbol,
+        pricing_tier=profile.pricing_tier,
+        pricing_strategy=PRICING_STRATEGY,
+        plan_type=PLAN_TYPE_PAID,
+        fallback_applied=profile.fallback_applied,
+        fallback_reason=profile.fallback_reason,
+        monthly={
+            "amount": profile.monthly.display_amount_value,
+            "amountMinor": profile.monthly.amount_minor,
+            "displayAmount": profile.monthly.display_amount,
+            "stripePriceId": profile.monthly.stripe_price_id,
+        },
+        yearly={
+            "amount": profile.yearly.display_amount_value,
+            "amountMinor": profile.yearly.amount_minor,
+            "displayAmount": profile.yearly.display_amount,
+            "stripePriceId": profile.yearly.stripe_price_id,
+        },
         subheadline=profile.regional_subheadline,
         plans=plans,
     )
 
 
-def resolve_stripe_price(country: str, plan_id: str, interval: str) -> dict[str, str | int]:
-    profile = _country_profile(country)
-    if profile.primary_provider != "stripe":
-        raise ValueError(f"Stripe billing is not available for {profile.country}.")
+def resolve_stripe_price(country: str, plan_id: str, interval: str) -> dict[str, str | int | bool | None]:
+    if plan_id != "premium_plus":
+        raise ValueError("Only premium_plus is supported")
+    if interval not in {"month", "year"}:
+        raise ValueError("interval must be month or year")
 
-    provider_price_id = _stripe_price_id(profile.currency, plan_id, interval)
-    if not provider_price_id:
-        raise ValueError(f"No Stripe price is configured for {profile.country} {plan_id} ({interval}).")
-
+    profile = _profile_for_country(country)
+    selected = profile.monthly if interval == "month" else profile.yearly
     provider_product_id = _stripe_product_ids().get(plan_id)
     if not provider_product_id:
         raise ValueError(f"No Stripe product is configured for {plan_id}.")
 
-    price_minor = _price_minor_for(profile, plan_id) if interval == "month" else _yearly_price_minor(profile, plan_id)
     return {
-        "country": profile.country,
+        "country": profile.country_code,
+        "country_name": profile.country,
         "currency": profile.currency,
-        "provider": profile.primary_provider,
+        "provider": "stripe",
         "provider_product_id": provider_product_id,
-        "provider_price_id": provider_price_id,
-        "price_minor": price_minor,
-        "display_price": _format_minor_amount(profile.currency, price_minor),
+        "provider_price_id": selected.stripe_price_id,
+        "price_minor": selected.amount_minor,
+        "display_price": selected.display_amount,
+        "pricing_tier": profile.pricing_tier,
+        "pricing_strategy": PRICING_STRATEGY,
+        "fallback_applied": profile.fallback_applied,
+        "fallback_reason": profile.fallback_reason,
     }
 
 
-def resolve_billing_price(country: str, plan_id: str, interval: str) -> dict[str, str | int | None]:
+def resolve_billing_price(country: str, plan_id: str, interval: str) -> dict[str, str | int | bool | None]:
     if plan_id == "free":
         return {
             "country": country.strip(),
@@ -555,32 +465,23 @@ def resolve_billing_price(country: str, plan_id: str, interval: str) -> dict[str
             "provider_price_id": None,
             "price_minor": 0,
             "display_price": "0",
+            "pricing_tier": "FREE",
+            "pricing_strategy": PRICING_STRATEGY,
+            "fallback_applied": False,
+            "fallback_reason": None,
         }
-
-    profile = _country_profile(country)
-    if interval not in {"month", "year"}:
-        raise ValueError("interval must be month or year")
-    if plan_id != "premium_plus":
-        raise ValueError("Only premium_plus is supported")
-
-    price_minor = _price_minor_for(profile, plan_id) if interval == "month" else _yearly_price_minor(profile, plan_id)
-    provider_price_id = _stripe_price_id(profile.currency, plan_id, interval) if profile.primary_provider == "stripe" else None
-    if profile.primary_provider == "stripe" and provider_price_id is None:
-        raise ValueError(f"No Stripe price is configured for {profile.country} {plan_id} ({interval}).")
-    provider_product_id = _stripe_product_ids().get(plan_id) if profile.primary_provider == "stripe" else None
-    return {
-        "country": profile.country,
-        "currency": profile.currency,
-        "provider": profile.primary_provider,
-        "provider_product_id": provider_product_id,
-        "provider_price_id": provider_price_id,
-        "price_minor": price_minor,
-        "display_price": _format_minor_amount(profile.currency, price_minor),
-    }
+    return resolve_stripe_price(country, plan_id, interval)
 
 
 def stripe_price_metadata(price_id: str) -> dict[str, str] | None:
-    metadata = _stripe_price_id_lookup().get(price_id)
-    if not metadata:
-        return None
-    return dict(metadata)
+    for country_code, raw in _AFFORDABILITY_PRICES.items():
+        for interval, key in (("month", "m"), ("year", "y")):
+            if _price_id(str(raw[key]), country_code, interval) == price_id:
+                return {
+                    "country": country_code,
+                    "currency": str(raw["currency"]),
+                    "plan_id": "premium_plus",
+                    "interval": interval,
+                    "pricing_tier": str(raw["tier"]),
+                }
+    return None

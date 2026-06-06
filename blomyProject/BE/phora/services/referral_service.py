@@ -179,8 +179,6 @@ class ReferralService:
         )
 
     def _is_qualified(self, user: User, profile) -> tuple[bool, str]:
-        if user.account_mode == "anonymous":
-            return False, "anonymous_account"
         if not user.email_verified:
             return False, "email_unverified"
         if profile.onboarding_completed_at is None:

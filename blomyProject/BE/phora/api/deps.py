@@ -7,6 +7,7 @@ from phora.core.security import decode_token_safe
 from phora.db.session import get_db
 from phora.models.user import User
 from phora.repositories.core import UserRepository
+from phora.services.inprocess_ml_client import InProcessMlClient
 from phora.services.ml_client import DisabledMlClient, MlClient
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -17,9 +18,13 @@ def get_settings_dep() -> Settings:
 
 
 def get_ml_client(settings: Settings = Depends(get_settings_dep)) -> MlClient:
-    if not settings.ml_enabled or not settings.ml_base_url:
+    if not settings.ml_enabled:
         return DisabledMlClient(settings)
-    return MlClient(settings)
+    if settings.ml_inprocess:
+        return InProcessMlClient(settings)
+    if settings.ml_base_url:
+        return MlClient(settings)
+    return DisabledMlClient(settings)
 
 
 def _resolve_user(
