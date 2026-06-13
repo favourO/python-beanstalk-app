@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from phora.api.routes import ai, auth, billing, cycle, growth, health, home, log, notifications, onboarding, predictions, sensor, user, watch, wearables
-from phora.api.routes import admin, public
+from phora.api.routes import admin, public, well_known
 from phora.api.routes import wearable_commerce
 from phora.core.config import get_settings
 from phora.core.logging import configure_logging
@@ -59,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router, prefix=settings.api_prefix)
     app.include_router(public.router, prefix=settings.api_prefix)
     app.include_router(wearable_commerce.router, prefix=settings.api_prefix)
+    app.include_router(well_known.router)  # no prefix — must serve at /.well-known/*
     app.include_router(wearable_commerce.admin_router, prefix=settings.api_prefix)
     app.include_router(auth.router, prefix=settings.api_prefix_legacy)
     return app
