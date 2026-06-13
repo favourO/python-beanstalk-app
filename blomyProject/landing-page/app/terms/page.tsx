@@ -45,7 +45,7 @@ export default function TermsPage() {
       <header className="bg-white border-b border-[#FFD9C2]">
         <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/">
-            <Image src="https://vyla.health/assets/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-26 w-auto" unoptimized />
+            <Image src="https://vyla.health/assets/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-9 w-auto block" unoptimized />
           </Link>
           <Link href="/" className="text-sm font-medium text-[#A06A52] hover:text-[#1E0C16] transition-colors">
             ← Back to home
@@ -58,7 +58,7 @@ export default function TermsPage() {
         <div className="mb-14">
           <p className="text-xs font-medium tracking-[0.12em] uppercase text-[#FF7A33] mb-3">Legal</p>
           <h1 className="font-serif text-[52px] leading-[1.08] tracking-[-0.02em] text-[#1E0C16] mb-4">Terms of Use</h1>
-          <p className="text-sm font-light text-[#A06A52]">Last updated: May 2, 2026</p>
+          <p className="text-sm font-light text-[#A06A52]">Last updated: June 14, 2026</p>
         </div>
 
         {/* Intro */}
@@ -156,8 +156,9 @@ export default function TermsPage() {
         <Section id="vyla-ai" title="7. Vyla AI">
           <P>If you use Vyla AI features:</P>
           <Ul items={[
-            "you authorize Vyla to process your prompts, messages, account context, and relevant health data to generate responses, suggestions, and structured outputs;",
+            "you authorise Vyla to process your prompts, messages, account context, and relevant cycle and health data to generate responses, suggestions, and structured outputs;",
             "chat history, thread history, outputs, and saved records may be stored with your account;",
+            "Vyla AI builds an anonymised semantic memory of important facts and context from your conversations — stored as numerical vector embeddings — so it can give more relevant, personalised answers across sessions without replaying your full history;",
             "AI features may ask follow-up questions or suggest updates to your logs; and",
             "you remain responsible for reviewing AI-generated outputs before relying on them or saving them to your records.",
           ]} />

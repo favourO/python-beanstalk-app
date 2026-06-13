@@ -37,7 +37,7 @@ export default function Nav() {
       <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center" aria-label="Vyla home">
-          <Image src="https://vyla.health/assets/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-26 w-auto" unoptimized priority />
+          <Image src="https://vyla.health/assets/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-9 w-auto block" unoptimized priority />
         </Link>
 
         {/* Desktop Nav */}
