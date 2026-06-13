@@ -63,7 +63,7 @@ export default function PrivacyPage() {
       <header className="bg-white border-b border-[#FFD9C2]">
         <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/">
-            <Image src="https://vyla.health/assets/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-26 w-auto" unoptimized />
+            <Image src="https://vyla.health/assets/vyla-logo.png" alt="Vyla" width={1536} height={1024} className="h-9 w-auto block" unoptimized />
           </Link>
           <Link href="/" className="text-sm font-medium text-[#A06A52] hover:text-[#1E0C16] transition-colors">
             ← Back to home
@@ -76,7 +76,7 @@ export default function PrivacyPage() {
         <div className="mb-14">
           <p className="text-xs font-medium tracking-[0.12em] uppercase text-[#FF7A33] mb-3">Legal</p>
           <h1 className="font-serif text-[52px] leading-[1.08] tracking-[-0.02em] text-[#1E0C16] mb-4">Privacy Policy</h1>
-          <p className="text-sm font-light text-[#A06A52]">Last updated: May 8, 2026</p>
+          <p className="text-sm font-light text-[#A06A52]">Last updated: June 14, 2026</p>
         </div>
 
         {/* Intro */}
@@ -101,7 +101,7 @@ export default function PrivacyPage() {
           <Ul items={[
             "Vyla processes sensitive reproductive health and wellness data that you choose to provide, such as cycle logs, symptoms, temperature, LH test information, cervical mucus, intimacy logs, notes, AI messages, and wearable signals.",
             "We use your data to provide the Services, including account access, cycle tracking, predictions, insights, reminders, reports, AI features, wearable sync, subscriptions, support, security, and product improvement.",
-            "Vyla AI chat requires Premium in the current app. If you use Vyla AI, your messages and relevant account or cycle context may be processed to generate responses and support chat history.",
+            "Vyla AI chat requires Premium in the current app. If you use Vyla AI, your messages and relevant cycle context may be processed to generate responses and support chat history. Vyla AI also builds anonymised memory summaries from your conversations, encoded as semantic vector embeddings, so it can give more relevant and personalised responses over time.",
             "If you connect a wearable, we process device metadata and synced wellness signals to show readings and support insights.",
             "We do not sell your reproductive health data to advertisers or data brokers.",
             "We do not currently describe Vyla as an ad-supported app, and the current mobile app codebase does not include third-party advertising SDKs.",
@@ -232,6 +232,8 @@ export default function PrivacyPage() {
               "structured suggestions or extracted fields created from your messages",
               "missing-data prompts or follow-up questions",
               "feedback you provide on AI responses",
+              "AI memory summaries derived from your conversations, stored to personalise future responses",
+              "semantic vector representations of memory summaries used to retrieve relevant context (these are numerical embeddings and do not contain raw conversation text)",
               "safety, moderation, and diagnostic metadata needed to operate the AI feature",
             ]} />
           </Sub>
@@ -391,6 +393,8 @@ export default function PrivacyPage() {
               "generate responses and maintain conversation history",
               "create structured logging suggestions",
               "identify missing information needed to answer your question",
+              "build and maintain AI memory: anonymised summaries of key facts from your conversations are stored and encoded as semantic vector embeddings so that Vyla AI can retrieve the most relevant context in future sessions without replaying your full chat history",
+              "perform semantic similarity search over your stored AI memories to surface contextually relevant information when answering a question",
               "monitor, debug, and improve AI reliability and safety",
               "enforce safety rules and prevent misuse",
             ]} />
@@ -524,15 +528,18 @@ export default function PrivacyPage() {
 
         {/* Section 12 */}
         <Section id="vyla-ai" title="12. Vyla AI">
-          <P>Vyla AI is intended to help you understand your logs, ask general cycle and wellness questions, and organize information. Vyla AI is not a clinician and does not provide medical advice, diagnosis, or treatment.</P>
+          <P>Vyla AI is intended to help you understand your logs, ask general cycle and wellness questions, and organise information. Vyla AI is not a clinician and does not provide medical advice, diagnosis, or treatment.</P>
+          <P>Vyla AI uses a <strong>semantic memory system</strong>. As you chat, Vyla AI builds anonymised memory summaries of important facts and context from your conversations. These summaries are encoded as numerical vector embeddings and stored securely. When you ask a future question, Vyla AI uses semantic similarity search to retrieve the most relevant memories and include them as context — so it can give you more personalised, consistent answers across sessions without replaying your entire conversation history.</P>
           <P>When you use Vyla AI:</P>
           <Ul items={[
-            "your message and relevant app context may be processed to generate a response",
+            "your message and relevant cycle and app context may be processed to generate a response",
             "your chat history may be stored with your account",
+            "anonymised AI memory summaries derived from your conversations may be stored and used to personalise future responses",
+            "vector embeddings (numerical representations) of those memory summaries are stored and used for semantic retrieval — they do not store raw conversation text",
             "AI outputs may be inaccurate, incomplete, or unsuitable for your situation",
             "you are responsible for deciding whether to save any AI-assisted log suggestion",
             "sensitive information you type into chat may be processed as described in this policy",
-            "we may use safety systems, moderation, logging, or review processes to prevent misuse and improve reliability",
+            "we may use safety systems, content filtering, moderation, logging, or review processes to prevent misuse and improve reliability",
           ]} />
           <div className="bg-[#FFF0E8] border border-[#FFD9C2] rounded-xl p-4">
             <p className="text-[14px] font-medium text-[#1E0C16]">Important</p>
