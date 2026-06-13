@@ -9,6 +9,7 @@ celery_app = Celery(
     "phora",
     broker=settings.broker_url,
     backend=settings.result_backend,
+    include=["phora.workers.jobs"],
 )
 
 celery_app.conf.task_routes = {

@@ -11,12 +11,11 @@ from statistics import mean, stdev
 from typing import Any, Iterator
 from xml.etree import ElementTree
 
-import httpx
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from phora.core.config import Settings
-from phora.models import CycleRecord, DailyLog, MedicalChatMessage, MedicalChatThread, PredictionSnapshot, SensorReading
+from phora.models import AiMemoryDocument, CycleRecord, DailyLog, MedicalChatMessage, MedicalChatThread, PredictionSnapshot, SensorReading
 from phora.models.enums import LogType
 from phora.repositories.core import AuditRepository, CycleRepository, DailyInsightRepository, PredictionRepository, SensorRepository, UserRepository
 from phora.schemas.ai import (
@@ -28,6 +27,14 @@ from phora.schemas.ai import (
     MedicalChatResponse,
     MedicalChatThreadListResponse,
     MedicalChatThreadSummary,
+)
+from phora.services.ai_gateway import AIGateway
+from phora.services.ai_memory import (
+    AIMemoryEmbeddingService,
+    LOCAL_EMBEDDING_MODEL,
+    OpenAIEmbeddingService,
+    REAL_EMBEDDING_MODEL,
+    REAL_EMBEDDING_DIMENSIONS,
 )
 from phora.services.premium_access import PremiumAccessService
 
@@ -168,6 +175,37 @@ CHAT_QUOTA_WINDOW_DAYS = 7
 MEDICAL_DOCUMENT_MAX_BYTES = 25 * 1024 * 1024
 MEDICAL_DOCUMENT_TEXT_LIMIT = 24000
 MEDICAL_DOCUMENT_ALLOWED_EXTENSIONS = {".txt", ".csv", ".pdf", ".xlsx", ".xls", ".png", ".jpg", ".jpeg", ".webp", ".heic", ".heif"}
+AI_SECURITY_POLICY_VERSION = "rag-security-phase1-2026-06"
+
+PII_REDACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE), "[redacted_email]"),
+    (re.compile(r"\b\d{1,5}\s+[A-Za-z0-9.' -]{2,80}\s+(?:street|st|road|rd|avenue|ave|lane|ln|drive|dr|close|court|ct|way|boulevard|blvd)\b", re.IGNORECASE), "[redacted_address]"),
+    (re.compile(r"\b(?:date of birth|dob|born)\s*[:=-]?\s*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", re.IGNORECASE), "[redacted_dob]"),
+    (re.compile(r"\b(?:my name is|i am called|i'm called)\s+[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3}\b", re.IGNORECASE), "[redacted_name]"),
+    (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[redacted_identifier]"),
+)
+
+PII_PAYLOAD_KEYS = {
+    "address",
+    "birth_date",
+    "date_of_birth",
+    "device_id",
+    "dob",
+    "email",
+    "external_id",
+    "first_name",
+    "full_name",
+    "last_name",
+    "name",
+    "phone",
+    "postcode",
+    "postal_code",
+    "raw_text",
+    "ssn",
+    "street",
+    "zip",
+    "zipcode",
+}
 
 
 class MedicalChatService:
@@ -180,6 +218,15 @@ class MedicalChatService:
         self.predictions = PredictionRepository(db)
         self.insights = DailyInsightRepository(db)
         self.audit = AuditRepository(db)
+        self.ai_gateway = AIGateway(settings)
+        self._sqlite = settings.database_url.startswith("sqlite")
+        if not self._sqlite and settings.llm_api_key:
+            self.ai_memory_embeddings: AIMemoryEmbeddingService | OpenAIEmbeddingService = OpenAIEmbeddingService(
+                api_key=settings.llm_api_key,
+                base_url=settings.llm_base_url,
+            )
+        else:
+            self.ai_memory_embeddings = AIMemoryEmbeddingService()
 
     def chat(
         self,
@@ -233,6 +280,7 @@ class MedicalChatService:
             saved_records.extend(self._apply_data_action(user_id=user_id, data_action=data_action))
 
         context = self._build_context(user_id)
+        context["retrieved_ai_memory"] = self._retrieve_ai_memory_documents(user_id=user_id, query=normalized_message)
         educational_question = self._is_educational_health_question(normalized_message)
         missing = (
             []
@@ -253,7 +301,16 @@ class MedicalChatService:
                 contextual_follow_up=is_contextual_follow_up,
             )
 
+        answer = self._guard_output(answer)
         self._append_message(thread_id=thread.id, user_id=user_id, role="assistant", content=answer)
+        memory_document = self._persist_ai_memory_document(
+            user_id=user_id,
+            thread_id=thread.id,
+            message=normalized_message,
+            answer=answer,
+            context=context,
+            sufficient_data=not missing,
+        )
 
         response = MedicalChatResponse(
             thread_id=thread.id,
@@ -273,10 +330,14 @@ class MedicalChatService:
             "ai.medical_chat",
             {
                 "thread_id": thread.id,
-                "message": normalized_message,
+                "message_redacted": self._redact_text(normalized_message),
                 "sufficient_data": response.sufficient_data,
                 "saved_records": saved_records,
                 "missing_actions": [item.action for item in missing],
+                "security_policy_version": AI_SECURITY_POLICY_VERSION,
+                "consent_accepted": self._ai_chat_consent_accepted(user_id),
+                "context_pipeline": "minimise:redact:llm:guard",
+                "memory_document_id": memory_document.id if memory_document else None,
             },
         )
         self.db.commit()
@@ -323,6 +384,7 @@ class MedicalChatService:
         quota_after = {**quota, "used": int(quota["used"]) + 1, "remaining": max(0, int(quota["remaining"]) - 1)}
 
         context = self._build_context(user_id)
+        context["retrieved_ai_memory"] = self._retrieve_ai_memory_documents(user_id=user_id, query=prompt)
         if not extracted_text:
             answer = (
                 "I could not read enough text from this file to analyse it safely. "
@@ -345,13 +407,26 @@ class MedicalChatService:
                 question=prompt,
                 filename=safe_filename,
                 document_type=document_type,
-                extracted_text=extracted_text,
+                extracted_text=self._redact_text(extracted_text),
                 context=context,
             )
             medical_only = True
             sufficient_data = True
 
+        answer = self._guard_output(answer)
         self._append_message(thread_id=thread.id, user_id=user_id, role="assistant", content=answer)
+        memory_document = None
+        if medical_only and sufficient_data:
+            memory_document = self._persist_ai_memory_document(
+                user_id=user_id,
+                thread_id=thread.id,
+                message=prompt,
+                answer=answer,
+                context=context,
+                sufficient_data=True,
+                doc_type="document_analysis_summary",
+                data_scope="medical_document",
+            )
         response = MedicalDocumentAnalysisResponse(
             thread_id=thread.id,
             answer=answer,
@@ -379,6 +454,9 @@ class MedicalChatService:
                 "extracted_text_chars": len(extracted_text),
                 "medical_only": medical_only,
                 "sufficient_data": sufficient_data,
+                "security_policy_version": AI_SECURITY_POLICY_VERSION,
+                "context_pipeline": "document:redact:minimise:llm:guard",
+                "memory_document_id": memory_document.id if memory_document else None,
             },
         )
         self.db.commit()
@@ -491,7 +569,7 @@ class MedicalChatService:
             return ""
 
     def _extract_image_text(self, *, data: bytes, content_type: str) -> str:
-        if not self.settings.llm_api_key:
+        if not self.ai_gateway.enabled:
             return ""
         image_b64 = base64.b64encode(data).decode("ascii")
         body = {
@@ -514,21 +592,10 @@ class MedicalChatService:
             "temperature": 0,
             "text": {"format": {"type": "text"}},
         }
-        try:
-            response = httpx.post(
-                f"{self.settings.llm_base_url.rstrip('/')}/responses",
-                headers={
-                    "Authorization": f"Bearer {self.settings.llm_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-                timeout=self.settings.llm_timeout_seconds,
-            )
-            response.raise_for_status()
-            data = response.json()
-        except Exception:
+        data = self.ai_gateway.responses(body)
+        if not data:
             return ""
-        return self._extract_response_text(data)
+        return self._guard_output(self._extract_response_text(data))
 
     def _clean_extracted_document_text(self, text: str) -> str:
         cleaned = re.sub(r"[ \t]+", " ", text or "")
@@ -586,7 +653,7 @@ class MedicalChatService:
         extracted_text: str,
         context: dict[str, Any],
     ) -> str | None:
-        if not self.settings.llm_api_key:
+        if not self.ai_gateway.enabled:
             return None
         prompt_context = self._serialize_context_for_model(context)
         body = {
@@ -605,7 +672,7 @@ class MedicalChatService:
                         "If the document is unclear, say what is missing. Do not mention internal extraction details unless readability limits matter.\n\n"
                         f"Filename: {filename}\nDocument type: {document_type}\n\n"
                         f"User health context:\n{prompt_context}\n\n"
-                        f"Extracted document text:\n{extracted_text}"
+                        f"Extracted document text:\n{self._redact_text(extracted_text)}"
                     ),
                 },
                 {"role": "user", "content": question},
@@ -617,21 +684,10 @@ class MedicalChatService:
             "temperature": 0.2,
             "text": {"format": {"type": "text"}},
         }
-        try:
-            response = httpx.post(
-                f"{self.settings.llm_base_url.rstrip('/')}/responses",
-                headers={
-                    "Authorization": f"Bearer {self.settings.llm_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-                timeout=self.settings.llm_timeout_seconds,
-            )
-            response.raise_for_status()
-            data = response.json()
-        except Exception:
+        data = self.ai_gateway.responses(body)
+        if not data:
             return None
-        return self._extract_response_text(data)
+        return self._guard_output(self._extract_response_text(data))
 
     def _extract_response_text(self, data: dict[str, Any]) -> str:
         try:
@@ -1075,6 +1131,9 @@ class MedicalChatService:
         recent_sleep = self.sensors.recent(user_id, "sleep_minutes", days=30)
         recent_steps = self.sensors.recent(user_id, "steps", days=30)
         recent_temps = self.sensors.recent(user_id, "wrist_temp", days=60)
+        if not recent_temps:
+            latest_temp = self._latest_sensor_reading(user_id, "wrist_temp")
+            recent_temps = [latest_temp] if latest_temp else []
         recent_rhr = self.sensors.recent(user_id, "rhr", days=30)
         recent_blood_oxygen_avg = self.sensors.recent(user_id, "blood_oxygen_avg", days=30)
         recent_blood_oxygen_min = self.sensors.recent(user_id, "blood_oxygen_min", days=30)
@@ -1114,6 +1173,14 @@ class MedicalChatService:
             .limit(limit)
         )
         return list(self.db.scalars(stmt))
+
+    def _latest_sensor_reading(self, user_id: str, metric: str) -> SensorReading | None:
+        return self.db.scalar(
+            select(SensorReading)
+            .where(SensorReading.user_id == user_id, SensorReading.metric == metric)
+            .order_by(desc(SensorReading.recorded_at))
+            .limit(1)
+        )
 
     def _latest_period_log(self, user_id: str) -> DailyLog | None:
         stmt = (
@@ -1430,7 +1497,7 @@ class MedicalChatService:
             },
         ]
         for item in history:
-            input_messages.append({"role": item.role, "content": item.content})
+            input_messages.append({"role": item.role, "content": self._redact_text(item.content)})
         if educational:
             instructions = (
                 "The user is asking an educational health question — they want to understand a concept or condition. "
@@ -1464,61 +1531,26 @@ class MedicalChatService:
         }
 
     def _openai_answer(self, *, message: str, context: dict[str, Any], thread_id: str, educational: bool = False) -> str | None:
-        if not self.settings.llm_api_key:
+        if not self.ai_gateway.enabled:
             return None
         body = self._build_chat_openai_body(message=message, context=context, thread_id=thread_id, educational=educational)
-        try:
-            response = httpx.post(
-                f"{self.settings.llm_base_url.rstrip('/')}/responses",
-                headers={
-                    "Authorization": f"Bearer {self.settings.llm_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-                timeout=self.settings.llm_timeout_seconds,
-            )
-            response.raise_for_status()
-            data = response.json()
-        except Exception:
+        data = self.ai_gateway.responses(body)
+        if not data:
             return None
-        text = self._extract_response_text(data)
+        text = self._guard_output(self._extract_response_text(data))
         return text or None
 
     def _openai_answer_stream(
         self, *, message: str, context: dict[str, Any], thread_id: str, educational: bool = False
     ) -> Iterator[str]:
-        if not self.settings.llm_api_key:
+        if not self.ai_gateway.enabled:
             return
         body = self._build_chat_openai_body(message=message, context=context, thread_id=thread_id, educational=educational)
-        body["stream"] = True
-        try:
-            with httpx.stream(
-                "POST",
-                f"{self.settings.llm_base_url.rstrip('/')}/responses",
-                headers={
-                    "Authorization": f"Bearer {self.settings.llm_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-                timeout=self.settings.llm_timeout_seconds,
-            ) as response:
-                response.raise_for_status()
-                for line in response.iter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    payload = line[6:]
-                    if payload.strip() == "[DONE]":
-                        break
-                    try:
-                        data = json.loads(payload)
-                    except ValueError:
-                        continue
-                    if data.get("type") == "response.output_text.delta":
-                        delta = data.get("delta", "")
-                        if delta:
-                            yield delta
-        except Exception:
-            return
+        for data in self.ai_gateway.stream_responses(body):
+            if data.get("type") == "response.output_text.delta":
+                delta = data.get("delta", "")
+                if delta:
+                    yield delta
 
     def chat_stream(
         self,
@@ -1607,6 +1639,7 @@ class MedicalChatService:
             if data_action is not None:
                 saved_records.extend(self._apply_data_action(user_id=user_id, data_action=data_action))
             context = self._build_context(user_id)
+            context["retrieved_ai_memory"] = self._retrieve_ai_memory_documents(user_id=user_id, query=normalized_message)
             educational_question = self._is_educational_health_question(normalized_message)
             missing = (
                 []
@@ -1638,6 +1671,7 @@ class MedicalChatService:
                     thread_id=thread.id,
                     educational=educational_question,
                 ):
+                    chunk = self._redact_text(chunk)
                     yield _sse({"event": "delta", "text": chunk})
                     answer_parts.append(chunk)
 
@@ -1651,14 +1685,30 @@ class MedicalChatService:
                 yield _sse({"event": "delta", "text": fallback})
                 answer_parts.append(fallback)
 
-        full_answer = "".join(answer_parts)
+        full_answer = self._guard_output("".join(answer_parts))
 
         try:
             self._append_message(thread_id=thread.id, user_id=user_id, role="assistant", content=full_answer)
+            memory_document = self._persist_ai_memory_document(
+                user_id=user_id,
+                thread_id=thread.id,
+                message=normalized_message,
+                answer=full_answer,
+                context=context,
+                sufficient_data=not missing,
+            )
             self.audit.log(
                 user_id,
                 "ai.medical_chat.stream",
-                {"thread_id": thread.id, "message": normalized_message, "sufficient_data": not missing},
+                {
+                    "thread_id": thread.id,
+                    "message_redacted": self._redact_text(normalized_message),
+                    "sufficient_data": not missing,
+                    "security_policy_version": AI_SECURITY_POLICY_VERSION,
+                    "consent_accepted": self._ai_chat_consent_accepted(user_id),
+                    "context_pipeline": "minimise:redact:llm:guard",
+                    "memory_document_id": memory_document.id if memory_document else None,
+                },
             )
             self.db.commit()
         except Exception:
@@ -1769,6 +1819,368 @@ class MedicalChatService:
         }
         return any(term in text for term in topic_terms)
 
+    def _ai_chat_consent_accepted(self, user_id: str) -> bool:
+        profile = self.users.ensure_profile(user_id)
+        conditions = dict(profile.conditions or {})
+        ai_preferences = dict(conditions.get("ai_preferences") or {})
+        return ai_preferences.get("chat_consent_accepted") is True
+
+    def _redact_text(self, value: str | None) -> str:
+        if not value:
+            return ""
+        redacted = str(value)
+        for pattern, replacement in PII_REDACTION_PATTERNS:
+            redacted = pattern.sub(replacement, redacted)
+        redacted = re.sub(r"(?<![\w.-])\+?\d[\d\s().-]{7,}\d(?!\w)", self._redact_phone_candidate, redacted)
+        return redacted
+
+    def _redact_phone_candidate(self, match: re.Match[str]) -> str:
+        candidate = match.group(0)
+        digits = re.sub(r"\D", "", candidate)
+        if len(digits) < 9:
+            return candidate
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", candidate.strip()):
+            return candidate
+        return "[redacted_phone]"
+
+    def _redact_payload_for_model(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            clean: dict[str, Any] = {}
+            for key, item in value.items():
+                key_text = str(key)
+                if key_text.lower() in PII_PAYLOAD_KEYS:
+                    clean[key_text] = "[redacted]"
+                    continue
+                clean[key_text] = self._redact_payload_for_model(item)
+            return clean
+        if isinstance(value, list):
+            return [self._redact_payload_for_model(item) for item in value[:40]]
+        if isinstance(value, str):
+            return self._redact_text(value)
+        return value
+
+    def _minimise_model_context(self, knowledge_base: dict[str, Any]) -> dict[str, Any]:
+        context = self._redact_payload_for_model(knowledge_base)
+        profile = dict(context.get("profile") or {})
+        profile.pop("date_of_birth", None)
+        profile.pop("height_cm", None)
+        profile.pop("weight_kg", None)
+        context["profile"] = profile
+
+        latest_prediction = context.get("latest_prediction")
+        if isinstance(latest_prediction, dict):
+            latest_prediction.pop("audit", None)
+            latest_prediction["warning_flags"] = latest_prediction.get("warning_flags") or []
+
+        logs = context.get("recent_logs")
+        if isinstance(logs, list):
+            context["recent_logs"] = logs[-14:]
+        patterns = context.get("recent_log_patterns")
+        if isinstance(patterns, dict):
+            patterns.pop("latest_by_type", None)
+        return context
+
+    def _guard_output(self, answer: str) -> str:
+        guarded = self._redact_text(answer)
+        unsafe_diagnosis = re.search(r"\b(you have|you definitely have|this confirms)\s+(pcos|endometriosis|fibroids|cancer|pregnancy|miscarriage|infection)\b", guarded, re.IGNORECASE)
+        if unsafe_diagnosis and "may" not in guarded[max(0, unsafe_diagnosis.start() - 80): unsafe_diagnosis.end() + 80].lower():
+            guarded = re.sub(
+                r"\bYou have\b",
+                "Your data may suggest",
+                guarded,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+        return guarded
+
+    def _persist_ai_memory_document(
+        self,
+        *,
+        user_id: str,
+        thread_id: str,
+        message: str,
+        answer: str,
+        context: dict[str, Any],
+        sufficient_data: bool,
+        doc_type: str = "chat_summary",
+        data_scope: str | None = None,
+    ) -> AiMemoryDocument | None:
+        if not sufficient_data or not self._ai_chat_consent_accepted(user_id):
+            return None
+        summary = self._build_ai_memory_summary(message=message, answer=answer, context=context)
+        if not summary:
+            return None
+        scope = data_scope or self._infer_ai_memory_scope(message)
+        hash_embedding = AIMemoryEmbeddingService().embed(summary)
+        memory = AiMemoryDocument(
+            user_id=user_id,
+            thread_id=thread_id,
+            doc_type=doc_type,
+            data_scope=scope,
+            sensitivity=self._ai_memory_sensitivity(scope),
+            summary_text=summary,
+            embedding=hash_embedding,
+            embedding_model=LOCAL_EMBEDDING_MODEL,
+            source_refs=[f"medical_chat_thread:{thread_id}"],
+            memory_metadata={
+                "security_policy_version": AI_SECURITY_POLICY_VERSION,
+                "context_pipeline": "minimise:redact:summarise",
+                "used_user_data": self._used_user_data(context),
+            },
+            redaction_version=AI_SECURITY_POLICY_VERSION,
+        )
+        self.db.add(memory)
+        self.db.flush()
+        if not self._sqlite and isinstance(self.ai_memory_embeddings, OpenAIEmbeddingService):
+            self._write_real_embedding(memory.id, summary)
+        return memory
+
+    def _write_real_embedding(self, memory_id: str, text: str) -> None:
+        """Write a real semantic embedding to embedding_vec on Postgres. Non-fatal on failure."""
+        from phora.db.base import HEALTH_SCHEMA
+        try:
+            vec = self.ai_memory_embeddings.embed(text)
+            vec_str = "[" + ",".join(f"{x:.6f}" for x in vec) + "]"
+            schema_prefix = f'"{HEALTH_SCHEMA}".' if HEALTH_SCHEMA else ""
+            self.db.execute(
+                text(
+                    f"UPDATE {schema_prefix}ai_memory_documents "
+                    f"SET embedding_vec = CAST(:vec AS vector), embedding_model = :model "
+                    f"WHERE id = :id"
+                ),
+                {"vec": vec_str, "model": REAL_EMBEDDING_MODEL, "id": memory_id},
+            )
+        except Exception:
+            pass
+
+    def _build_ai_memory_summary(self, *, message: str, answer: str, context: dict[str, Any]) -> str:
+        message_text = self._redact_text(message)
+        answer_text = self._redact_text(answer)
+        answer_text = re.sub(r"\s+", " ", answer_text).strip()
+        if len(answer_text) > 520:
+            answer_text = answer_text[:517].rsplit(" ", 1)[0].rstrip(" ,;:") + "..."
+        context_bits = self._deterministic_context_summary(context)
+        pieces = [
+            f"User asked: {message_text}",
+            f"Vyla answered: {answer_text}",
+        ]
+        if context_bits:
+            pieces.append(f"Relevant context: {self._redact_text(context_bits)}")
+        return self._redact_text(" ".join(pieces)).strip()
+
+    def _retrieve_ai_memory_documents(
+        self,
+        *,
+        user_id: str,
+        query: str,
+        allowed_scopes: set[str] | None = None,
+        limit: int = 4,
+    ) -> list[dict[str, Any]]:
+        scopes = allowed_scopes or self._allowed_ai_memory_scopes(query)
+        if not scopes:
+            return []
+
+        if isinstance(self.ai_memory_embeddings, OpenAIEmbeddingService):
+            safe_items = self._retrieve_via_vector_sql(
+                user_id=user_id, query=query, scopes=scopes, limit=limit
+            )
+            if safe_items:
+                self.audit.log(
+                    user_id,
+                    "ai.memory.retrieved",
+                    {
+                        "count": len(safe_items),
+                        "allowed_scopes": sorted(scopes),
+                        "security_policy_version": AI_SECURITY_POLICY_VERSION,
+                        "retriever": "vector_cosine_hnsw",
+                        "embedding_model": REAL_EMBEDDING_MODEL,
+                    },
+                )
+                return safe_items
+            # Fall through to Python cosine if no real-embedding docs exist yet
+
+        safe_items = self._retrieve_via_python_cosine(
+            user_id=user_id, query=query, scopes=scopes, limit=limit
+        )
+        if safe_items:
+            self.audit.log(
+                user_id,
+                "ai.memory.retrieved",
+                {
+                    "count": len(safe_items),
+                    "allowed_scopes": sorted(scopes),
+                    "security_policy_version": AI_SECURITY_POLICY_VERSION,
+                    "retriever": "user_scoped_embedding_shadow_rag",
+                    "embedding_model": LOCAL_EMBEDDING_MODEL,
+                },
+            )
+        return safe_items
+
+    def _retrieve_via_vector_sql(
+        self,
+        *,
+        user_id: str,
+        query: str,
+        scopes: set[str],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        from phora.db.base import HEALTH_SCHEMA
+
+        try:
+            vec = self.ai_memory_embeddings.embed(query)
+        except Exception:
+            return []
+
+        vec_str = "[" + ",".join(f"{x:.6f}" for x in vec) + "]"
+        schema_prefix = f'"{HEALTH_SCHEMA}".' if HEALTH_SCHEMA else ""
+        scopes_list = sorted(scopes)
+
+        rows = self.db.execute(
+            text(
+                f"SELECT doc_type, data_scope, sensitivity, summary_text, source_refs, "
+                f"embedding_model, created_at "
+                f"FROM {schema_prefix}ai_memory_documents "
+                f"WHERE user_id = :user_id "
+                f"  AND data_scope = ANY(:scopes) "
+                f"  AND embedding_vec IS NOT NULL "
+                f"ORDER BY embedding_vec <=> CAST(:vec AS vector) "
+                f"LIMIT :limit"
+            ),
+            {"user_id": user_id, "scopes": scopes_list, "vec": vec_str, "limit": limit * 4},
+        ).fetchall()
+
+        safe_items: list[dict[str, Any]] = []
+        for row in rows:
+            summary = self._redact_text(row.summary_text)
+            if self._contains_prompt_injection(summary):
+                continue
+            safe_items.append(
+                {
+                    "doc_type": row.doc_type,
+                    "data_scope": row.data_scope,
+                    "sensitivity": row.sensitivity,
+                    "summary": summary,
+                    "source_refs": row.source_refs or [],
+                    "embedding_model": row.embedding_model,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                }
+            )
+            if len(safe_items) >= limit:
+                break
+        return safe_items
+
+    def _retrieve_via_python_cosine(
+        self,
+        *,
+        user_id: str,
+        query: str,
+        scopes: set[str],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        candidates = list(
+            self.db.scalars(
+                select(AiMemoryDocument)
+                .where(
+                    AiMemoryDocument.user_id == user_id,
+                    AiMemoryDocument.data_scope.in_(sorted(scopes)),
+                )
+                .order_by(desc(AiMemoryDocument.created_at))
+                .limit(40)
+            )
+        )
+        query_embedding = AIMemoryEmbeddingService().embed(query)
+        ranked = sorted(
+            candidates,
+            key=lambda item: self._memory_rank_score(
+                query=query,
+                query_embedding=query_embedding,
+                memory=item,
+            ),
+            reverse=True,
+        )
+        safe_items: list[dict[str, Any]] = []
+        for item in ranked:
+            score = self._memory_rank_score(query=query, query_embedding=query_embedding, memory=item)
+            if score <= 0 and len(safe_items) >= 1:
+                continue
+            summary = self._redact_text(item.summary_text)
+            if self._contains_prompt_injection(summary):
+                continue
+            safe_items.append(
+                {
+                    "doc_type": item.doc_type,
+                    "data_scope": item.data_scope,
+                    "sensitivity": item.sensitivity,
+                    "summary": summary,
+                    "source_refs": item.source_refs or [],
+                    "embedding_model": item.embedding_model,
+                    "created_at": item.created_at.isoformat() if item.created_at else None,
+                }
+            )
+            if len(safe_items) >= limit:
+                break
+        return safe_items
+
+    def _allowed_ai_memory_scopes(self, query: str) -> set[str]:
+        text = query.lower()
+        scopes = {"cycle", "symptom", "education"}
+        if any(term in text for term in {"temperature", "bbt", "wearable", "sleep", "hrv", "heart rate", "rhr"}):
+            scopes.add("wearable")
+        if any(term in text for term in {"sex", "intimacy", "intercourse", "pregnancy", "fertility", "ovulation", "lh"}):
+            scopes.add("fertility")
+        if any(term in text for term in {"document", "file", "report", "lab", "blood", "scan"}):
+            scopes.add("medical_document")
+        return scopes
+
+    def _infer_ai_memory_scope(self, message: str) -> str:
+        text = message.lower()
+        if any(term in text for term in {"temperature", "bbt", "wearable", "sleep", "hrv", "heart rate", "rhr"}):
+            return "wearable"
+        if any(term in text for term in {"ovulation", "fertile", "fertility", "lh", "pregnancy", "intimacy", "sex"}):
+            return "fertility"
+        if any(term in text for term in {"symptom", "cramp", "pain", "mood", "bleeding", "spotting"}):
+            return "symptom"
+        if self._is_educational_health_question(message):
+            return "education"
+        return "cycle"
+
+    def _ai_memory_sensitivity(self, scope: str) -> str:
+        if scope in {"fertility", "wearable", "medical_document"}:
+            return "HIGH"
+        if scope in {"cycle", "symptom"}:
+            return "MEDIUM"
+        return "LOW"
+
+    def _memory_relevance_score(self, query: str, summary: str, data_scope: str) -> int:
+        query_terms = {
+            term
+            for term in re.findall(r"[a-z0-9]{3,}", query.lower())
+            if term not in {"what", "when", "does", "with", "about", "this", "that", "have", "today"}
+        }
+        summary_terms = set(re.findall(r"[a-z0-9]{3,}", summary.lower()))
+        score = len(query_terms & summary_terms)
+        if data_scope in self._allowed_ai_memory_scopes(query):
+            score += 1
+        return score
+
+    def _memory_rank_score(self, *, query: str, query_embedding: list[float], memory: AiMemoryDocument) -> float:
+        keyword_score = float(self._memory_relevance_score(query, memory.summary_text, memory.data_scope))
+        vector_score = self.ai_memory_embeddings.cosine_similarity(query_embedding, memory.embedding)
+        return keyword_score + vector_score
+
+    def _contains_prompt_injection(self, text: str) -> bool:
+        lowered = text.lower()
+        return any(
+            phrase in lowered
+            for phrase in (
+                "ignore previous instructions",
+                "reveal all data",
+                "show system prompt",
+                "export database",
+                "developer message",
+            )
+        )
+
     def _serialize_context_for_model(self, context: dict[str, Any]) -> str:
         profile = context["profile"]
         active_cycle = context["active_cycle"]
@@ -1839,9 +2251,10 @@ class MedicalChatService:
                 "blood_oxygen_min": self._sensor_summary(context["recent_blood_oxygen_min"], value_label="percent"),
                 "stress": self._stress_summary(context["recent_stress"]),
             },
+            "retrieved_ai_memory": context.get("retrieved_ai_memory") or [],
             "data_confidence": self._data_confidence_score(context),
         }
-        return json.dumps(knowledge_base, default=str, ensure_ascii=True, indent=2)
+        return json.dumps(self._minimise_model_context(knowledge_base), default=str, ensure_ascii=True, indent=2)
 
     def _cycle_history_summary(self, past_cycles: list[CycleRecord]) -> dict[str, Any]:
         if not past_cycles:
