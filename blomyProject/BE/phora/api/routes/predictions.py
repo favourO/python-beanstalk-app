@@ -1,9 +1,15 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from phora.api.deps import get_current_user_id, get_ml_client, get_settings_dep
 from phora.db.session import get_db
-from phora.schemas.prediction import AgeContextResponse, CalendarPredictionResponse, PredictionSnapshotResponse
+from phora.schemas.prediction import (
+    AgeContextResponse,
+    CalendarPredictionResponse,
+    CycleForecastSuggestionListResponse,
+    CycleForecastSuggestionResponse,
+    PredictionSnapshotResponse,
+)
 from phora.services.ml_client import MlClient
 from phora.services.prediction_service import PredictionService
 
@@ -65,6 +71,46 @@ def next_period(
     return _service(db, settings, ml_client).latest_prediction(user_id).next_period_estimate
 
 
+@router.get("/forecast-suggestions", response_model=CycleForecastSuggestionListResponse)
+def forecast_suggestions(
+    status_filter: str = Query(default="pending", alias="status"),
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+    settings=Depends(get_settings_dep),
+    ml_client: MlClient = Depends(get_ml_client),
+) -> CycleForecastSuggestionListResponse:
+    suggestions = _service(db, settings, ml_client).list_forecast_suggestions(user_id, status=status_filter)
+    return CycleForecastSuggestionListResponse(suggestions=suggestions)
+
+
+@router.post("/forecast-suggestions/{suggestion_id}/accept", response_model=CycleForecastSuggestionResponse)
+def accept_forecast_suggestion(
+    suggestion_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+    settings=Depends(get_settings_dep),
+    ml_client: MlClient = Depends(get_ml_client),
+) -> CycleForecastSuggestionResponse:
+    try:
+        return _service(db, settings, ml_client).accept_forecast_suggestion(user_id, suggestion_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/forecast-suggestions/{suggestion_id}/reject", response_model=CycleForecastSuggestionResponse)
+def reject_forecast_suggestion(
+    suggestion_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+    settings=Depends(get_settings_dep),
+    ml_client: MlClient = Depends(get_ml_client),
+) -> CycleForecastSuggestionResponse:
+    try:
+        return _service(db, settings, ml_client).reject_forecast_suggestion(user_id, suggestion_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
 @router.get("/age-context", response_model=AgeContextResponse)
 def age_context(
     user_id: str = Depends(get_current_user_id),
@@ -73,4 +119,3 @@ def age_context(
     ml_client: MlClient = Depends(get_ml_client),
 ):
     return _service(db, settings, ml_client).age_context(user_id)
-

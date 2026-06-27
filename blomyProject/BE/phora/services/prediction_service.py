@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 
 from phora.core.config import Settings
 from phora.core.metrics import PREDICTION_COUNTER
-from phora.models import CycleRecord, PredictionSnapshot
+from phora.models import CycleForecastSuggestion, CycleRecord, PredictionSnapshot
 from phora.repositories.core import AuditRepository, CycleRepository, PredictionRepository, SensorRepository, UserRepository
 from phora.schemas.ml import MlEnsembleResponse, PredictionAudit
-from phora.schemas.prediction import PredictionSnapshotResponse
+from phora.schemas.prediction import CycleForecastSuggestionResponse, PredictionSnapshotResponse
 from phora.services.age import POPULATION_PRIORS, age_band_label, build_age_context, derive_age_band
 from phora.services.ml_client import MlClient
 from phora.services.prediction_builder import PredictionInputBundle, build_ensemble_request
@@ -275,6 +275,182 @@ class PredictionService:
             "how_age_affects_predictions": build_age_context(age_band, profile.perimenopause_mode_active),
             "population_priors_for_band": POPULATION_PRIORS.get(age_band or "", {}),
         }
+
+    def list_forecast_suggestions(self, user_id: str, *, status: str = "pending") -> list[CycleForecastSuggestionResponse]:
+        query = self.db.query(CycleForecastSuggestion).filter(CycleForecastSuggestion.user_id == user_id)
+        if status:
+            query = query.filter(CycleForecastSuggestion.status == status)
+        suggestions = query.order_by(CycleForecastSuggestion.created_at.desc()).limit(20).all()
+        return [self._suggestion_response(item) for item in suggestions]
+
+    def create_forecast_suggestion(
+        self,
+        *,
+        user_id: str,
+        cycle_id: str | None,
+        suggestion_type: str,
+        current_value,
+        suggested_value,
+        evidence: list[dict],
+        source: str,
+    ) -> CycleForecastSuggestion:
+        existing = (
+            self.db.query(CycleForecastSuggestion)
+            .filter(
+                CycleForecastSuggestion.user_id == user_id,
+                CycleForecastSuggestion.cycle_id == cycle_id,
+                CycleForecastSuggestion.suggestion_type == suggestion_type,
+                CycleForecastSuggestion.suggested_value == suggested_value,
+                CycleForecastSuggestion.status == "pending",
+            )
+            .one_or_none()
+        )
+        if existing:
+            return existing
+        suggestion = CycleForecastSuggestion(
+            user_id=user_id,
+            cycle_id=cycle_id,
+            suggestion_type=suggestion_type,
+            current_value=current_value,
+            suggested_value=suggested_value,
+            evidence=evidence,
+            source=source,
+            status="pending",
+        )
+        self.db.add(suggestion)
+        self.db.flush()
+        self.audit.log(
+            user_id,
+            "prediction.forecast_suggestion.created",
+            {
+                "suggestion_id": suggestion.id,
+                "suggestion_type": suggestion_type,
+                "current_value": current_value.isoformat() if current_value else None,
+                "suggested_value": suggested_value.isoformat(),
+                "source": source,
+            },
+        )
+        return suggestion
+
+    def accept_forecast_suggestion(self, user_id: str, suggestion_id: str) -> CycleForecastSuggestionResponse:
+        suggestion = self._get_user_suggestion(user_id, suggestion_id)
+        if suggestion.status != "pending":
+            return self._suggestion_response(suggestion)
+        cycle = self.db.get(CycleRecord, suggestion.cycle_id) if suggestion.cycle_id else self.cycles.active_for_user(user_id)
+        latest = self.predictions.latest_for_user(user_id)
+        if suggestion.suggestion_type == "ovulation_shift":
+            luteal_length = self._luteal_length_for_period_recalculation(user_id, cycle)
+            next_period_date = suggestion.suggested_value + timedelta(days=luteal_length)
+            next_period_range_days = 2
+            if cycle:
+                cycle.ovulation_confirmed_date = suggestion.suggested_value
+                cycle.ovulation_predicted_date = suggestion.suggested_value
+                cycle.luteal_length_days = luteal_length
+                if cycle.period_start_date:
+                    cycle.cycle_length_days = max(1, (next_period_date - cycle.period_start_date).days)
+            if latest:
+                cycle_day = ((suggestion.suggested_value - cycle.period_start_date).days + 1) if cycle else None
+                latest.ovulation_estimate = {
+                    **dict(latest.ovulation_estimate or {}),
+                    "date": suggestion.suggested_value.isoformat(),
+                    "cycle_day": cycle_day,
+                    "range_start": (suggestion.suggested_value - timedelta(days=1)).isoformat(),
+                    "range_end": (suggestion.suggested_value + timedelta(days=1)).isoformat(),
+                    "source": "user_accepted_bbt_shift",
+                }
+                latest.fertile_window = {
+                    **dict(latest.fertile_window or {}),
+                    "start": (suggestion.suggested_value - timedelta(days=5)).isoformat(),
+                    "end": (suggestion.suggested_value + timedelta(days=1)).isoformat(),
+                    "method": "user_accepted_bbt_shift",
+                }
+                latest.next_period_estimate = {
+                    **dict(latest.next_period_estimate or {}),
+                    "date": next_period_date.isoformat(),
+                    "range_start": (next_period_date - timedelta(days=next_period_range_days)).isoformat(),
+                    "range_end": (next_period_date + timedelta(days=next_period_range_days)).isoformat(),
+                    "range_days": next_period_range_days,
+                    "source": "ovulation_plus_luteal_length",
+                    "luteal_length_days": luteal_length,
+                }
+                latest.audit = {
+                    **dict(latest.audit or {}),
+                    "user_accepted_forecast_suggestion_id": suggestion.id,
+                    "period_recalculated_from_accepted_ovulation": True,
+                }
+        elif suggestion.suggestion_type == "period_shift":
+            if cycle and cycle.period_start_date:
+                cycle.cycle_length_days = max(1, (suggestion.suggested_value - cycle.period_start_date).days)
+            if latest:
+                latest.next_period_estimate = {
+                    **dict(latest.next_period_estimate or {}),
+                    "date": suggestion.suggested_value.isoformat(),
+                    "source": "user_accepted_forecast_suggestion",
+                }
+                latest.audit = {
+                    **dict(latest.audit or {}),
+                    "user_accepted_forecast_suggestion_id": suggestion.id,
+                }
+        suggestion.status = "accepted"
+        suggestion.decided_at = self._now_utc()
+        self.audit.log(user_id, "prediction.forecast_suggestion.accepted", {"suggestion_id": suggestion.id})
+        self.db.commit()
+        self.db.refresh(suggestion)
+        return self._suggestion_response(suggestion)
+
+    def reject_forecast_suggestion(self, user_id: str, suggestion_id: str) -> CycleForecastSuggestionResponse:
+        suggestion = self._get_user_suggestion(user_id, suggestion_id)
+        if suggestion.status == "pending":
+            suggestion.status = "rejected"
+            suggestion.decided_at = self._now_utc()
+            self.audit.log(user_id, "prediction.forecast_suggestion.rejected", {"suggestion_id": suggestion.id})
+            self.db.commit()
+            self.db.refresh(suggestion)
+        return self._suggestion_response(suggestion)
+
+    def _get_user_suggestion(self, user_id: str, suggestion_id: str) -> CycleForecastSuggestion:
+        suggestion = (
+            self.db.query(CycleForecastSuggestion)
+            .filter(CycleForecastSuggestion.id == suggestion_id, CycleForecastSuggestion.user_id == user_id)
+            .one_or_none()
+        )
+        if suggestion is None:
+            raise ValueError("Forecast suggestion not found")
+        return suggestion
+
+    def _suggestion_response(self, item: CycleForecastSuggestion) -> CycleForecastSuggestionResponse:
+        return CycleForecastSuggestionResponse(
+            id=item.id,
+            user_id=item.user_id,
+            cycle_id=item.cycle_id,
+            suggestion_type=item.suggestion_type,
+            current_value=item.current_value,
+            suggested_value=item.suggested_value,
+            evidence=item.evidence or [],
+            status=item.status,
+            source=item.source,
+            created_at=item.created_at,
+            decided_at=item.decided_at,
+        )
+
+    def _luteal_length_for_period_recalculation(self, user_id: str, cycle: CycleRecord | None) -> int:
+        if cycle and cycle.luteal_length_days and 8 <= cycle.luteal_length_days <= 18:
+            return cycle.luteal_length_days
+        historical: list[int] = []
+        cycles = (
+            self.db.query(CycleRecord)
+            .filter(CycleRecord.user_id == user_id, CycleRecord.is_active.is_(False))
+            .order_by(CycleRecord.period_start_date.desc())
+            .limit(8)
+            .all()
+        )
+        for item in cycles:
+            if item.luteal_length_days and 8 <= item.luteal_length_days <= 18:
+                historical.append(item.luteal_length_days)
+        if historical:
+            return int(round(sum(historical) / len(historical)))
+        return 14
+
     @staticmethod
     def _now_utc() -> datetime:
         return datetime.now(UTC)

@@ -53,6 +53,7 @@ locals {
       PHORA_SECRET_KEY                           = coalesce(var.app_secret_key, random_password.app_secret.result)
       PHORA_APPLE_BUNDLE_ID                      = ""
       PHORA_APPLE_SERVICE_ID                     = ""
+      PHORA_APPLE_IAP_SHARED_SECRET              = ""
       PHORA_STRIPE_SECRET_KEY                    = ""
       PHORA_STRIPE_PUBLISHABLE_KEY               = ""
       PHORA_STRIPE_WEBHOOK_SECRET                = ""
@@ -258,6 +259,10 @@ resource "aws_secretsmanager_secret" "app" {
 resource "aws_secretsmanager_secret_version" "app" {
   secret_id     = aws_secretsmanager_secret.app.id
   secret_string = jsonencode(local.secret_environment)
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
 
 resource "aws_security_group" "alb" {

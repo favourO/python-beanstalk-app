@@ -519,6 +519,12 @@ abstract class AppLocalizations {
   /// **'Select your birth date to continue.'**
   String get signUpBirthDateRequiredError;
 
+  /// No description provided for @signUpAgeRestrictionError.
+  ///
+  /// In en, this message translates to:
+  /// **'You must be at least 16 years old to use Vyla.'**
+  String get signUpAgeRestrictionError;
+
   /// No description provided for @signUpAcceptTermsError.
   ///
   /// In en, this message translates to:

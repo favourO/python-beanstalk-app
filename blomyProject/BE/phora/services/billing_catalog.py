@@ -263,17 +263,43 @@ def _default_country_code() -> str:
     return configured if configured in _AFFORDABILITY_PRICES else "GB"
 
 
-def _price_id(raw_price_id: str, country_code: str, interval: str) -> str:
-    env_name = f"PHORA_STRIPE_PRICE_{country_code}_{interval.upper()}"
-    configured = os.getenv(env_name, "").strip()
-    if configured:
-        return configured
-    if not raw_price_id:
-        raise RuntimeError(
-            f"No Stripe price configured for {country_code} {interval}. "
-            f"Set {env_name} or add a price ID to the catalog."
-        )
-    return raw_price_id
+def _price_override_names(country_code: str, currency: str, interval: str) -> tuple[str, ...]:
+    suffix = interval.upper()
+    names = [f"PHORA_STRIPE_PRICE_{country_code}_{suffix}"]
+    if country_code == "GB":
+        # Backward compatibility with the original GBP-only live price settings.
+        names.append(f"PHORA_STRIPE_PREMIUM_GBP_{suffix}_PRICE_ID")
+    return tuple(names)
+
+
+def _price_id(raw_price_id: str, country_code: str, currency: str, interval: str) -> str:
+    env_names = _price_override_names(country_code, currency, interval)
+    for env_name in env_names:
+        configured = os.getenv(env_name, "").strip()
+        if configured:
+            return configured
+
+    if _use_test_stripe_catalog():
+        if not raw_price_id:
+            raise RuntimeError(
+                f"No test Stripe price configured for {country_code} {interval}. "
+                f"Set {env_names[0]} or add a test price ID to the catalog."
+            )
+        return raw_price_id
+
+    raise RuntimeError(
+        f"No live Stripe price configured for {country_code} {currency} {interval}. "
+        f"Set {env_names[0]} to a live-mode Stripe Price ID."
+    )
+
+
+def required_live_stripe_price_env_vars() -> tuple[str, ...]:
+    names: list[str] = []
+    for country_code, raw in sorted(_AFFORDABILITY_PRICES.items()):
+        currency = str(raw["currency"])
+        for interval in ("month", "year"):
+            names.append(_price_override_names(country_code, currency, interval)[0])
+    return tuple(names)
 
 
 def _profile_for_country(country: str | None, *, allow_fallback: bool = True) -> CountryPricingProfile:
@@ -306,12 +332,12 @@ def _profile_for_country(country: str | None, *, allow_fallback: bool = True) ->
         monthly=FixedPrice(
             amount_minor=month,
             display_amount=_format_minor_amount(currency, month),
-            stripe_price_id=_price_id(str(raw["m"]), country_code, "month"),
+            stripe_price_id=_price_id(str(raw["m"]), country_code, currency, "month"),
         ),
         yearly=FixedPrice(
             amount_minor=year,
             display_amount=_format_minor_amount(currency, year),
-            stripe_price_id=_price_id(str(raw["y"]), country_code, "year"),
+            stripe_price_id=_price_id(str(raw["y"]), country_code, currency, "year"),
         ),
         fallback_applied=fallback_applied,
         fallback_reason=fallback_reason,
@@ -476,7 +502,7 @@ def resolve_billing_price(country: str, plan_id: str, interval: str) -> dict[str
 def stripe_price_metadata(price_id: str) -> dict[str, str] | None:
     for country_code, raw in _AFFORDABILITY_PRICES.items():
         for interval, key in (("month", "m"), ("year", "y")):
-            if _price_id(str(raw[key]), country_code, interval) == price_id:
+            if _price_id(str(raw[key]), country_code, str(raw["currency"]), interval) == price_id:
                 return {
                     "country": country_code,
                     "currency": str(raw["currency"]),

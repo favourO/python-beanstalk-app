@@ -4,12 +4,15 @@ import base64
 import csv
 import io
 import json
+import logging
 import re
 import zipfile
 from datetime import UTC, date, datetime, timedelta
 from statistics import mean, stdev
 from typing import Any, Iterator
 from xml.etree import ElementTree
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -839,22 +842,34 @@ class MedicalChatService:
         *,
         user_id: str,
         limit: int = 20,
+        before: datetime | None = None,
     ) -> MedicalChatThreadListResponse:
+        limit = max(1, min(limit, 100))
+        stmt = (
+            select(MedicalChatThread)
+            .where(MedicalChatThread.user_id == user_id)
+            .order_by(
+                MedicalChatThread.updated_at.desc(),
+                MedicalChatThread.created_at.desc(),
+            )
+        )
+        if before is not None:
+            stmt = stmt.where(MedicalChatThread.updated_at < before)
         threads = (
             self.db.execute(
-                select(MedicalChatThread)
-                .where(MedicalChatThread.user_id == user_id)
-                .order_by(
-                    MedicalChatThread.updated_at.desc(),
-                    MedicalChatThread.created_at.desc(),
-                )
-                .limit(limit)
+                stmt.limit(limit + 1)
             )
             .scalars()
             .all()
         )
+        page_threads = threads[:limit]
+        next_before = None
+        if len(threads) > limit and page_threads:
+            next_before = page_threads[-1].updated_at.isoformat()
         return MedicalChatThreadListResponse(
-            threads=[self._thread_summary(thread) for thread in threads],
+            threads=[self._thread_summary(thread) for thread in page_threads],
+            has_more=len(threads) > limit,
+            next_before=next_before,
         )
 
     def thread_history(
@@ -1568,6 +1583,7 @@ class MedicalChatService:
         try:
             quota = self._chat_quota(user_id)
         except Exception:
+            logger.exception("chat_stream: _chat_quota failed for user %s", user_id)
             yield _sse({"event": "error", "message": "Service temporarily unavailable."})
             return
 
@@ -1596,6 +1612,7 @@ class MedicalChatService:
                 "remaining": max(0, int(quota["remaining"]) - 1),
             }
         except Exception:
+            logger.exception("chat_stream: thread/message setup failed for user %s", user_id)
             yield _sse({"event": "error", "message": "Service temporarily unavailable."})
             return
 
@@ -1647,6 +1664,7 @@ class MedicalChatService:
                 else self._identify_missing_data(message=normalized_message, context=context)
             )
         except Exception:
+            logger.exception("chat_stream: context/retrieval pipeline failed for user %s", user_id)
             yield _sse({"event": "error", "message": "Service temporarily unavailable."})
             return
 
@@ -2035,19 +2053,23 @@ class MedicalChatService:
         schema_prefix = f'"{HEALTH_SCHEMA}".' if HEALTH_SCHEMA else ""
         scopes_list = sorted(scopes)
 
-        rows = self.db.execute(
-            text(
-                f"SELECT doc_type, data_scope, sensitivity, summary_text, source_refs, "
-                f"embedding_model, created_at "
-                f"FROM {schema_prefix}ai_memory_documents "
-                f"WHERE user_id = :user_id "
-                f"  AND data_scope = ANY(:scopes) "
-                f"  AND embedding_vec IS NOT NULL "
-                f"ORDER BY embedding_vec <=> CAST(:vec AS vector) "
-                f"LIMIT :limit"
-            ),
-            {"user_id": user_id, "scopes": scopes_list, "vec": vec_str, "limit": limit * 4},
-        ).fetchall()
+        try:
+            rows = self.db.execute(
+                text(
+                    f"SELECT doc_type, data_scope, sensitivity, summary_text, source_refs, "
+                    f"embedding_model, created_at "
+                    f"FROM {schema_prefix}ai_memory_documents "
+                    f"WHERE user_id = :user_id "
+                    f"  AND data_scope = ANY(:scopes) "
+                    f"  AND embedding_vec IS NOT NULL "
+                    f"ORDER BY embedding_vec <=> CAST(:vec AS vector) "
+                    f"LIMIT :limit"
+                ),
+                {"user_id": user_id, "scopes": scopes_list, "vec": vec_str, "limit": limit * 4},
+            ).fetchall()
+        except Exception:
+            logger.exception("_retrieve_via_vector_sql: pgvector query failed; falling back to empty results")
+            return []
 
         safe_items: list[dict[str, Any]] = []
         for row in rows:

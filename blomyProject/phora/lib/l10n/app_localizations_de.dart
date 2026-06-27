@@ -228,6 +228,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Wähle dein Geburtsdatum, um fortzufahren.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'Du musst mindestens 16 Jahre alt sein, um Vyla zu nutzen.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Akzeptiere die Nutzungsbedingungen und Datenschutzrichtlinie.';
 
@@ -2049,10 +2053,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get notificationsFilterInsights => 'Einblicke';
 
   @override
-  String get notificationsFilterUpdates => 'Updates';
+  String get notificationsFilterUpdates => 'Aktualisierungen';
 
   @override
-  String get notificationsFilterSystem => 'System';
+  String get notificationsFilterSystem => 'Systemmeldungen';
 
   @override
   String get notificationsSectionToday => 'Heute';
@@ -2425,7 +2429,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get bloomUsedDataLabel =>
-      'Vyla is a prediction application not a medical device';
+      'Vyla ist eine Vorhersage-App und kein Medizinprodukt';
 
   @override
   String get bloomSavedToLogsTitle => 'In deinen Protokollen gespeichert';
@@ -2798,13 +2802,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get choosePlanLabel => 'Plan wählen';
 
   @override
-  String get temperatureMethodOral => 'Oral';
+  String get temperatureMethodOral => 'Orale Messung';
 
   @override
-  String get temperatureMethodVaginal => 'Vaginal';
+  String get temperatureMethodVaginal => 'Vaginale Messung';
 
   @override
-  String get temperatureMethodWearable => 'Wearable';
+  String get temperatureMethodWearable => 'Tragbares Gerät';
 
   @override
   String get temperatureMethodUnknown => 'Unbekannt';
@@ -3034,6 +3038,10 @@ class AppLocalizationsDeAt extends AppLocalizationsDe {
       'Wähle dein Geburtsdatum, um fortzufahren.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'Du musst mindestens 16 Jahre alt sein, um Vyla zu nutzen.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Akzeptiere die Nutzungsbedingungen und Datenschutzrichtlinie.';
 
@@ -4855,10 +4863,10 @@ class AppLocalizationsDeAt extends AppLocalizationsDe {
   String get notificationsFilterInsights => 'Einblicke';
 
   @override
-  String get notificationsFilterUpdates => 'Updates';
+  String get notificationsFilterUpdates => 'Aktualisierungen';
 
   @override
-  String get notificationsFilterSystem => 'System';
+  String get notificationsFilterSystem => 'Systemmeldungen';
 
   @override
   String get notificationsSectionToday => 'Heute';
@@ -5231,7 +5239,7 @@ class AppLocalizationsDeAt extends AppLocalizationsDe {
 
   @override
   String get bloomUsedDataLabel =>
-      'Vyla is a prediction application not a medical device';
+      'Vyla ist eine Vorhersage-App und kein Medizinprodukt';
 
   @override
   String get bloomSavedToLogsTitle => 'In deinen Protokollen gespeichert';
@@ -5604,13 +5612,13 @@ class AppLocalizationsDeAt extends AppLocalizationsDe {
   String get choosePlanLabel => 'Plan wählen';
 
   @override
-  String get temperatureMethodOral => 'Oral';
+  String get temperatureMethodOral => 'Orale Messung';
 
   @override
-  String get temperatureMethodVaginal => 'Vaginal';
+  String get temperatureMethodVaginal => 'Vaginale Messung';
 
   @override
-  String get temperatureMethodWearable => 'Wearable';
+  String get temperatureMethodWearable => 'Tragbares Gerät';
 
   @override
   String get temperatureMethodUnknown => 'Unbekannt';
@@ -5840,6 +5848,10 @@ class AppLocalizationsDeCh extends AppLocalizationsDe {
       'Wähle dein Geburtsdatum, um fortzufahren.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'Du musst mindestens 16 Jahre alt sein, um Vyla zu nutzen.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Akzeptiere die Nutzungsbedingungen und Datenschutzrichtlinie.';
 
@@ -7661,10 +7673,10 @@ class AppLocalizationsDeCh extends AppLocalizationsDe {
   String get notificationsFilterInsights => 'Einblicke';
 
   @override
-  String get notificationsFilterUpdates => 'Updates';
+  String get notificationsFilterUpdates => 'Aktualisierungen';
 
   @override
-  String get notificationsFilterSystem => 'System';
+  String get notificationsFilterSystem => 'Systemmeldungen';
 
   @override
   String get notificationsSectionToday => 'Heute';
@@ -8037,7 +8049,7 @@ class AppLocalizationsDeCh extends AppLocalizationsDe {
 
   @override
   String get bloomUsedDataLabel =>
-      'Vyla is a prediction application not a medical device';
+      'Vyla ist eine Vorhersage-App und kein Medizinprodukt';
 
   @override
   String get bloomSavedToLogsTitle => 'In deinen Protokollen gespeichert';
@@ -8410,13 +8422,13 @@ class AppLocalizationsDeCh extends AppLocalizationsDe {
   String get choosePlanLabel => 'Plan wählen';
 
   @override
-  String get temperatureMethodOral => 'Oral';
+  String get temperatureMethodOral => 'Orale Messung';
 
   @override
-  String get temperatureMethodVaginal => 'Vaginal';
+  String get temperatureMethodVaginal => 'Vaginale Messung';
 
   @override
-  String get temperatureMethodWearable => 'Wearable';
+  String get temperatureMethodWearable => 'Tragbares Gerät';
 
   @override
   String get temperatureMethodUnknown => 'Unbekannt';
@@ -8646,6 +8658,10 @@ class AppLocalizationsDeDe extends AppLocalizationsDe {
       'Wähle dein Geburtsdatum, um fortzufahren.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'Du musst mindestens 16 Jahre alt sein, um Vyla zu nutzen.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Akzeptiere die Nutzungsbedingungen und Datenschutzrichtlinie.';
 
@@ -10467,10 +10483,10 @@ class AppLocalizationsDeDe extends AppLocalizationsDe {
   String get notificationsFilterInsights => 'Einblicke';
 
   @override
-  String get notificationsFilterUpdates => 'Updates';
+  String get notificationsFilterUpdates => 'Aktualisierungen';
 
   @override
-  String get notificationsFilterSystem => 'System';
+  String get notificationsFilterSystem => 'Systemmeldungen';
 
   @override
   String get notificationsSectionToday => 'Heute';
@@ -10843,7 +10859,7 @@ class AppLocalizationsDeDe extends AppLocalizationsDe {
 
   @override
   String get bloomUsedDataLabel =>
-      'Vyla is a prediction application not a medical device';
+      'Vyla ist eine Vorhersage-App und kein Medizinprodukt';
 
   @override
   String get bloomSavedToLogsTitle => 'In deinen Protokollen gespeichert';
@@ -11216,13 +11232,13 @@ class AppLocalizationsDeDe extends AppLocalizationsDe {
   String get choosePlanLabel => 'Plan wählen';
 
   @override
-  String get temperatureMethodOral => 'Oral';
+  String get temperatureMethodOral => 'Orale Messung';
 
   @override
-  String get temperatureMethodVaginal => 'Vaginal';
+  String get temperatureMethodVaginal => 'Vaginale Messung';
 
   @override
-  String get temperatureMethodWearable => 'Wearable';
+  String get temperatureMethodWearable => 'Tragbares Gerät';
 
   @override
   String get temperatureMethodUnknown => 'Unbekannt';

@@ -222,6 +222,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Select your birth date to continue.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'You must be at least 16 years old to use Vyla.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Accept the Terms of Service and Privacy Policy.';
 
@@ -2983,6 +2987,10 @@ class AppLocalizationsEnAu extends AppLocalizationsEn {
   @override
   String get signUpBirthDateRequiredError =>
       'Select your birth date to continue.';
+
+  @override
+  String get signUpAgeRestrictionError =>
+      'You must be at least 16 years old to use Vyla.';
 
   @override
   String get signUpAcceptTermsError =>
@@ -5747,6 +5755,10 @@ class AppLocalizationsEnCa extends AppLocalizationsEn {
       'Select your birth date to continue.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'You must be at least 16 years old to use Vyla.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Accept the Terms of Service and Privacy Policy.';
 
@@ -8509,6 +8521,10 @@ class AppLocalizationsEnGb extends AppLocalizationsEn {
       'Select your birth date to continue.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'You must be at least 16 years old to use Vyla.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Accept the Terms of Service and Privacy Policy.';
 
@@ -11269,6 +11285,10 @@ class AppLocalizationsEnUs extends AppLocalizationsEn {
   @override
   String get signUpBirthDateRequiredError =>
       'Select your birth date to continue.';
+
+  @override
+  String get signUpAgeRestrictionError =>
+      'You must be at least 16 years old to use Vyla.';
 
   @override
   String get signUpAcceptTermsError =>

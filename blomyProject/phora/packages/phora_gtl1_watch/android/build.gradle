@@ -2,15 +2,13 @@ group 'com.phora.gtl1_watch'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.9.25'
     repositories {
         google()
         mavenCentral()
     }
 
     dependencies {
-        classpath "com.android.tools.build:gradle:8.7.0"
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath "com.android.tools.build:gradle:8.11.1"
     }
 }
 
@@ -24,11 +22,11 @@ allprojects {
 }
 
 apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android'
 
 android {
     namespace 'com.phora.gtl1_watch'
-    compileSdk 34
+    compileSdk 35
+    ndkVersion '28.2.13676358'
 
     defaultConfig {
         minSdk 21
@@ -53,12 +51,14 @@ android {
         resources {
             excludes += ['/META-INF/{AL2.0,LGPL2.1}', '/META-INF/*.kotlin_module']
         }
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
 }
 
 dependencies {
     implementation fileTree(dir: 'src/main/libs', include: ['*.jar'])
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'com.github.jasonchenlijian:fastble:2.4.0'
     implementation 'com.phora.vendor:bluetoothsdk:1.0.0'

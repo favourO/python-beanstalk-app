@@ -19,7 +19,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "not_requested_title": "Didn’t request this?",
         "not_requested_body": (
             "If you didn’t request a code, you can safely ignore this email<br/>"
-            "or <a href=\"mailto:support@vyla.health\" style=\"color:#FF8A4C;text-decoration:none;"
+            "or <a href=\"mailto:support@vyla.health\" style=\"color:#5336E8;text-decoration:none;"
             "font-weight:600;\">contact our support team</a> if you have concerns."
         ),
         "pill_label": "Your verification code",
@@ -43,7 +43,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "not_requested_title": "Nicht angefordert?",
         "not_requested_body": (
             "Falls du keinen Code angefordert hast, kannst du diese E-Mail ignorieren<br/>"
-            "oder <a href=\"mailto:support@vyla.health\" style=\"color:#FF8A4C;text-decoration:none;"
+            "oder <a href=\"mailto:support@vyla.health\" style=\"color:#5336E8;text-decoration:none;"
             "font-weight:600;\">kontaktiere unser Support-Team</a>, wenn du Bedenken hast."
         ),
         "pill_label": "Dein Bestätigungscode",
@@ -67,7 +67,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "not_requested_title": "¿No lo solicitaste?",
         "not_requested_body": (
             "Si no solicitaste un código, puedes ignorar este correo<br/>"
-            "o <a href=\"mailto:support@vyla.health\" style=\"color:#FF8A4C;text-decoration:none;"
+            "o <a href=\"mailto:support@vyla.health\" style=\"color:#5336E8;text-decoration:none;"
             "font-weight:600;\">contacta a nuestro equipo de soporte</a> si tienes dudas."
         ),
         "pill_label": "Tu código de verificación",
@@ -91,7 +91,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "not_requested_title": "Vous n'avez pas demandé cela ?",
         "not_requested_body": (
             "Si vous n'avez pas demandé de code, vous pouvez ignorer cet e-mail<br/>"
-            "ou <a href=\"mailto:support@vyla.health\" style=\"color:#FF8A4C;text-decoration:none;"
+            "ou <a href=\"mailto:support@vyla.health\" style=\"color:#5336E8;text-decoration:none;"
             "font-weight:600;\">contactez notre équipe d'assistance</a> si vous avez des doutes."
         ),
         "pill_label": "Votre code de vérification",
@@ -115,7 +115,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "not_requested_title": "Não solicitou isso?",
         "not_requested_body": (
             "Se você não solicitou um código, pode ignorar este e-mail<br/>"
-            "ou <a href=\"mailto:support@vyla.health\" style=\"color:#FF8A4C;text-decoration:none;"
+            "ou <a href=\"mailto:support@vyla.health\" style=\"color:#5336E8;text-decoration:none;"
             "font-weight:600;\">entre em contato com nossa equipe de suporte</a> se tiver dúvidas."
         ),
         "pill_label": "Seu código de verificação",

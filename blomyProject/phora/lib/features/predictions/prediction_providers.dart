@@ -32,10 +32,10 @@ class CurrentPredictionController extends AsyncNotifier<CurrentPrediction> {
   }
 }
 
-final predictionCalendarProvider =
-    AsyncNotifierProvider<PredictionCalendarController, List<PredictionCalendarDay>>(
-      PredictionCalendarController.new,
-    );
+final predictionCalendarProvider = AsyncNotifierProvider<
+  PredictionCalendarController,
+  List<PredictionCalendarDay>
+>(PredictionCalendarController.new);
 
 class PredictionCalendarController
     extends AsyncNotifier<List<PredictionCalendarDay>> {
@@ -53,5 +53,46 @@ class PredictionCalendarController
     state = await AsyncValue.guard(
       () => ref.read(predictionsRepositoryProvider).getPredictionCalendar(),
     );
+  }
+}
+
+final cycleForecastSuggestionsProvider = AsyncNotifierProvider<
+  CycleForecastSuggestionsController,
+  List<CycleForecastSuggestion>
+>(CycleForecastSuggestionsController.new);
+
+class CycleForecastSuggestionsController
+    extends AsyncNotifier<List<CycleForecastSuggestion>> {
+  @override
+  Future<List<CycleForecastSuggestion>> build() async {
+    final session = await ref.watch(authSessionProvider.future);
+    if (session == null || !session.isAuthenticated) {
+      return const [];
+    }
+    return ref
+        .watch(predictionsRepositoryProvider)
+        .getPendingForecastSuggestions();
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () =>
+          ref
+              .read(predictionsRepositoryProvider)
+              .getPendingForecastSuggestions(),
+    );
+  }
+
+  Future<void> accept(String id) async {
+    await ref.read(predictionsRepositoryProvider).acceptForecastSuggestion(id);
+    ref.invalidate(currentPredictionProvider);
+    ref.invalidate(predictionCalendarProvider);
+    await refresh();
+  }
+
+  Future<void> reject(String id) async {
+    await ref.read(predictionsRepositoryProvider).rejectForecastSuggestion(id);
+    await refresh();
   }
 }

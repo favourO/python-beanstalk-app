@@ -40,7 +40,7 @@ def test_country_affordability_pricing_uses_configured_fixed_stripe_prices(tmp_p
     client = _client(tmp_path, monkeypatch, "local-pricing-countries.db")
 
     cases = [
-        ("GB", "GBP", "TIER_1_PREMIUM", "£2.99", "price_1TaYVaGRl5Hb5DeyQDl1oONm"),
+        ("GB", "GBP", "TIER_1_PREMIUM", "£3.99", "price_1TfEErGRl5Hb5DeyCEawachj"),
         ("US", "USD", "TIER_1_PREMIUM", "$2.99", "price_1TaYWVGRl5Hb5Deyl6kkG0zi"),
         ("CZ", "CZK", "TIER_3_VALUE", "Kc49", "price_1TaYXcGRl5Hb5Deytk7gUTwL"),
         ("DE", "EUR", "TIER_2_STANDARD", "€2.49", "price_1TaYXHGRl5Hb5Deylzups3z7"),

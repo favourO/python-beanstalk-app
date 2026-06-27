@@ -12,6 +12,7 @@ import 'package:phora/core/ui/phora_loading.dart';
 import 'package:phora/features/home/domain/home_dashboard.dart';
 import 'package:phora/features/home/home_providers.dart';
 import 'package:phora/features/home/presentation/widgets/cycle_phase_ring.dart';
+import 'package:phora/features/profile/profile_providers.dart';
 import 'package:phora/features/wearables/data/gtl1_watch_sync_repository.dart';
 import 'package:phora/features/wearables/domain/wearable_models.dart';
 import 'package:phora/features/wearables/presentation/wearable_provider_picker.dart';
@@ -42,9 +43,6 @@ class TodayScreen extends ConsumerWidget {
                     () => ref.read(homeDashboardProvider.notifier).refresh(),
               ),
           data: (dashboard) {
-            unawaited(
-              ref.read(bbtReminderServiceProvider).updateSchedule(dashboard),
-            );
             final wearableConnected =
                 dashboard.healthSnapshot.wearableConnected ||
                 _localWearableConnected(ref);
@@ -219,20 +217,23 @@ bool _isDateOnlyTimestamp(DateTime value) {
       local.microsecond == 0;
 }
 
-class _HomeHeader extends StatelessWidget {
+class _HomeHeader extends ConsumerWidget {
   const _HomeHeader({required this.firstName, required this.wearableStatus});
 
   final String? firstName;
   final _HeaderWearableStatus wearableStatus;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final dims = context.dims;
     final colors = context.phora.colors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final greetingName =
         (firstName?.trim().isNotEmpty ?? false) ? firstName!.trim() : 'there';
     final greeting = _timeGreeting();
+    final hasUnread =
+        (ref.watch(notificationHistoryProvider).valueOrNull?.unreadCount ?? 0) >
+        0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -256,7 +257,7 @@ class _HomeHeader extends StatelessWidget {
             _HeaderIconButton(
               onTap: () => context.push('/notifications'),
               icon: Icons.notifications_none_rounded,
-              dotColor: const Color(0xFFFF8A4C),
+              dotColor: hasUnread ? const Color(0xFFFF8A4C) : null,
               iconColor: isDark ? colors.textPrimary : const Color(0xFF3B241A),
             ),
             SizedBox(width: dims.scaleWidth(8)),

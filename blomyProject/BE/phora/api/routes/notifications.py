@@ -115,6 +115,27 @@ def mark_read(
     )
 
 
+@router.delete("", response_model=NotificationMarkReadResponse)
+def delete_all_notifications(
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    return NotificationMarkReadResponse(
+        updated=_service(db).delete_all_notifications(user_id),
+    )
+
+
+@router.delete("/{notification_id}", response_model=NotificationMarkReadResponse)
+def delete_notification(
+    notification_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    return NotificationMarkReadResponse(
+        updated=_service(db).delete_notification(user_id, notification_id),
+    )
+
+
 @router.post("/trigger", response_model=NotificationDispatchResponse)
 def trigger_notification(
     payload: NotificationTriggerRequest,

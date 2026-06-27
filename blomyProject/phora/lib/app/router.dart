@@ -307,6 +307,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/sign-up',
         builder:
             (context, state) => SignUpScreen(
+              initialEmail: state.uri.queryParameters['email'],
               initialReferralCode: state.uri.queryParameters['ref'],
               referralSource: state.uri.queryParameters['source'],
               referralDeepLinkId: state.uri.queryParameters['dl'],
@@ -425,6 +426,17 @@ final routerProvider = Provider<GoRouter>((ref) {
                   title: context.l10n.termsOfServiceLabel,
                   url: 'https://vyla.health/terms',
                 ),
+          ),
+          GoRoute(
+            path: '/blog',
+            builder: (context, state) {
+              final slug = state.uri.queryParameters['post'];
+              final url =
+                  slug != null && slug.isNotEmpty
+                      ? 'https://vyla.health/blog?post=${Uri.encodeComponent(slug)}'
+                      : 'https://vyla.health/blog';
+              return LegalWebScreen(title: 'Blog', url: url);
+            },
           ),
           GoRoute(
             path: '/notifications',

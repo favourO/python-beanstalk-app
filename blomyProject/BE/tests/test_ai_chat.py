@@ -4,9 +4,12 @@ from fastapi.testclient import TestClient
 
 from phora.api.app import create_app
 from phora.db.session import get_session_factory
-from phora.models import CycleRecord, DailyLog, MedicalChatMessage, MedicalChatThread, PredictionSnapshot, SensorReading, Subscription, UserProfile
+from phora.core.config import Settings
+from phora.models import AiMemoryDocument, AuditEvent, CycleRecord, DailyLog, MedicalChatMessage, MedicalChatThread, PredictionSnapshot, SensorReading, Subscription, UserProfile
 from phora.models.enums import LogType
 from phora.services.email import EmailService
+from phora.services.ai_memory import LOCAL_EMBEDDING_MODEL
+from phora.services.medical_chat import AI_SECURITY_POLICY_VERSION, MedicalChatService
 
 
 def _verified_client(tmp_path, monkeypatch) -> tuple[TestClient, dict[str, str], dict]:
@@ -62,6 +65,267 @@ def test_medical_chat_rejects_non_medical_questions(tmp_path, monkeypatch):
     assert body["sufficient_data"] is False
     assert body["thread_id"] is not None
     assert "only answers reproductive and health-related questions" in body["answer"]
+
+
+def test_medical_chat_audit_redacts_identifiers_without_changing_memory(tmp_path, monkeypatch):
+    client, headers, verify = _verified_client(tmp_path, monkeypatch)
+
+    message = "My email is jane.private@example.com, my phone is +44 7700 900123, why is my period late?"
+    response = client.post(
+        "/api/v1/ai/chat",
+        headers=headers,
+        json={"message": message},
+    )
+
+    assert response.status_code == 200
+    thread_id = response.json()["thread_id"]
+    with get_session_factory()() as db:
+        user_message = (
+            db.query(MedicalChatMessage)
+            .filter(
+                MedicalChatMessage.user_id == verify["user"]["id"],
+                MedicalChatMessage.thread_id == thread_id,
+                MedicalChatMessage.role == "user",
+            )
+            .one()
+        )
+        audit = (
+            db.query(AuditEvent)
+            .filter(AuditEvent.actor_user_id == verify["user"]["id"], AuditEvent.action == "ai.medical_chat")
+            .one()
+        )
+
+    assert "jane.private@example.com" in user_message.content
+    assert "+44 7700 900123" in user_message.content
+    assert audit.payload["security_policy_version"] == AI_SECURITY_POLICY_VERSION
+    assert audit.payload["context_pipeline"] == "minimise:redact:llm:guard"
+    assert "jane.private@example.com" not in str(audit.payload)
+    assert "+44 7700 900123" not in str(audit.payload)
+    assert "[redacted_email]" in audit.payload["message_redacted"]
+    assert "[redacted_phone]" in audit.payload["message_redacted"]
+
+
+def test_medical_chat_llm_context_is_minimised_and_redacted(tmp_path, monkeypatch):
+    client, headers, verify = _verified_client(tmp_path, monkeypatch)
+
+    with get_session_factory()() as db:
+        user_id = verify["user"]["id"]
+        profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).one()
+        profile.date_of_birth = datetime(1990, 5, 4, tzinfo=UTC).date()
+        profile.height_cm = 170
+        profile.weight_kg = 68
+        profile.age_band = "30-34"
+        profile.conditions = {
+            "health_conditions": ["PCOS"],
+            "phone": "+44 7700 900999",
+            "address": "12 Private Street",
+        }
+        cycle = CycleRecord(
+            user_id=user_id,
+            period_start_date=datetime(2026, 4, 1, tzinfo=UTC).date(),
+            is_active=True,
+        )
+        db.add(cycle)
+        db.flush()
+        db.add(
+            DailyLog(
+                user_id=user_id,
+                cycle_id=cycle.id,
+                log_date=datetime(2026, 4, 5, tzinfo=UTC).date(),
+                log_type=LogType.SYMPTOM,
+                payload={
+                    "symptoms": ["cramps"],
+                    "notes": "Contact me at jane.private@example.com about cramps.",
+                },
+            )
+        )
+        db.commit()
+
+        service = MedicalChatService(db, Settings(llm_api_key="test-key"))
+        thread = service._get_or_create_thread(user_id=user_id, thread_id=None, message="Why am I cramping?")
+        service._append_message(
+            thread_id=thread.id,
+            user_id=user_id,
+            role="user",
+            content="My email is jane.private@example.com and my phone is +44 7700 900999. Why am I cramping?",
+        )
+        context = service._build_context(user_id)
+        body = service._build_chat_openai_body(
+            message="Why am I cramping?",
+            context=context,
+            thread_id=thread.id,
+        )
+
+    prompt_payload = str(body)
+    assert "jane.private@example.com" not in prompt_payload
+    assert "+44 7700 900999" not in prompt_payload
+    assert "12 Private Street" not in prompt_payload
+    assert "1990-05-04" not in prompt_payload
+    assert "date_of_birth" not in prompt_payload
+    assert "height_cm" not in prompt_payload
+    assert "weight_kg" not in prompt_payload
+    assert "[redacted_email]" in prompt_payload
+    assert "[redacted_phone]" in prompt_payload
+    assert "30-34" in prompt_payload
+
+
+def test_medical_chat_persists_anonymised_memory_when_ai_consent_is_accepted(tmp_path, monkeypatch):
+    client, headers, verify = _verified_client(tmp_path, monkeypatch)
+
+    with get_session_factory()() as db:
+        user_id = verify["user"]["id"]
+        profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).one()
+        profile.conditions = {
+            "ai_preferences": {"chat_consent_accepted": True},
+            "health_conditions": ["PCOS"],
+        }
+        db.add(
+            CycleRecord(
+                user_id=user_id,
+                period_start_date=datetime.now(UTC).date() - timedelta(days=17),
+                cycle_length_days=29,
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/ai/chat",
+        headers=headers,
+        json={"message": "My email is jane.private@example.com. Why might ovulation be late this cycle?"},
+    )
+
+    assert response.status_code == 200
+    with get_session_factory()() as db:
+        memories = db.query(AiMemoryDocument).filter(AiMemoryDocument.user_id == verify["user"]["id"]).all()
+
+    assert len(memories) == 1
+    memory = memories[0]
+    assert memory.doc_type == "chat_summary"
+    assert memory.data_scope == "fertility"
+    assert memory.sensitivity == "HIGH"
+    assert memory.redaction_version == AI_SECURITY_POLICY_VERSION
+    assert memory.embedding_model == LOCAL_EMBEDDING_MODEL
+    assert isinstance(memory.embedding, list)
+    assert len(memory.embedding) == 96
+    assert "jane.private@example.com" not in memory.summary_text
+    assert "[redacted_email]" in memory.summary_text
+    assert memory.source_refs[0].startswith("medical_chat_thread:")
+
+
+def test_medical_chat_memory_retrieval_is_scoped_to_current_user(tmp_path, monkeypatch):
+    client, headers, verify = _verified_client(tmp_path, monkeypatch)
+
+    with get_session_factory()() as db:
+        current_user_id = verify["user"]["id"]
+        profile = db.query(UserProfile).filter(UserProfile.user_id == current_user_id).one()
+        profile.conditions = {"ai_preferences": {"chat_consent_accepted": True}}
+        db.add(
+            AiMemoryDocument(
+                user_id=current_user_id,
+                doc_type="chat_summary",
+                data_scope="fertility",
+                sensitivity="HIGH",
+                summary_text="User previously discussed late ovulation after a delayed temperature rise.",
+                source_refs=["medical_chat_thread:current"],
+                redaction_version=AI_SECURITY_POLICY_VERSION,
+            )
+        )
+        db.add(
+            AiMemoryDocument(
+                user_id="other-user-id",
+                doc_type="chat_summary",
+                data_scope="fertility",
+                sensitivity="HIGH",
+                summary_text="Other user secret fertility memory must never appear.",
+                source_refs=["medical_chat_thread:other"],
+                redaction_version=AI_SECURITY_POLICY_VERSION,
+            )
+        )
+        db.commit()
+
+        service = MedicalChatService(db, Settings(llm_api_key="test-key"))
+        context = service._build_context(current_user_id)
+        context["retrieved_ai_memory"] = service._retrieve_ai_memory_documents(
+            user_id=current_user_id,
+            query="What did we discuss about late ovulation?",
+        )
+        thread = service._get_or_create_thread(
+            user_id=current_user_id,
+            thread_id=None,
+            message="What did we discuss about late ovulation?",
+        )
+        body = service._build_chat_openai_body(
+            message="What did we discuss about late ovulation?",
+            context=context,
+            thread_id=thread.id,
+        )
+
+    prompt_payload = str(body)
+    assert "delayed temperature rise" in prompt_payload
+    assert "Other user secret" not in prompt_payload
+
+
+def test_medical_chat_memory_retrieval_uses_embedding_rank_with_user_scope(tmp_path, monkeypatch):
+    client, headers, verify = _verified_client(tmp_path, monkeypatch)
+
+    with get_session_factory()() as db:
+        user_id = verify["user"]["id"]
+        profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).one()
+        profile.conditions = {"ai_preferences": {"chat_consent_accepted": True}}
+        service = MedicalChatService(db, Settings(llm_api_key="test-key"))
+        ovulation_summary = "User discussed ovulation shift after a sustained BBT temperature rise."
+        unrelated_summary = "User discussed general bloating and hydration during their period."
+        other_user_summary = "Other user discussed ovulation shift and BBT temperature rise."
+        db.add_all(
+            [
+                AiMemoryDocument(
+                    user_id=user_id,
+                    doc_type="chat_summary",
+                    data_scope="fertility",
+                    sensitivity="HIGH",
+                    summary_text=ovulation_summary,
+                    embedding=service.ai_memory_embeddings.embed(ovulation_summary),
+                    embedding_model=LOCAL_EMBEDDING_MODEL,
+                    source_refs=["medical_chat_thread:ovulation"],
+                    redaction_version=AI_SECURITY_POLICY_VERSION,
+                ),
+                AiMemoryDocument(
+                    user_id=user_id,
+                    doc_type="chat_summary",
+                    data_scope="cycle",
+                    sensitivity="MEDIUM",
+                    summary_text=unrelated_summary,
+                    embedding=service.ai_memory_embeddings.embed(unrelated_summary),
+                    embedding_model=LOCAL_EMBEDDING_MODEL,
+                    source_refs=["medical_chat_thread:period"],
+                    redaction_version=AI_SECURITY_POLICY_VERSION,
+                ),
+                AiMemoryDocument(
+                    user_id="other-user-id",
+                    doc_type="chat_summary",
+                    data_scope="fertility",
+                    sensitivity="HIGH",
+                    summary_text=other_user_summary,
+                    embedding=service.ai_memory_embeddings.embed(other_user_summary),
+                    embedding_model=LOCAL_EMBEDDING_MODEL,
+                    source_refs=["medical_chat_thread:other"],
+                    redaction_version=AI_SECURITY_POLICY_VERSION,
+                ),
+            ]
+        )
+        db.commit()
+
+        retrieved = service._retrieve_ai_memory_documents(
+            user_id=user_id,
+            query="Did my temperature rise suggest ovulation shifted?",
+            limit=2,
+        )
+
+    assert retrieved
+    assert retrieved[0]["summary"] == ovulation_summary
+    assert retrieved[0]["embedding_model"] == LOCAL_EMBEDDING_MODEL
+    assert all("Other user" not in item["summary"] for item in retrieved)
 
 
 def test_medical_chat_answers_luteal_phase_education_without_cycle_data(tmp_path, monkeypatch):
@@ -943,12 +1207,38 @@ def test_medical_chat_lists_threads_and_loads_selected_history(tmp_path, monkeyp
 
     list_response = client.get("/api/v1/ai/chat/threads", headers=headers)
     assert list_response.status_code == 200
-    threads = list_response.json()["threads"]
+    list_body = list_response.json()
+    threads = list_body["threads"]
     assert len(threads) == 2
+    assert list_body["has_more"] is False
+    assert list_body["next_before"] is None
     assert threads[0]["thread_id"] == second_thread_id
     assert threads[0]["message_count"] == 2
     assert "egg white mucus" in threads[0]["title"].lower()
     assert threads[1]["thread_id"] == first_thread_id
+
+    first_page_response = client.get(
+        "/api/v1/ai/chat/threads",
+        headers=headers,
+        params={"limit": 1},
+    )
+    assert first_page_response.status_code == 200
+    first_page = first_page_response.json()
+    assert len(first_page["threads"]) == 1
+    assert first_page["threads"][0]["thread_id"] == second_thread_id
+    assert first_page["has_more"] is True
+    assert first_page["next_before"]
+
+    second_page_response = client.get(
+        "/api/v1/ai/chat/threads",
+        headers=headers,
+        params={"limit": 1, "before": first_page["next_before"]},
+    )
+    assert second_page_response.status_code == 200
+    second_page = second_page_response.json()
+    assert len(second_page["threads"]) == 1
+    assert second_page["threads"][0]["thread_id"] == first_thread_id
+    assert second_page["has_more"] is False
 
     history_response = client.get(
         f"/api/v1/ai/chat/threads/{first_thread_id}",

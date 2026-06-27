@@ -11,6 +11,13 @@ String notificationDestinationFromData(Map<String, dynamic> data) {
     return '/wearable/orders/${Uri.encodeComponent(orderId)}/tracking';
   }
 
+  final postSlug = _readString(
+    data['post_slug'] ?? data['postSlug'] ?? data['blog_post_slug'],
+  );
+  if (postSlug != null) {
+    return '/blog?post=${Uri.encodeComponent(postSlug)}';
+  }
+
   final normalizedActionUrl = _normalizeActionUrl(actionUrl);
   if (normalizedActionUrl != null) {
     return normalizedActionUrl;
@@ -30,6 +37,10 @@ String? _normalizeActionUrl(String? actionUrl) {
   }
 
   final segments = uri.pathSegments;
+  if (segments.length == 1 && segments.first == 'calendar') {
+    return '/cycle';
+  }
+
   if (segments.length >= 3 &&
       segments[0] == 'wearable' &&
       segments[1] == 'orders') {

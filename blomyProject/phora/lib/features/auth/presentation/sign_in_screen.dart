@@ -224,15 +224,20 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                                           context.go('/splash');
                                           return;
                                         }
-                                        showAuthError(
+                                        final error =
+                                            ref
+                                                .read(
+                                                  appleAuthControllerProvider,
+                                                )
+                                                .error ??
+                                            context.l10n.signInAppleError;
+                                        if (_handleSocialAccountNotFound(
                                           context,
-                                          ref
-                                                  .read(
-                                                    appleAuthControllerProvider,
-                                                  )
-                                                  .error ??
-                                              context.l10n.signInAppleError,
-                                        );
+                                          error,
+                                        )) {
+                                          return;
+                                        }
+                                        showAuthError(context, error);
                                       });
                                 },
                               ),
@@ -253,15 +258,20 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                                         context.go('/splash');
                                         return;
                                       }
-                                      showAuthError(
+                                      final error =
+                                          ref
+                                              .read(
+                                                googleAuthControllerProvider,
+                                              )
+                                              .error ??
+                                          context.l10n.signInGoogleError;
+                                      if (_handleSocialAccountNotFound(
                                         context,
-                                        ref
-                                                .read(
-                                                  googleAuthControllerProvider,
-                                                )
-                                                .error ??
-                                            context.l10n.signInGoogleError,
-                                      );
+                                        error,
+                                      )) {
+                                        return;
+                                      }
+                                      showAuthError(context, error);
                                     });
                               },
                             ),
@@ -285,7 +295,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                             ),
                           ),
                           GestureDetector(
-                            onTap: () => context.go('/sign-up'),
+                            onTap:
+                                () => context.go(
+                                  _signUpLocation(_emailController.text.trim()),
+                                ),
                             child: Text(
                               context.l10n.signUpLinkLabel,
                               style: Theme.of(
@@ -350,7 +363,168 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       );
       return;
     }
+    if (_isAccountNotFoundError(loginError)) {
+      await _showAccountNotFoundSheet(context, email);
+      return;
+    }
     showAuthError(context, loginError ?? context.l10n.signInUnableError);
+  }
+
+  bool _isAccountNotFoundError(Object? error) {
+    final message = switch (error) {
+      ApiFailure failure => failure.message,
+      String value => value,
+      null => '',
+      _ => error.toString(),
+    };
+    final normalized = message.toLowerCase();
+    return normalized.contains('account not found') ||
+        normalized.contains('account does not exist') ||
+        normalized.contains('no account') && normalized.contains('found') ||
+        normalized.contains('user not found');
+  }
+
+  bool _handleSocialAccountNotFound(BuildContext context, Object error) {
+    if (!_isAccountNotFoundError(error)) return false;
+    showAuthSuccess(
+      context,
+      'No Vyla account was found. Create an account to continue.',
+    );
+    context.go('/sign-up');
+    return true;
+  }
+
+  Future<void> _showAccountNotFoundSheet(
+    BuildContext context,
+    String email,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder:
+          (sheetContext) => _AccountNotFoundSheet(
+            email: email,
+            onCreateAccount: () {
+              Navigator.of(sheetContext).pop();
+              context.go(_signUpLocation(email));
+            },
+            onTryAnotherEmail: () {
+              Navigator.of(sheetContext).pop();
+              _emailController
+                ..clear()
+                ..selection = const TextSelection.collapsed(offset: 0);
+              _passwordController.clear();
+              FocusScope.of(context).unfocus();
+            },
+          ),
+    );
+  }
+}
+
+String _signUpLocation(String email) {
+  final trimmed = email.trim();
+  if (trimmed.isEmpty) return '/sign-up';
+  return '/sign-up?email=${Uri.encodeComponent(trimmed)}';
+}
+
+class _AccountNotFoundSheet extends StatelessWidget {
+  const _AccountNotFoundSheet({
+    required this.email,
+    required this.onCreateAccount,
+    required this.onTryAnotherEmail,
+  });
+
+  final String email;
+  final VoidCallback onCreateAccount;
+  final VoidCallback onTryAnotherEmail;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    final isLight = Theme.of(context).brightness == Brightness.light;
+
+    return SafeArea(
+      child: Container(
+        margin: EdgeInsets.all(dims.scaleWidth(14)),
+        padding: EdgeInsets.fromLTRB(
+          dims.scaleWidth(20),
+          dims.scaleSpace(20),
+          dims.scaleWidth(20),
+          dims.scaleSpace(18),
+        ),
+        decoration: BoxDecoration(
+          color: isLight ? Colors.white : colors.bgElevated,
+          borderRadius: BorderRadius.circular(dims.scaleRadius(28)),
+          border: Border.all(
+            color: isLight ? const Color(0xFFFFE0CE) : colors.border,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isLight ? 0.08 : 0.28),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: dims.scaleWidth(46),
+              height: dims.scaleWidth(46),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF1E8),
+                borderRadius: BorderRadius.circular(dims.scaleRadius(16)),
+              ),
+              child: Icon(
+                Icons.person_add_alt_1_rounded,
+                color: const Color(0xFFFF8A4C),
+                size: dims.scaleText(24),
+              ),
+            ),
+            SizedBox(height: dims.scaleSpace(16)),
+            Text(
+              'No account found',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontSize: dims.scaleText(20),
+                fontWeight: FontWeight.w800,
+                color: colors.textPrimary,
+              ),
+            ),
+            SizedBox(height: dims.scaleSpace(8)),
+            Text(
+              'We could not find a Vyla account for ${email.trim()}. Create one to start tracking your cycle.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: dims.scaleText(14),
+                height: 1.45,
+                color: colors.textSecondary,
+              ),
+            ),
+            SizedBox(height: dims.scaleSpace(18)),
+            OnboardingPrimaryButton(
+              label: 'Create account',
+              onPressed: onCreateAccount,
+            ),
+            SizedBox(height: dims.scaleSpace(8)),
+            TextButton(
+              onPressed: onTryAnotherEmail,
+              child: Text(
+                'Try another email',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFFFF8A4C),
+                  fontSize: dims.scaleText(14),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

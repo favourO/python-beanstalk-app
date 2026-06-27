@@ -183,6 +183,57 @@ class PredictionsRepository {
     }
   }
 
+  Future<List<CycleForecastSuggestion>> getPendingForecastSuggestions() async {
+    try {
+      final response = await dio.get<Map<String, dynamic>>(
+        buildVersionedApiUrl(dio, '/api/v1/predictions/forecast-suggestions'),
+        queryParameters: const {'status': 'pending'},
+      );
+      final payload = response.data ?? <String, dynamic>{};
+      final rawItems = _listValue(
+        payload['suggestions'] ?? payload['data'] ?? payload['items'],
+      );
+      return rawItems
+          .map(_forecastSuggestionFromJson)
+          .whereType<CycleForecastSuggestion>()
+          .toList();
+    } on DioException catch (exception) {
+      throw mapDioError(exception);
+    }
+  }
+
+  Future<CycleForecastSuggestion> acceptForecastSuggestion(String id) async {
+    return _decideForecastSuggestion(id: id, action: 'accept');
+  }
+
+  Future<CycleForecastSuggestion> rejectForecastSuggestion(String id) async {
+    return _decideForecastSuggestion(id: id, action: 'reject');
+  }
+
+  Future<CycleForecastSuggestion> _decideForecastSuggestion({
+    required String id,
+    required String action,
+  }) async {
+    try {
+      final response = await dio.post<Map<String, dynamic>>(
+        buildVersionedApiUrl(
+          dio,
+          '/api/v1/predictions/forecast-suggestions/$id/$action',
+        ),
+      );
+      final payload = _payloadFromMap(response.data);
+      final suggestion = _forecastSuggestionFromJson(payload);
+      if (suggestion == null) {
+        throw const MessageApiFailure(
+          'Could not read forecast suggestion response.',
+        );
+      }
+      return suggestion;
+    } on DioException catch (exception) {
+      throw mapDioError(exception);
+    }
+  }
+
   Future<Map<String, dynamic>> _getOptional(String path) async {
     try {
       final response = await dio.get<Map<String, dynamic>>(
@@ -235,6 +286,43 @@ class PredictionsRepository {
     return result;
   }
 
+  CycleForecastSuggestion? _forecastSuggestionFromJson(
+    Map<String, dynamic> item,
+  ) {
+    final id = _stringValue(item['id']);
+    if (id == null) return null;
+    return CycleForecastSuggestion(
+      id: id,
+      type: _parseSuggestionType(
+        _stringValue(item['suggestion_type']) ?? _stringValue(item['type']),
+      ),
+      status: _parseSuggestionStatus(_stringValue(item['status'])),
+      cycleId: _stringValue(item['cycle_id']),
+      currentValue: _dateValue(item['current_value']),
+      suggestedValue: _dateValue(item['suggested_value']),
+      evidence: _evidenceList(item['evidence']),
+      createdAt: _dateTimeValue(item['created_at']),
+      decidedAt: _dateTimeValue(item['decided_at']),
+    );
+  }
+
+  List<CycleForecastEvidence> _evidenceList(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map(Map<String, dynamic>.from)
+        .map((item) {
+          return CycleForecastEvidence(
+            label: _stringValue(item['label']) ?? 'Evidence',
+            summary: _stringValue(item['summary']) ?? '',
+            sourceType: _stringValue(item['source_type']),
+            confidence: _doubleValue(item['confidence']),
+          );
+        })
+        .where((item) => item.summary.isNotEmpty)
+        .toList();
+  }
+
   PredictionPhase _phaseFromDistribution(
     Map<PredictionPhase, double> distribution,
   ) {
@@ -261,6 +349,34 @@ class PredictionsRepository {
         return PredictionPhase.luteal;
       default:
         return PredictionPhase.unknown;
+    }
+  }
+
+  CycleForecastSuggestionType _parseSuggestionType(String? raw) {
+    switch (raw?.trim().toLowerCase()) {
+      case 'ovulation_shift':
+      case 'ovulation':
+        return CycleForecastSuggestionType.ovulationShift;
+      case 'period_shift':
+      case 'period':
+        return CycleForecastSuggestionType.periodShift;
+      default:
+        return CycleForecastSuggestionType.unknown;
+    }
+  }
+
+  CycleForecastSuggestionStatus _parseSuggestionStatus(String? raw) {
+    switch (raw?.trim().toLowerCase()) {
+      case 'pending':
+        return CycleForecastSuggestionStatus.pending;
+      case 'accepted':
+        return CycleForecastSuggestionStatus.accepted;
+      case 'rejected':
+        return CycleForecastSuggestionStatus.rejected;
+      case 'expired':
+        return CycleForecastSuggestionStatus.expired;
+      default:
+        return CycleForecastSuggestionStatus.unknown;
     }
   }
 
@@ -293,6 +409,8 @@ class PredictionsRepository {
     if (string == null) return null;
     return DateTime.tryParse(string)?.toLocal();
   }
+
+  DateTime? _dateTimeValue(dynamic value) => _dateValue(value);
 
   List<String> _stringList(dynamic value) {
     if (value is List) {

@@ -31,7 +31,7 @@ class _DummySMTP:
         self.sent_messages.append(message)
 
 
-def test_send_signup_otp_builds_html_email_with_inline_logo(monkeypatch):
+def test_send_signup_otp_builds_simple_professional_html_email(monkeypatch):
     _DummySMTP.sent_messages = []
     monkeypatch.setattr("phora.services.email.smtplib.SMTP", _DummySMTP)
 
@@ -51,7 +51,6 @@ def test_send_signup_otp_builds_html_email_with_inline_logo(monkeypatch):
     message = _DummySMTP.sent_messages[0]
     html_parts = [part for part in message.walk() if part.get_content_type() == "text/html"]
     plain_parts = [part for part in message.walk() if part.get_content_type() == "text/plain"]
-    image_parts = [part for part in message.walk() if part.get_content_maintype() == "image"]
 
     assert plain_parts
     assert "842193" in plain_parts[0].get_content()
@@ -59,15 +58,17 @@ def test_send_signup_otp_builds_html_email_with_inline_logo(monkeypatch):
     assert html_parts
     html = html_parts[0].get_content()
     assert "Verify it" in html
-    assert all(d in html for d in "842193")
+    assert "842193" in html
     assert "Never share this code with anyone" in html
     assert "request a code" in html and "safely ignore this email" in html
-    assert "Vyla</strong> Team" in html
-    assert "#FF8A4C" in html
-    assert "cid:" in html
-
-    assert len(image_parts) == 1
-    assert image_parts[0].get_filename() == "vyla-logo.png"
+    assert "The Vyla Team" in html
+    assert "text-align:left" in html
+    assert "cid:" not in html
+    assert "<img" not in html
+    assert "<svg" not in html
+    assert "&#128" not in html
+    assert "&#9201" not in html
+    assert "&#10048" not in html
 
 
 def test_account_confirmed_email_dashboard_button_uses_app_link():

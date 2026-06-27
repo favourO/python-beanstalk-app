@@ -4,12 +4,12 @@ import json
 from datetime import UTC, date, datetime
 from typing import Any
 
-import httpx
 from sqlalchemy.orm import Session
 
 from phora.core.config import Settings
 from phora.models import DailyInsight
 from phora.repositories.core import DailyInsightRepository, UserRepository
+from phora.services.ai_gateway import AIGateway
 
 
 class DailyInsightService:
@@ -18,6 +18,7 @@ class DailyInsightService:
         self.settings = settings
         self.users = UserRepository(db)
         self.insights = DailyInsightRepository(db)
+        self.ai_gateway = AIGateway(settings)
 
     def get_or_generate(
         self,
@@ -163,7 +164,7 @@ class DailyInsightService:
         }
 
     def _llm_payload(self, anonymized_context: dict[str, Any]) -> dict[str, Any] | None:
-        if not self.settings.llm_api_key:
+        if not self.ai_gateway.enabled:
             return None
         messages = [
             {
@@ -178,19 +179,18 @@ class DailyInsightService:
             {"role": "user", "content": json.dumps(anonymized_context, sort_keys=True)},
         ]
         try:
-            response = httpx.post(
-                f"{self.settings.llm_base_url.rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.settings.llm_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={"model": self.settings.llm_model, "messages": messages, "temperature": 0.2, "response_format": {"type": "json_object"}},
-                timeout=self.settings.llm_timeout_seconds,
+            content = self.ai_gateway.chat_completion_content(
+                {
+                    "model": self.settings.llm_model,
+                    "messages": messages,
+                    "temperature": 0.2,
+                    "response_format": {"type": "json_object"},
+                }
             )
-            response.raise_for_status()
-            content = response.json()["choices"][0]["message"]["content"]
+            if not content:
+                return None
             parsed = json.loads(content)
-        except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError):
+        except (KeyError, IndexError, TypeError, json.JSONDecodeError):
             return None
         return {
             key: parsed[key]

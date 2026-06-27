@@ -118,16 +118,33 @@ class ProfileRepository {
     }
   }
 
-  Future<NotificationHistory> getNotificationHistory({int limit = 50}) async {
+  Future<NotificationHistory> getNotificationHistory({
+    int limit = 20,
+    int offset = 0,
+  }) async {
     try {
       final response = await dio.get<dynamic>(
         buildVersionedApiUrl(dio, '/api/v1/notifications'),
-        queryParameters: {'limit': limit},
+        queryParameters: {'limit': limit, 'offset': offset},
       );
       final data = response.data;
       final unreadCount =
           data is Map<String, dynamic>
               ? _intValue(data['unread_count'] ?? data['unreadCount'])
+              : null;
+      final totalCount =
+          data is Map<String, dynamic>
+              ? _intValue(
+                data['total_count'] ?? data['totalCount'] ?? data['total'],
+              )
+              : null;
+      final nextOffset =
+          data is Map<String, dynamic>
+              ? _intValue(data['next_offset'] ?? data['nextOffset'])
+              : null;
+      final hasMoreValue =
+          data is Map<String, dynamic>
+              ? data['has_more'] ?? data['hasMore'] ?? data['more']
               : null;
       final items =
           data is List
@@ -154,6 +171,14 @@ class ProfileRepository {
         items: notifications,
         unreadCount:
             unreadCount ?? notifications.where((item) => !item.isRead).length,
+        hasMore:
+            hasMoreValue is bool
+                ? hasMoreValue
+                : nextOffset != null
+                ? true
+                : totalCount != null
+                ? offset + notifications.length < totalCount
+                : notifications.length >= limit,
       );
     } on DioException catch (exception) {
       throw mapDioError(exception);
@@ -179,6 +204,26 @@ class ProfileRepository {
     try {
       await dio.post<Map<String, dynamic>>(
         buildVersionedApiUrl(dio, '/api/v1/notifications/$notificationId/read'),
+      );
+    } on DioException catch (exception) {
+      throw mapDioError(exception);
+    }
+  }
+
+  Future<void> deleteNotification(String notificationId) async {
+    try {
+      await dio.delete<Map<String, dynamic>>(
+        buildVersionedApiUrl(dio, '/api/v1/notifications/$notificationId'),
+      );
+    } on DioException catch (exception) {
+      throw mapDioError(exception);
+    }
+  }
+
+  Future<void> deleteAllNotifications() async {
+    try {
+      await dio.delete<Map<String, dynamic>>(
+        buildVersionedApiUrl(dio, '/api/v1/notifications'),
       );
     } on DioException catch (exception) {
       throw mapDioError(exception);

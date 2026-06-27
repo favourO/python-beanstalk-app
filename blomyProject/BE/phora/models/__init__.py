@@ -1,4 +1,4 @@
-from phora.models.ai import MedicalChatMessage, MedicalChatThread
+from phora.models.ai import AiMemoryDocument, MedicalChatMessage, MedicalChatThread
 from phora.models.wearable_commerce import WearableInventory, WearableOrder
 from phora.models.blog import BlogPost
 from phora.models.contact import ContactMessage, DownloadRequest
@@ -8,7 +8,7 @@ from phora.models.cycle import CycleRecord, DailyLog
 from phora.models.growth import FriendConnection, PremiumGrant, ReferralAttribution, ReferralProfile
 from phora.models.insight import DailyInsight
 from phora.models.notification import NotificationDevice, NotificationHistory, NotificationPreference
-from phora.models.prediction import PredictionSnapshot
+from phora.models.prediction import CycleForecastSuggestion, PredictionSnapshot
 from phora.models.timeseries import GoogleHealthConnection, SensorReading, StressScore, WearableMetric
 from phora.models.user import EmailOtpCode, OnboardingProgress, RefreshTokenSession, User, UserMFATOTP, UserProfile
 
@@ -21,6 +21,7 @@ __all__ = [
     "DownloadRequest",
     "MedicalChatThread",
     "MedicalChatMessage",
+    "AiMemoryDocument",
     "Invoice",
     "BillingActivity",
     "PricingEligibilityReviewLog",
@@ -35,6 +36,7 @@ __all__ = [
     "NotificationPreference",
     "PremiumGrant",
     "PredictionSnapshot",
+    "CycleForecastSuggestion",
     "ReferralAttribution",
     "ReferralProfile",
     "SensorReading",

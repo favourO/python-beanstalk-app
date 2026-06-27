@@ -705,7 +705,7 @@ class PhoraWearPairing {
       deviceId: _stringValue(json['device_id']) ?? '',
       stableIdentifier: _stringValue(json['stable_identifier']) ?? '',
       internalDeviceType: _stringValue(json['internal_device_type']) ?? 'gtl1',
-      displayName: _stringValue(json['display_name']) ?? 'Vyla Wear',
+      displayName: _stringValue(json['display_name']) ?? 'Vyla Wearable',
       deviceName: _stringValue(json['device_name']),
       manufacturerMac: _stringValue(json['manufacturer_mac']),
       manufacturerPrefix: _stringValue(json['manufacturer_prefix']),

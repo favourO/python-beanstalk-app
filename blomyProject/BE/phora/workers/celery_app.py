@@ -16,8 +16,12 @@ celery_app.conf.task_routes = {
     "phora.workers.jobs.run_daily_prediction": {"queue": "default"},
     "phora.workers.jobs.refresh_all_daily_insights": {"queue": "default"},
     "phora.workers.jobs.refresh_user_daily_insights": {"queue": "default"},
+    "phora.workers.jobs.send_all_due_cycle_notifications": {"queue": "default"},
     "phora.workers.jobs.send_all_morning_cycle_notifications": {"queue": "default"},
     "phora.workers.jobs.send_morning_cycle_notifications": {"queue": "default"},
+    "phora.workers.jobs.send_all_wearable_ovulation_reminders": {"queue": "default"},
+    "phora.workers.jobs.send_wearable_ovulation_reminder": {"queue": "default"},
+    "phora.workers.jobs.nightly_sensor_check": {"queue": "default"},
     "phora.workers.jobs.process_temperature_night": {"queue": "critical"},
     "phora.workers.jobs.process_lh_result": {"queue": "critical"},
     "phora.workers.jobs.close_cycle": {"queue": "default"},
@@ -35,6 +39,16 @@ celery_app.conf.beat_schedule = {
     "send-cycle-reminders-at-7am": {
         "task": "phora.workers.jobs.send_all_morning_cycle_notifications",
         "schedule": crontab(hour=7, minute=0),
+        "options": {"queue": "default"},
+    },
+    "send-due-cycle-notifications-at-9am": {
+        "task": "phora.workers.jobs.send_all_due_cycle_notifications",
+        "schedule": crontab(hour=9, minute=0),
+        "options": {"queue": "default"},
+    },
+    "send-wearable-cycle-reminders-at-8pm": {
+        "task": "phora.workers.jobs.send_all_wearable_ovulation_reminders",
+        "schedule": crontab(hour=20, minute=0),
         "options": {"queue": "default"},
     },
 }

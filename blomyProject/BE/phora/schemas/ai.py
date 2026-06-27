@@ -77,6 +77,8 @@ class MedicalChatHistoryResponse(BaseModel):
 
 class MedicalChatThreadListResponse(BaseModel):
     threads: list[MedicalChatThreadSummary] = Field(default_factory=list)
+    has_more: bool = False
+    next_before: str | None = None
 
 
 class MedicalChatConsentRequest(BaseModel):

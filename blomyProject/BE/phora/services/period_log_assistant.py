@@ -4,15 +4,15 @@ import json
 import re
 from typing import Any
 
-import httpx
-
 from phora.core.config import Settings
 from phora.schemas.daily_log import PeriodLogPayload, SymptomsLogPayload
+from phora.services.ai_gateway import AIGateway
 
 
 class PeriodLogAssistantService:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.ai_gateway = AIGateway(settings)
 
     def assist(
         self,
@@ -64,7 +64,7 @@ class PeriodLogAssistantService:
         current_period: PeriodLogPayload,
         current_symptoms: SymptomsLogPayload,
     ) -> dict[str, Any] | None:
-        if not self.settings.llm_api_key:
+        if not self.ai_gateway.enabled:
             return None
         body = {
             "model": self.settings.llm_model,
@@ -133,17 +133,9 @@ class PeriodLogAssistantService:
             "temperature": 0,
         }
         try:
-            response = httpx.post(
-                f"{self.settings.llm_base_url.rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.settings.llm_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-                timeout=self.settings.llm_timeout_seconds,
-            )
-            response.raise_for_status()
-            data = response.json()
+            data = self.ai_gateway.chat_completion(body)
+            if not data:
+                return None
             message_data = data["choices"][0]["message"]
             refusal = message_data.get("refusal")
             if refusal:
@@ -153,7 +145,7 @@ class PeriodLogAssistantService:
                 return None
             parsed = json.loads(content)
             return parsed if isinstance(parsed, dict) else None
-        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
+        except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
             return None
 
     def _heuristic_extract(self, message: str) -> dict[str, Any]:

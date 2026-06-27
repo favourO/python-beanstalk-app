@@ -40,6 +40,7 @@ class _PhoraAppState extends ConsumerState<PhoraApp> {
       (_, next) {
         final session = next.valueOrNull;
         if (session?.isAuthenticated != true) {
+          ref.read(pushNotificationRegistrarProvider).clearRegisteredUser();
           ref.read(phoraWearSyncControllerProvider.notifier).stop();
           return;
         }
@@ -53,6 +54,7 @@ class _PhoraAppState extends ConsumerState<PhoraApp> {
         );
         unawaited(ref.read(phoraWearSyncControllerProvider.notifier).start());
       },
+      fireImmediately: true,
     );
   }
 

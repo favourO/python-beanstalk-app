@@ -52,20 +52,56 @@ final notificationHistoryProvider =
     );
 
 class NotificationHistoryController extends AsyncNotifier<NotificationHistory> {
+  static const pageSize = 20;
+
   @override
   Future<NotificationHistory> build() async {
     final session = await ref.watch(authSessionProvider.future);
     if (session == null || !session.isAuthenticated) {
       return const NotificationHistory.empty();
     }
-    return ref.watch(profileRepositoryProvider).getNotificationHistory();
+    return ref
+        .watch(profileRepositoryProvider)
+        .getNotificationHistory(limit: pageSize);
   }
 
   Future<void> refresh() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(
-      () => ref.read(profileRepositoryProvider).getNotificationHistory(),
+      () => ref
+          .read(profileRepositoryProvider)
+          .getNotificationHistory(limit: pageSize),
     );
+  }
+
+  Future<void> loadMore() async {
+    final current = state.valueOrNull;
+    if (current == null || current.isLoadingMore || !current.hasMore) {
+      return;
+    }
+
+    state = AsyncData(current.copyWith(isLoadingMore: true));
+    try {
+      final nextPage = await ref
+          .read(profileRepositoryProvider)
+          .getNotificationHistory(
+            limit: pageSize,
+            offset: current.items.length,
+          );
+      final seenIds = current.items.map((item) => item.id).toSet();
+      final newItems =
+          nextPage.items.where((item) => seenIds.add(item.id)).toList();
+      final mergedItems = [...current.items, ...newItems];
+      state = AsyncData(
+        NotificationHistory(
+          items: mergedItems,
+          unreadCount: nextPage.unreadCount,
+          hasMore: newItems.isNotEmpty && nextPage.hasMore,
+        ),
+      );
+    } catch (_) {
+      state = AsyncData(current.copyWith(isLoadingMore: false));
+    }
   }
 
   Future<void> markAllRead() async {
@@ -89,13 +125,16 @@ class NotificationHistoryController extends AsyncNotifier<NotificationHistory> {
               ),
           ],
           unreadCount: 0,
+          hasMore: previous.hasMore,
         ),
       );
     }
     try {
       await ref.read(profileRepositoryProvider).markAllNotificationsRead();
       state = AsyncData(
-        await ref.read(profileRepositoryProvider).getNotificationHistory(),
+        await ref
+            .read(profileRepositoryProvider)
+            .getNotificationHistory(limit: previous?.items.length ?? pageSize),
       );
     } catch (error, stackTrace) {
       if (previous != null) {
@@ -133,6 +172,7 @@ class NotificationHistoryController extends AsyncNotifier<NotificationHistory> {
                   )
                   ? (previous.unreadCount - 1).clamp(0, previous.items.length)
                   : previous.unreadCount,
+          hasMore: previous.hasMore,
         ),
       );
     }
@@ -141,7 +181,110 @@ class NotificationHistoryController extends AsyncNotifier<NotificationHistory> {
           .read(profileRepositoryProvider)
           .markNotificationRead(notificationId);
       state = AsyncData(
-        await ref.read(profileRepositoryProvider).getNotificationHistory(),
+        await ref
+            .read(profileRepositoryProvider)
+            .getNotificationHistory(limit: previous?.items.length ?? pageSize),
+      );
+    } catch (error, stackTrace) {
+      if (previous != null) {
+        state = AsyncData(previous);
+      } else {
+        state = AsyncError(error, stackTrace);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deleteNotification(String notificationId) async {
+    final previous = state.valueOrNull;
+    if (previous != null) {
+      final removedUnread = previous.items.any(
+        (item) => item.id == notificationId && !item.isRead,
+      );
+      final nextItems =
+          previous.items.where((item) => item.id != notificationId).toList();
+      state = AsyncData(
+        NotificationHistory(
+          items: nextItems,
+          unreadCount:
+              removedUnread
+                  ? (previous.unreadCount - 1).clamp(0, nextItems.length)
+                  : previous.unreadCount.clamp(0, nextItems.length),
+          hasMore: previous.hasMore,
+        ),
+      );
+    }
+    try {
+      await ref
+          .read(profileRepositoryProvider)
+          .deleteNotification(notificationId);
+      state = AsyncData(
+        await ref
+            .read(profileRepositoryProvider)
+            .getNotificationHistory(limit: previous?.items.length ?? pageSize),
+      );
+    } catch (error, stackTrace) {
+      if (previous != null) {
+        state = AsyncData(previous);
+      } else {
+        state = AsyncError(error, stackTrace);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deleteNotifications(Iterable<String> notificationIds) async {
+    final ids = notificationIds.toSet();
+    if (ids.isEmpty) return;
+    final previous = state.valueOrNull;
+    if (previous != null) {
+      final nextItems =
+          previous.items.where((item) => !ids.contains(item.id)).toList();
+      final unreadRemoved =
+          previous.items
+              .where((item) => ids.contains(item.id) && !item.isRead)
+              .length;
+      state = AsyncData(
+        NotificationHistory(
+          items: nextItems,
+          unreadCount: (previous.unreadCount - unreadRemoved).clamp(
+            0,
+            nextItems.length,
+          ),
+          hasMore: previous.hasMore,
+        ),
+      );
+    }
+    try {
+      for (final id in ids) {
+        await ref.read(profileRepositoryProvider).deleteNotification(id);
+      }
+      state = AsyncData(
+        await ref
+            .read(profileRepositoryProvider)
+            .getNotificationHistory(limit: previous?.items.length ?? pageSize),
+      );
+    } catch (error, stackTrace) {
+      if (previous != null) {
+        state = AsyncData(previous);
+      } else {
+        state = AsyncError(error, stackTrace);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deleteAllNotifications() async {
+    final previous = state.valueOrNull;
+    if (previous != null) {
+      state = const AsyncData(NotificationHistory.empty());
+    }
+    try {
+      await ref.read(profileRepositoryProvider).deleteAllNotifications();
+      state = AsyncData(
+        await ref
+            .read(profileRepositoryProvider)
+            .getNotificationHistory(limit: pageSize),
       );
     } catch (error, stackTrace) {
       if (previous != null) {

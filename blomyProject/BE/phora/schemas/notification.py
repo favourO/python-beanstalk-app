@@ -196,6 +196,7 @@ class NotificationTriggerRequest(BaseModel):
     lock_screen_body: str | None = None
     send_at: datetime | None = None
     force_delivery: bool = False
+    bypass_frequency_cap: bool = False
 
 
 class NotificationDispatchResponse(BaseModel):
