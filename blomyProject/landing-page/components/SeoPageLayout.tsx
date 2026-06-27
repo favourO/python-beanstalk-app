@@ -200,8 +200,8 @@ export default function SeoPageLayout({
             </div>
             <div className="w-px h-10 bg-[#FFD9C2] hidden sm:block" aria-hidden="true" />
             <div>
-              <p className="text-[32px] font-semibold text-[#1E0C16] leading-none">50k+</p>
-              <p className="text-xs text-[#A06A52] mt-1">Active users</p>
+              <p className="text-[32px] font-semibold text-[#1E0C16] leading-none">Now</p>
+              <p className="text-xs text-[#A06A52] mt-1">Live on iOS & Android</p>
             </div>
             <div className="w-px h-10 bg-[#FFD9C2] hidden sm:block" aria-hidden="true" />
             <div>

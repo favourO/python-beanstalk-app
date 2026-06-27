@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:phora/core/ui/app_dimensions.dart';
 import 'package:phora/core/ui/app_theme.dart';
 import 'package:phora/core/i18n/l10n_extensions.dart';
@@ -9,6 +7,7 @@ import 'package:phora/core/api/api_error_mapper.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 class BloomScreen extends ConsumerStatefulWidget {
@@ -25,20 +24,27 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
   final DraggableScrollableController _historyController =
       DraggableScrollableController();
   bool? _hasAiConsent;
+  AiChatConsentStatus? _aiConsentStatus;
   bool _isSending = false;
   bool _isUploadingDocument = false;
+  bool _isUpdatingAiControls = false;
   String? _streamingText;
   _DocumentUploadPhase _documentUploadPhase = _DocumentUploadPhase.idle;
   PlatformFile? _pendingDocument;
+  bool _isLoadingInitialThread = false;
   bool _isLoadingHistory = false;
   bool _isLoadingThreads = false;
+  bool _isLoadingMoreThreads = false;
   bool _isLoadingOlderMessages = false;
   bool _hasMoreMessages = false;
+  bool _hasMoreThreads = false;
   bool _historyPanelVisible = false;
   String? _olderMessagesCursor;
+  String? _olderThreadsCursor;
   String? _threadId;
   final List<_BloomMessage> _messages = [];
   final List<String> _savedRecords = [];
+  AiDataUseReceipt? _lastDataUseReceipt;
   List<AiChatThreadSummary> _threads = const [];
   List<AiMissingDataPrompt> _missingData = const [];
   double _historyPanelExtent = _HistoryPanelSheet.minSize;
@@ -114,7 +120,10 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
     final preferences = ref.read(appPreferencesProvider);
     final cachedConsent = await preferences.getAllowPhoraAiChat();
     if (!mounted) return;
-    setState(() => _hasAiConsent = cachedConsent);
+    setState(() {
+      _hasAiConsent = cachedConsent;
+      _isLoadingInitialThread = cachedConsent;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _loadConsent(refreshOnly: true);
@@ -134,7 +143,12 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
       if (!mounted) return;
       final previousConsent = _hasAiConsent == true;
       if (_hasAiConsent != status.accepted) {
-        setState(() => _hasAiConsent = status.accepted);
+        setState(() {
+          _hasAiConsent = status.accepted;
+          _aiConsentStatus = status;
+        });
+      } else {
+        setState(() => _aiConsentStatus = status);
       }
       if (status.accepted && !previousConsent && refreshOnly) {
         _loadLatestThread();
@@ -154,13 +168,72 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
   }
 
   Future<void> _acceptAiConsent() async {
-    await ref
+    final status = await ref
         .read(aiChatRepositoryProvider)
-        .updateConsentStatus(accepted: true);
+        .updateConsentStatus(consent: AiChatConsentStatus.fullConsent());
     await ref.read(appPreferencesProvider).setAllowPhoraAiChat(true);
     if (!mounted) return;
-    setState(() => _hasAiConsent = true);
+    setState(() {
+      _hasAiConsent = status.accepted;
+      _aiConsentStatus = status;
+    });
     await _loadThreadData();
+  }
+
+  Future<void> _updateAiConsent(AiChatConsentStatus consent) async {
+    if (_isUpdatingAiControls) return;
+    setState(() => _isUpdatingAiControls = true);
+    try {
+      final status = await ref
+          .read(aiChatRepositoryProvider)
+          .updateConsentStatus(consent: consent);
+      await ref
+          .read(appPreferencesProvider)
+          .setAllowPhoraAiChat(status.accepted);
+      if (!mounted) return;
+      setState(() {
+        _hasAiConsent = status.accepted;
+        _aiConsentStatus = status;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is ApiFailure ? error.message : error.toString();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _isUpdatingAiControls = false);
+    }
+  }
+
+  Future<void> _deleteAiMemory() async {
+    if (_isUpdatingAiControls) return;
+    setState(() => _isUpdatingAiControls = true);
+    try {
+      await ref.read(aiChatRepositoryProvider).deleteAiMemory();
+      if (!mounted) return;
+      setState(() {
+        _threadId = null;
+        _messages.clear();
+        _threads = const [];
+        _hasMoreThreads = false;
+        _olderThreadsCursor = null;
+        _savedRecords.clear();
+        _missingData = const [];
+        _lastDataUseReceipt = null;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('AI memory deleted.')));
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is ApiFailure ? error.message : error.toString();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _isUpdatingAiControls = false);
+    }
   }
 
   Future<void> _loadThreadData() async {
@@ -175,9 +248,13 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
       _isLoadingThreads = true;
     }
     try {
-      final threads = await ref.read(aiChatRepositoryProvider).fetchThreads();
+      final page = await ref.read(aiChatRepositoryProvider).fetchThreads();
       if (!mounted) return;
-      setState(() => _threads = threads);
+      setState(() {
+        _threads = page.threads;
+        _hasMoreThreads = page.hasMore;
+        _olderThreadsCursor = page.nextBefore;
+      });
     } catch (_) {
       if (!mounted) return;
     } finally {
@@ -189,12 +266,49 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
     }
   }
 
+  Future<void> _loadMoreThreads() async {
+    final cursor = _olderThreadsCursor;
+    if (_isLoadingThreads ||
+        _isLoadingMoreThreads ||
+        !_hasMoreThreads ||
+        cursor == null) {
+      return;
+    }
+    setState(() => _isLoadingMoreThreads = true);
+    try {
+      final page = await ref
+          .read(aiChatRepositoryProvider)
+          .fetchThreads(before: cursor);
+      if (!mounted) return;
+      setState(() {
+        final seenIds = _threads.map((thread) => thread.threadId).toSet();
+        _threads = [
+          ..._threads,
+          ...page.threads.where((thread) => seenIds.add(thread.threadId)),
+        ];
+        _hasMoreThreads = page.hasMore;
+        _olderThreadsCursor = page.nextBefore;
+      });
+    } catch (_) {
+      if (!mounted) return;
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMoreThreads = false);
+      }
+    }
+  }
+
   Future<void> _loadLatestThread() async {
     if (_isLoadingHistory) return;
-    if (mounted && _messages.isNotEmpty) {
-      setState(() => _isLoadingHistory = true);
+    final isInitialLoad = _messages.isEmpty && _threadId == null;
+    if (mounted) {
+      setState(() {
+        _isLoadingHistory = true;
+        _isLoadingInitialThread = isInitialLoad;
+      });
     } else {
       _isLoadingHistory = true;
+      _isLoadingInitialThread = isInitialLoad;
     }
     try {
       final history =
@@ -219,9 +333,13 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
       if (!mounted) return;
     } finally {
       if (mounted) {
-        setState(() => _isLoadingHistory = false);
+        setState(() {
+          _isLoadingHistory = false;
+          _isLoadingInitialThread = false;
+        });
       } else {
         _isLoadingHistory = false;
+        _isLoadingInitialThread = false;
       }
     }
   }
@@ -240,6 +358,7 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
         _olderMessagesCursor = history.nextBefore;
         _savedRecords.clear();
         _missingData = const [];
+        _lastDataUseReceipt = null;
         _messages
           ..clear()
           ..addAll(
@@ -321,6 +440,7 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
       _messages.clear();
       _savedRecords.clear();
       _missingData = const [];
+      _lastDataUseReceipt = null;
       _pendingDocument = null;
       _hasMoreMessages = false;
       _olderMessagesCursor = null;
@@ -364,32 +484,53 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
             });
           case AiChatStreamDelta(:final text):
             setState(() => _streamingText = (_streamingText ?? '') + text);
-            _scrollToLatest();
           case AiChatStreamDone(
             :final sufficientData,
             :final missingData,
             :final savedRecords,
+            :final usedUserData,
             :final disclaimer,
+            :final dataUseReceipt,
+            :final auditEventId,
+            :final policyDecision,
           ):
+            final receipt =
+                dataUseReceipt ??
+                AiDataUseReceipt(
+                  usedData: usedUserData,
+                  sensitivityLabels: const [],
+                  auditEventId: auditEventId,
+                  policyDecision: policyDecision,
+                );
             setState(() {
-              _messages.add(_BloomMessage.assistant(
-                _streamingText ?? '',
-                disclaimer: disclaimer,
-                sufficientData: sufficientData,
-              ));
+              _messages.add(
+                _BloomMessage.assistant(
+                  _streamingText ?? '',
+                  disclaimer: disclaimer,
+                  sufficientData: sufficientData,
+                  dataUseReceipt: receipt,
+                ),
+              );
               _streamingText = null;
               _savedRecords
                 ..clear()
                 ..addAll(savedRecords);
               _missingData = missingData;
+              _lastDataUseReceipt = receipt;
             });
             _scrollToLatest();
             await _loadThreads();
-          case AiChatStreamError(:final message):
+          case AiChatStreamError(:final message, :final code):
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(message)),
+            final handledQuota = _handleChatQuotaExceededMessage(
+              message,
+              code: code,
             );
+            if (!handledQuota) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(message)));
+            }
             setState(() {
               if (_messages.isNotEmpty && _messages.last.isUser) {
                 _messages.removeLast();
@@ -400,6 +541,15 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
       }
     } catch (error) {
       if (!mounted) return;
+      if (_handleChatQuotaExceeded(error)) {
+        setState(() {
+          if (_messages.isNotEmpty && _messages.last.isUser) {
+            _messages.removeLast();
+          }
+          _streamingText = null;
+        });
+        return;
+      }
       final errorMessage =
           error is ApiFailure ? error.message : error.toString();
       ScaffoldMessenger.of(
@@ -533,6 +683,7 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
         );
         _questionController.clear();
         _missingData = const [];
+        _lastDataUseReceipt = null;
       });
       _scrollToLatest();
 
@@ -560,17 +711,28 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
             response.answer,
             disclaimer: response.disclaimer,
             sufficientData: response.sufficientData,
+            dataUseReceipt: response.dataUseReceipt,
           ),
         );
         _savedRecords
           ..clear()
           ..addAll(response.savedRecords);
         _missingData = response.missingData;
+        _lastDataUseReceipt = response.dataUseReceipt;
       });
       _scrollToLatest();
       await _loadThreads();
     } catch (error) {
       if (!mounted) return;
+      if (_handleChatQuotaExceeded(error)) {
+        setState(() {
+          if (_messages.isNotEmpty && _messages.last.isUser) {
+            _messages.removeLast();
+          }
+          _pendingDocument = file;
+        });
+        return;
+      }
       final message = error is ApiFailure ? error.message : error.toString();
       ScaffoldMessenger.of(
         context,
@@ -616,6 +778,41 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
     await _animateHistoryPanel(target);
   }
 
+  bool _handleChatQuotaExceeded(Object error) {
+    if (error is! ChatQuotaExceededFailure) return false;
+    _showWeeklyLimitToastAndRedirect();
+    return true;
+  }
+
+  bool _handleChatQuotaExceededMessage(String message, {String? code}) {
+    final normalized = message.toLowerCase();
+    final normalizedCode = (code ?? '').toLowerCase();
+    if (normalizedCode.contains('quota') || normalizedCode.contains('limit')) {
+      _showWeeklyLimitToastAndRedirect();
+      return true;
+    }
+    if (!normalized.contains('week') ||
+        !(normalized.contains('limit') ||
+            normalized.contains('quota') ||
+            normalized.contains('used all'))) {
+      return false;
+    }
+    _showWeeklyLimitToastAndRedirect();
+    return true;
+  }
+
+  void _showWeeklyLimitToastAndRedirect() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Weekly Vyla AI chat limit reached. Redirecting to subscription.',
+        ),
+      ),
+    );
+    context.go('/subscription');
+  }
+
   Future<void> _animateHistoryPanel(double size) async {
     if (!_historyController.isAttached) return;
     await _historyController.animateTo(
@@ -648,6 +845,30 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
     await _animateHistoryPanel(_HistoryPanelSheet.minSize);
   }
 
+  Future<void> _showAiControlsSheet() async {
+    final consent =
+        _aiConsentStatus ??
+        AiChatConsentStatus(
+          accepted: _hasAiConsent == true,
+          canUseAIInsights: _hasAiConsent == true,
+          canUseCycleLogs: _hasAiConsent == true,
+          canUseSymptoms: _hasAiConsent == true,
+        );
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder:
+          (ctx) => _AiControlsSheet(
+            consent: consent,
+            isBusy: _isUpdatingAiControls,
+            dataUseReceipt: _lastDataUseReceipt,
+            onConsentChanged: _updateAiConsent,
+            onDeleteMemory: _deleteAiMemory,
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -664,7 +885,9 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
     final hasAiConsent = _hasAiConsent ?? false;
     final isLoadingConsent = _hasAiConsent == null;
     final hasMessages = _messages.isNotEmpty;
-    final showIntroHints = !hasMessages;
+    final isLoadingInitialConversation =
+        hasAiConsent && _isLoadingInitialThread && !hasMessages;
+    final showIntroHints = !hasMessages && !isLoadingInitialConversation;
     final activeThread = _activeThread;
     final suggestions = [
       l10n.bloomSuggestionCycleLong,
@@ -695,13 +918,16 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
                       activeThreadTitle:
                           activeThread?.title?.trim().isNotEmpty == true
                               ? activeThread!.title!.trim()
-                              : (_threadId == null
-                                  ? 'New conversation'
-                                  : 'Current conversation'),
+                              : (isLoadingInitialConversation
+                                  ? 'Loading conversation'
+                                  : (_threadId == null
+                                      ? 'New conversation'
+                                      : 'Current conversation')),
                       historyExpanded:
                           _historyPanelExtent >= _HistoryPanelSheet.halfSize,
                       onHistoryTap: hasAiConsent ? _showHistorySheet : null,
                       onNewChat: hasAiConsent ? _startNewChat : null,
+                      onControlsTap: hasAiConsent ? _showAiControlsSheet : null,
                     ),
                   ),
                   Expanded(
@@ -765,6 +991,8 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
                             ),
                           ],
                           if (hasAiConsent) ...[
+                            if (isLoadingInitialConversation)
+                              const _InitialConversationLoader(),
                             if (showIntroHints) ...[
                               SizedBox(height: dims.scaleSpace(16)),
                               _ProfileStyleSection(
@@ -828,25 +1056,29 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
                                               label:
                                                   _kBloomPredictionDisclaimer,
                                             ),
+                                          if (!message.isUser &&
+                                              message.dataUseReceipt != null)
+                                            _DataUseAction(
+                                              receipt: message.dataUseReceipt!,
+                                            ),
                                         ],
                                       ),
                                     ),
                                   ),
                                   if (_isSending || _isUploadingDocument)
-                                    _isUploadingDocument
-                                        ? _ChatBubbleCard(
-                                          text: _documentUploadPhase.label,
-                                          compact: true,
-                                        )
-                                        : (_streamingText != null &&
-                                                _streamingText!.isNotEmpty
-                                            ? _ChatBubbleCard(
-                                              text: _streamingText!,
-                                              isUser: false,
-                                            )
-                                            : const _ThinkingBubble(
-                                              compact: true,
-                                            )),
+                                    _ChatBubbleCard(
+                                      text:
+                                          _isUploadingDocument
+                                              ? _documentUploadPhase.label
+                                              : ((_streamingText ?? '')
+                                                      .trim()
+                                                      .isEmpty
+                                                  ? l10n.bloomThinkingLabel
+                                                  : _streamingText!),
+                                      compact:
+                                          _isUploadingDocument ||
+                                          (_streamingText ?? '').trim().isEmpty,
+                                    ),
                                 ],
                               ),
                             ],
@@ -906,8 +1138,11 @@ class _BloomScreenState extends ConsumerState<BloomScreen> {
                   threads: _threads,
                   activeThreadId: _threadId,
                   isLoading: _isLoadingThreads,
+                  isLoadingMore: _isLoadingMoreThreads,
+                  hasMore: _hasMoreThreads,
                   extent: _historyPanelExtent,
                   onExtentChanged: _handleHistoryExtentChanged,
+                  onLoadMore: _loadMoreThreads,
                   onSelect: _handleHistorySelection,
                 ),
             ],
@@ -1003,6 +1238,31 @@ class _BloomBackdrop extends StatelessWidget {
   }
 }
 
+class _InitialConversationLoader extends StatelessWidget {
+  const _InitialConversationLoader();
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+
+    return SizedBox(
+      height: dims.scaleHeight(220),
+      child: Center(
+        child: SizedBox(
+          width: dims.scaleWidth(34),
+          height: dims.scaleWidth(34),
+          child: CircularProgressIndicator(
+            strokeWidth: 3,
+            color: _kBloomAccent,
+            backgroundColor: colors.border.withValues(alpha: 0.35),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BloomTopBar extends StatelessWidget {
   const _BloomTopBar({
     required this.hasAiConsent,
@@ -1010,6 +1270,7 @@ class _BloomTopBar extends StatelessWidget {
     required this.historyExpanded,
     this.onHistoryTap,
     this.onNewChat,
+    this.onControlsTap,
   });
 
   final bool hasAiConsent;
@@ -1017,6 +1278,7 @@ class _BloomTopBar extends StatelessWidget {
   final bool historyExpanded;
   final VoidCallback? onHistoryTap;
   final VoidCallback? onNewChat;
+  final VoidCallback? onControlsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1057,6 +1319,14 @@ class _BloomTopBar extends StatelessWidget {
                 ],
               ),
             ),
+            if (hasAiConsent) ...[
+              _CircleIconButton(
+                icon: Icons.privacy_tip_outlined,
+                tooltip: 'AI controls',
+                onTap: onControlsTap,
+              ),
+              SizedBox(width: dims.scaleWidth(8)),
+            ],
             _HistoryPillButton(expanded: historyExpanded, onTap: onHistoryTap),
           ],
         ),
@@ -1071,6 +1341,52 @@ class _BloomTopBar extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _CircleIconButton extends StatelessWidget {
+  const _CircleIconButton({
+    required this.icon,
+    required this.tooltip,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: isDark ? colors.bgSurface : Colors.white.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(dims.scaleRadius(18)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(dims.scaleRadius(18)),
+          onTap: onTap,
+          child: Container(
+            width: dims.scaleWidth(44),
+            height: dims.scaleWidth(44),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(dims.scaleRadius(18)),
+              border: Border.all(
+                color: isDark ? colors.border : const Color(0xFFF0E1D7),
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: dims.scaleText(19),
+              color: isDark ? colors.textPrimary : _kBloomTextPrimary,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1503,117 +1819,6 @@ class _SuggestionTile extends StatelessWidget {
   }
 }
 
-class _ThinkingBubble extends StatefulWidget {
-  const _ThinkingBubble({this.compact = false});
-  final bool compact;
-
-  @override
-  State<_ThinkingBubble> createState() => _ThinkingBubbleState();
-}
-
-class _ThinkingBubbleState extends State<_ThinkingBubble>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.phora.colors;
-    final dims = context.dims;
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: dims.scaleWidth(18),
-          vertical: dims.scaleSpace(widget.compact ? 12 : 14),
-        ),
-        decoration: BoxDecoration(
-          color: colors.bgCard,
-          borderRadius: BorderRadius.circular(dims.scaleRadius(24)),
-          border: Border.all(color: colors.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              'Thinking',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: dims.scaleText(13),
-                height: 1.45,
-                color: colors.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            SizedBox(width: dims.scaleWidth(3)),
-            for (int i = 0; i < 3; i++)
-              _AnimatedDot(
-                controller: _controller,
-                delay: i * 0.22,
-                color: colors.textSecondary,
-                size: dims.scaleText(5),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AnimatedDot extends StatelessWidget {
-  const _AnimatedDot({
-    required this.controller,
-    required this.delay,
-    required this.color,
-    required this.size,
-  });
-
-  final AnimationController controller;
-  final double delay;
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final t = (controller.value - delay) % 1.0;
-        final bounce = t < 0.45 ? math.sin(math.pi * t / 0.45) : 0.0;
-        return Transform.translate(
-          offset: Offset(0, -bounce * 4),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.45 + 0.55 * bounce),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _ChatBubbleCard extends StatelessWidget {
   const _ChatBubbleCard({
     required this.text,
@@ -1859,6 +2064,390 @@ class _ChatCaption extends StatelessWidget {
           fontSize: dims.scaleText(12),
           color: colors.textQuaternary,
         ),
+      ),
+    );
+  }
+}
+
+class _DataUseAction extends StatelessWidget {
+  const _DataUseAction({required this.receipt});
+
+  final AiDataUseReceipt receipt;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: dims.scaleWidth(4),
+        top: dims.scaleSpace(6),
+      ),
+      child: TextButton.icon(
+        onPressed: () => _showDataUseReceipt(context, receipt),
+        icon: const Icon(Icons.manage_search_rounded),
+        label: const Text('View data used'),
+        style: TextButton.styleFrom(
+          foregroundColor: _kBloomAccent,
+          padding: EdgeInsets.symmetric(horizontal: dims.scaleWidth(8)),
+          textStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
+            fontSize: dims.scaleText(12),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void _showDataUseReceipt(BuildContext context, AiDataUseReceipt receipt) {
+  showModalBottomSheet<void>(
+    context: context,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => _DataUseReceiptSheet(receipt: receipt),
+  );
+}
+
+class _DataUseReceiptSheet extends StatelessWidget {
+  const _DataUseReceiptSheet({required this.receipt});
+
+  final AiDataUseReceipt receipt;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final usedData =
+        receipt.usedData.isEmpty
+            ? const ['No user context reported.']
+            : receipt.usedData;
+    final labels =
+        receipt.sensitivityLabels.isEmpty
+            ? const ['Not reported']
+            : receipt.sensitivityLabels;
+
+    return Container(
+      margin: EdgeInsets.only(top: dims.scaleSpace(48)),
+      padding: EdgeInsets.fromLTRB(
+        dims.scaleWidth(20),
+        dims.scaleSpace(16),
+        dims.scaleWidth(20),
+        dims.scaleSpace(28),
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? colors.bgElevated : Colors.white,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(dims.scaleRadius(28)),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SheetHandle(),
+          SizedBox(height: dims.scaleSpace(18)),
+          Text(
+            'Data used for this answer',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontSize: dims.scaleText(18),
+              fontWeight: FontWeight.w800,
+              color: colors.textPrimary,
+            ),
+          ),
+          SizedBox(height: dims.scaleSpace(14)),
+          ...usedData.map(
+            (item) => _ReceiptRow(icon: Icons.check_rounded, text: item),
+          ),
+          SizedBox(height: dims.scaleSpace(12)),
+          _ReceiptRow(
+            icon: Icons.security_rounded,
+            text: 'Sensitivity: ${labels.join(', ')}',
+          ),
+          if ((receipt.policyDecision ?? '').isNotEmpty)
+            _ReceiptRow(
+              icon: Icons.rule_rounded,
+              text: 'Policy: ${receipt.policyDecision}',
+            ),
+          if ((receipt.retention ?? '').isNotEmpty)
+            _ReceiptRow(
+              icon: Icons.schedule_rounded,
+              text: 'Retention: ${receipt.retention}',
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiControlsSheet extends StatefulWidget {
+  const _AiControlsSheet({
+    required this.consent,
+    required this.isBusy,
+    required this.onConsentChanged,
+    required this.onDeleteMemory,
+    this.dataUseReceipt,
+  });
+
+  final AiChatConsentStatus consent;
+  final bool isBusy;
+  final AiDataUseReceipt? dataUseReceipt;
+  final Future<void> Function(AiChatConsentStatus consent) onConsentChanged;
+  final VoidCallback onDeleteMemory;
+
+  @override
+  State<_AiControlsSheet> createState() => _AiControlsSheetState();
+}
+
+class _AiControlsSheetState extends State<_AiControlsSheet> {
+  late AiChatConsentStatus _consent = widget.consent;
+  late bool _isBusy = widget.isBusy;
+
+  Future<void> _setConsent(AiChatConsentStatus next) async {
+    if (_isBusy) return;
+    setState(() {
+      _consent = next;
+      _isBusy = true;
+    });
+    try {
+      await widget.onConsentChanged(next);
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      margin: EdgeInsets.only(top: dims.scaleSpace(48)),
+      padding: EdgeInsets.fromLTRB(
+        dims.scaleWidth(20),
+        dims.scaleSpace(16),
+        dims.scaleWidth(20),
+        dims.scaleSpace(28),
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? colors.bgElevated : Colors.white,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(dims.scaleRadius(28)),
+        ),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SheetHandle(),
+            SizedBox(height: dims.scaleSpace(18)),
+            Text(
+              'Vyla AI controls',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontSize: dims.scaleText(18),
+                fontWeight: FontWeight.w800,
+                color: colors.textPrimary,
+              ),
+            ),
+            SizedBox(height: dims.scaleSpace(6)),
+            Text(
+              'Backend policy still decides the minimum data required before retrieval.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: dims.scaleText(12),
+                height: 1.4,
+                color: colors.textSecondary,
+              ),
+            ),
+            SizedBox(height: dims.scaleSpace(16)),
+            _ConsentSwitch(
+              title: 'Allow Vyla AI',
+              value: _consent.canUseAIInsights,
+              enabled: !_isBusy,
+              onChanged:
+                  (value) => _setConsent(
+                    _consent.copyWith(
+                      accepted: value,
+                      canUseAIInsights: value,
+                      canUseCycleLogs: value ? _consent.canUseCycleLogs : false,
+                      canUseSymptoms: value ? _consent.canUseSymptoms : false,
+                      canUseWearableData:
+                          value ? _consent.canUseWearableData : false,
+                      canUseIntimacyData:
+                          value ? _consent.canUseIntimacyData : false,
+                    ),
+                  ),
+            ),
+            _ConsentSwitch(
+              title: 'Use my cycle logs',
+              value: _consent.canUseCycleLogs,
+              enabled: !_isBusy && _consent.canUseAIInsights,
+              onChanged:
+                  (value) =>
+                      _setConsent(_consent.copyWith(canUseCycleLogs: value)),
+            ),
+            _ConsentSwitch(
+              title: 'Use my symptoms',
+              value: _consent.canUseSymptoms,
+              enabled: !_isBusy && _consent.canUseAIInsights,
+              onChanged:
+                  (value) =>
+                      _setConsent(_consent.copyWith(canUseSymptoms: value)),
+            ),
+            _ConsentSwitch(
+              title: 'Use my wearable data',
+              value: _consent.canUseWearableData,
+              enabled: !_isBusy && _consent.canUseAIInsights,
+              onChanged:
+                  (value) =>
+                      _setConsent(_consent.copyWith(canUseWearableData: value)),
+            ),
+            _ConsentSwitch(
+              title: 'Use intimacy data',
+              value: _consent.canUseIntimacyData,
+              enabled: !_isBusy && _consent.canUseAIInsights,
+              onChanged:
+                  (value) =>
+                      _setConsent(_consent.copyWith(canUseIntimacyData: value)),
+            ),
+            SizedBox(height: dims.scaleSpace(12)),
+            if (widget.dataUseReceipt != null)
+              _SecondarySheetAction(
+                icon: Icons.manage_search_rounded,
+                title: 'View data used for latest answer',
+                onTap:
+                    () => _showDataUseReceipt(context, widget.dataUseReceipt!),
+              ),
+            _SecondarySheetAction(
+              icon: Icons.delete_outline_rounded,
+              title: 'Delete my AI memory',
+              destructive: true,
+              onTap: _isBusy ? null : widget.onDeleteMemory,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetHandle extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    return Center(
+      child: Container(
+        width: dims.scaleWidth(42),
+        height: dims.scaleHeight(4),
+        decoration: BoxDecoration(
+          color: colors.border,
+          borderRadius: BorderRadius.circular(99),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConsentSwitch extends StatelessWidget {
+  const _ConsentSwitch({
+    required this.title,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String title;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    return SwitchListTile.adaptive(
+      contentPadding: EdgeInsets.zero,
+      value: value,
+      activeThumbColor: _kBloomAccent,
+      activeTrackColor: _kBloomAccent.withValues(alpha: 0.28),
+      onChanged: enabled ? onChanged : null,
+      title: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontSize: dims.scaleText(14),
+          fontWeight: FontWeight.w700,
+          color: colors.textPrimary,
+        ),
+      ),
+    );
+  }
+}
+
+class _SecondarySheetAction extends StatelessWidget {
+  const _SecondarySheetAction({
+    required this.icon,
+    required this.title,
+    this.destructive = false,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final bool destructive;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    final color = destructive ? Colors.redAccent : _kBloomAccent;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      enabled: onTap != null,
+      leading: Icon(icon, color: color, size: dims.scaleText(22)),
+      title: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontSize: dims.scaleText(14),
+          fontWeight: FontWeight.w700,
+          color: destructive ? Colors.redAccent : colors.textPrimary,
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+}
+
+class _ReceiptRow extends StatelessWidget {
+  const _ReceiptRow({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    return Padding(
+      padding: EdgeInsets.only(bottom: dims.scaleSpace(10)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: dims.scaleText(18), color: _kBloomAccent),
+          SizedBox(width: dims.scaleWidth(10)),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: dims.scaleText(13),
+                height: 1.4,
+                color: colors.textPrimary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2232,8 +2821,11 @@ class _HistoryPanelSheet extends StatelessWidget {
     required this.threads,
     required this.activeThreadId,
     required this.isLoading,
+    required this.isLoadingMore,
+    required this.hasMore,
     required this.extent,
     required this.onExtentChanged,
+    required this.onLoadMore,
     required this.onSelect,
   });
 
@@ -2246,8 +2838,11 @@ class _HistoryPanelSheet extends StatelessWidget {
   final List<AiChatThreadSummary> threads;
   final String? activeThreadId;
   final bool isLoading;
+  final bool isLoadingMore;
+  final bool hasMore;
   final double extent;
   final ValueChanged<double> onExtentChanged;
+  final VoidCallback onLoadMore;
   final ValueChanged<String> onSelect;
 
   @override
@@ -2312,112 +2907,143 @@ class _HistoryPanelSheet extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: CustomScrollView(
-                      controller: scrollController,
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              dims.scaleWidth(16),
-                              dims.scaleSpace(16),
-                              dims.scaleWidth(16),
-                              dims.scaleSpace(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Recent chats',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleLarge?.copyWith(
-                                          fontSize: dims.scaleText(18),
-                                          fontWeight: FontWeight.w700,
-                                          color:
-                                              isDark
-                                                  ? colors.textPrimary
-                                                  : _kBloomTextPrimary,
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification.metrics.axis != Axis.vertical ||
+                            !hasMore ||
+                            isLoading ||
+                            isLoadingMore) {
+                          return false;
+                        }
+                        if (notification.metrics.extentAfter <= 220) {
+                          onLoadMore();
+                        }
+                        return false;
+                      },
+                      child: CustomScrollView(
+                        controller: scrollController,
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                dims.scaleWidth(16),
+                                dims.scaleSpace(16),
+                                dims.scaleWidth(16),
+                                dims.scaleSpace(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Recent chats',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleLarge?.copyWith(
+                                            fontSize: dims.scaleText(18),
+                                            fontWeight: FontWeight.w700,
+                                            color:
+                                                isDark
+                                                    ? colors.textPrimary
+                                                    : _kBloomTextPrimary,
+                                          ),
                                         ),
-                                      ),
-                                      SizedBox(height: dims.scaleSpace(4)),
-                                      Text(
-                                        extent >= maxSize - 0.02
-                                            ? 'Full history view'
-                                            : 'Pull up for full history',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall?.copyWith(
-                                          fontSize: dims.scaleText(12),
-                                          color:
-                                              isDark
-                                                  ? colors.textSecondary
-                                                  : _kBloomTextSecondary,
+                                        SizedBox(height: dims.scaleSpace(4)),
+                                        Text(
+                                          extent >= maxSize - 0.02
+                                              ? 'Full history view'
+                                              : 'Pull up for full history',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall?.copyWith(
+                                            fontSize: dims.scaleText(12),
+                                            color:
+                                                isDark
+                                                    ? colors.textSecondary
+                                                    : _kBloomTextSecondary,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                _InlineTextAction(
-                                  label: 'New chat',
-                                  onTap: () => onSelect('__new__'),
-                                ),
-                              ],
+                                  _InlineTextAction(
+                                    label: 'New chat',
+                                    onTap: () => onSelect('__new__'),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        if (isLoading)
-                          const SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        else if (threads.isEmpty)
-                          SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(dims.scaleWidth(24)),
-                                child: Text(
-                                  'No previous conversations yet.',
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.bodyMedium?.copyWith(
-                                    fontSize: dims.scaleText(13),
-                                    color: colors.textSecondary,
+                          if (isLoading)
+                            const SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (threads.isEmpty)
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(dims.scaleWidth(24)),
+                                  child: Text(
+                                    'No previous conversations yet.',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium?.copyWith(
+                                      fontSize: dims.scaleText(13),
+                                      color: colors.textSecondary,
+                                    ),
                                   ),
                                 ),
                               ),
+                            )
+                          else
+                            SliverPadding(
+                              padding: EdgeInsets.fromLTRB(
+                                dims.scaleWidth(16),
+                                0,
+                                dims.scaleWidth(16),
+                                dims.scaleSpace(28),
+                              ),
+                              sliver: SliverList.separated(
+                                itemCount:
+                                    threads.length + (isLoadingMore ? 1 : 0),
+                                separatorBuilder:
+                                    (_, _) =>
+                                        SizedBox(height: dims.scaleSpace(12)),
+                                itemBuilder: (context, index) {
+                                  if (index >= threads.length) {
+                                    return Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: dims.scaleSpace(12),
+                                      ),
+                                      child: const Center(
+                                        child: SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.4,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  final thread = threads[index];
+                                  return _HistoryThreadTile(
+                                    thread: thread,
+                                    index: index,
+                                    active: thread.threadId == activeThreadId,
+                                    onTap: () => onSelect(thread.threadId),
+                                  );
+                                },
+                              ),
                             ),
-                          )
-                        else
-                          SliverPadding(
-                            padding: EdgeInsets.fromLTRB(
-                              dims.scaleWidth(16),
-                              0,
-                              dims.scaleWidth(16),
-                              dims.scaleSpace(28),
-                            ),
-                            sliver: SliverList.separated(
-                              itemCount: threads.length,
-                              separatorBuilder:
-                                  (_, _) =>
-                                      SizedBox(height: dims.scaleSpace(12)),
-                              itemBuilder: (context, index) {
-                                final thread = threads[index];
-                                return _HistoryThreadTile(
-                                  thread: thread,
-                                  index: index,
-                                  active: thread.threadId == activeThreadId,
-                                  onTap: () => onSelect(thread.threadId),
-                                );
-                              },
-                            ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -2598,6 +3224,7 @@ class _BloomMessage {
     required this.text,
     required this.isUser,
     this.disclaimer,
+    this.dataUseReceipt,
     this.isCompact = false,
     this.sufficientData = true,
     this.attachmentName,
@@ -2621,12 +3248,14 @@ class _BloomMessage {
   factory _BloomMessage.assistant(
     String text, {
     String? disclaimer,
+    AiDataUseReceipt? dataUseReceipt,
     bool sufficientData = true,
   }) {
     return _BloomMessage(
       text: text,
       isUser: false,
       disclaimer: disclaimer,
+      dataUseReceipt: dataUseReceipt,
       sufficientData: sufficientData,
     );
   }
@@ -2634,6 +3263,7 @@ class _BloomMessage {
   final String text;
   final bool isUser;
   final String? disclaimer;
+  final AiDataUseReceipt? dataUseReceipt;
   final bool isCompact;
   final bool sufficientData;
   final String? attachmentName;

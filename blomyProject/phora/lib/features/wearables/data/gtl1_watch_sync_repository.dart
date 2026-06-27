@@ -561,7 +561,7 @@ PhoraWearPairing _pairingFromDevice(Gtl1WatchDevice device) {
     deviceId: device.id,
     stableIdentifier: stableIdentifier,
     internalDeviceType: 'gtl1',
-    displayName: 'Vyla Wear',
+    displayName: 'Vyla Wearable',
     deviceName: _deviceName(device),
     manufacturerMac: manufacturerMac,
     manufacturerPrefix: manufacturerPrefix,

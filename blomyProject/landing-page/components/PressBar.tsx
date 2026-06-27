@@ -7,7 +7,7 @@ const launchFacts = [
   { text: "BBT & wearable sync", style: "normal" as const },
   { text: "Early access open", style: "bold" as const },
   { text: "Ovulation & fertility tracking", style: "normal" as const },
-  { text: "Join our first users", style: "bold" as const },
+  { text: "Be among the first to try Vyla", style: "bold" as const },
   { text: "Vyla Band — £25 with first year upgrade", style: "bold" as const },
 ];
 

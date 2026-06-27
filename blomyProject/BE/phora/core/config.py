@@ -61,8 +61,9 @@ class Settings(BaseSettings):
     google_health_redirect_uri: str | None = None
     google_health_oauth_success_redirect: str = "vyla://wearables/google-health?status=connected"
     google_health_oauth_error_redirect: str = "vyla://wearables/google-health?status=error"
-    apple_bundle_id: str | None = None
+    apple_bundle_id: str | None = "com.vyla.health"
     apple_team_id: str = "8SN27A7K6C"
+    apple_iap_shared_secret: str | None = None
     android_package_name: str = "com.vyla.health"
     android_sha256_fingerprint: str | None = None
     apple_service_id: str | None = None

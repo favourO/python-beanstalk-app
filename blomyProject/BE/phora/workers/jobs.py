@@ -1,9 +1,8 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from phora.db.session import get_session_factory
 from phora.core.config import get_settings
-from phora.models.notification import NotificationPreference
 from phora.repositories.core import PredictionRepository, UserRepository
 from phora.schemas.notification import NotificationTriggerRequest
 from phora.services.daily_insights import DailyInsightService
@@ -144,6 +143,19 @@ def nightly_sensor_check(user_id: str) -> dict:
 
 
 @celery_app.task
+def send_all_due_cycle_notifications() -> dict:
+    queued = 0
+    with get_session_factory()() as db:
+        for user_id in UserRepository(db).active_user_ids():
+            profile = UserRepository(db).ensure_profile(user_id)
+            if not _is_local_hour(profile.timezone, 9):
+                continue
+            nightly_sensor_check.delay(user_id)
+            queued += 1
+    return {"status": "queued", "job": "send_all_due_cycle_notifications", "queued": queued}
+
+
+@celery_app.task
 def send_morning_cycle_notifications(user_id: str) -> dict:
     with get_session_factory()() as db:
         result = NotificationService(db).evaluate_morning_cycle_notifications(user_id, now=datetime.now(UTC))
@@ -181,45 +193,18 @@ def _is_local_hour(timezone_name: str | None, hour: int) -> bool:
 @celery_app.task
 def send_wearable_ovulation_reminder(user_id: str) -> dict:
     with get_session_factory()() as db:
-        pref = db.query(NotificationPreference).filter(NotificationPreference.user_id == user_id).first()
-        if not pref or not getattr(pref, "wearable_ovulation_reminder", True) or not pref.all_notifications:
-            return {"status": "skipped", "reason": "preference_off", "user_id": user_id}
-
-        snapshot = PredictionRepository(db).latest_for_user(user_id)
-        if not snapshot:
-            return {"status": "skipped", "reason": "no_snapshot", "user_id": user_id}
-
-        phase = snapshot.current_phase
-        if phase not in {"menstrual", "ovulatory", "late_follicular"}:
-            return {"status": "skipped", "reason": f"phase={phase}", "user_id": user_id}
-
-        from phora.models.timeseries import WearableMetric
-        from sqlalchemy import select as sa_select
-        cutoff = datetime.now(UTC) - timedelta(days=3)
-        has_recent = db.scalar(
-            sa_select(WearableMetric.id).where(
-                WearableMetric.user_id == user_id,
-                WearableMetric.measured_at >= cutoff,
-            ).limit(1)
-        )
-        if has_recent:
-            return {"status": "skipped", "reason": "wearable_active", "user_id": user_id}
-
-        service = NotificationService(db)
-        locale = service._user_locale(user_id)
-        phase_label = "period" if phase == "menstrual" else "ovulation window"
-        created = service.trigger_notification(
+        result = NotificationService(db).evaluate_wearable_cycle_reminders(
             user_id,
-            payload=NotificationTriggerRequest(
-                notification_type="wearable_ovulation_reminder",
-                title=translate(locale, "wearable_reminder_title") or f"Track your {phase_label}",
-                body=translate(locale, "wearable_reminder_body") or f"Connect your Vyla or Apple Watch during your {phase_label} for more accurate insights.",
-                category="reminders",
-                priority="low",
-                action_url="/connected-devices",
-            ),
+            now=datetime.now(UTC),
         )
-        return {"status": "ok", "job": "send_wearable_ovulation_reminder", "user_id": user_id, "created": created.created}
+        return {
+            "status": "ok",
+            "job": "send_wearable_ovulation_reminder",
+            "user_id": user_id,
+            "created": result.created,
+            "dispatched": result.dispatched,
+            "skipped": result.skipped,
+        }
 
 
 @celery_app.task
@@ -228,7 +213,7 @@ def send_all_wearable_ovulation_reminders() -> dict:
     with get_session_factory()() as db:
         for user_id in UserRepository(db).active_user_ids():
             profile = UserRepository(db).ensure_profile(user_id)
-            if not _is_local_hour(profile.timezone, 8):
+            if not _is_local_hour(profile.timezone, 20):
                 continue
             send_wearable_ovulation_reminder.delay(user_id)
             queued += 1

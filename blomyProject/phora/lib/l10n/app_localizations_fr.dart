@@ -230,6 +230,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Sélectionnez votre date de naissance pour continuer.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'Vous devez avoir au moins 16 ans pour utiliser Vyla.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Acceptez les Conditions d\'utilisation et la Politique de confidentialité.';
 
@@ -767,7 +771,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get conditionIrregularCycle => 'Cycle irrégulier';
 
   @override
-  String get conditionPcos => 'PCOS';
+  String get conditionPcos => 'SOPK';
 
   @override
   String get conditionMiscarriageHistory => 'Antécédents de fausse couche';
@@ -1540,7 +1544,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String logLhRatioLabel(String value) {
-    return 'Ratio $value';
+    return 'Rapport $value';
   }
 
   @override
@@ -2440,7 +2444,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get bloomUsedDataLabel =>
-      'Vyla is a prediction application not a medical device';
+      'Vyla est une application de prédiction, pas un dispositif médical';
 
   @override
   String get bloomSavedToLogsTitle => 'Enregistré dans vos journaux';
@@ -2822,10 +2826,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get choosePlanLabel => 'Choisir un forfait';
 
   @override
-  String get temperatureMethodOral => 'Oral';
+  String get temperatureMethodOral => 'Voie orale';
 
   @override
-  String get temperatureMethodVaginal => 'Vaginal';
+  String get temperatureMethodVaginal => 'Voie vaginale';
 
   @override
   String get temperatureMethodWearable => 'Dispositif portable';
@@ -3060,6 +3064,10 @@ class AppLocalizationsFrCa extends AppLocalizationsFr {
       'Sélectionnez votre date de naissance pour continuer.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'Vous devez avoir au moins 16 ans pour utiliser Vyla.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Acceptez les Conditions d\'utilisation et la Politique de confidentialité.';
 
@@ -3597,7 +3605,7 @@ class AppLocalizationsFrCa extends AppLocalizationsFr {
   String get conditionIrregularCycle => 'Cycle irrégulier';
 
   @override
-  String get conditionPcos => 'PCOS';
+  String get conditionPcos => 'SOPK';
 
   @override
   String get conditionMiscarriageHistory => 'Antécédents de fausse couche';
@@ -4370,7 +4378,7 @@ class AppLocalizationsFrCa extends AppLocalizationsFr {
 
   @override
   String logLhRatioLabel(String value) {
-    return 'Ratio $value';
+    return 'Rapport $value';
   }
 
   @override
@@ -5270,7 +5278,7 @@ class AppLocalizationsFrCa extends AppLocalizationsFr {
 
   @override
   String get bloomUsedDataLabel =>
-      'Vyla is a prediction application not a medical device';
+      'Vyla est une application de prédiction, pas un dispositif médical';
 
   @override
   String get bloomSavedToLogsTitle => 'Enregistré dans vos journaux';
@@ -5652,10 +5660,10 @@ class AppLocalizationsFrCa extends AppLocalizationsFr {
   String get choosePlanLabel => 'Choisir un forfait';
 
   @override
-  String get temperatureMethodOral => 'Oral';
+  String get temperatureMethodOral => 'Voie orale';
 
   @override
-  String get temperatureMethodVaginal => 'Vaginal';
+  String get temperatureMethodVaginal => 'Voie vaginale';
 
   @override
   String get temperatureMethodWearable => 'Dispositif portable';
@@ -5890,6 +5898,10 @@ class AppLocalizationsFrFr extends AppLocalizationsFr {
       'Sélectionnez votre date de naissance pour continuer.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'Vous devez avoir au moins 16 ans pour utiliser Vyla.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Acceptez les Conditions d\'utilisation et la Politique de confidentialité.';
 
@@ -6427,7 +6439,7 @@ class AppLocalizationsFrFr extends AppLocalizationsFr {
   String get conditionIrregularCycle => 'Cycle irrégulier';
 
   @override
-  String get conditionPcos => 'PCOS';
+  String get conditionPcos => 'SOPK';
 
   @override
   String get conditionMiscarriageHistory => 'Antécédents de fausse couche';
@@ -7200,7 +7212,7 @@ class AppLocalizationsFrFr extends AppLocalizationsFr {
 
   @override
   String logLhRatioLabel(String value) {
-    return 'Ratio $value';
+    return 'Rapport $value';
   }
 
   @override
@@ -8100,7 +8112,7 @@ class AppLocalizationsFrFr extends AppLocalizationsFr {
 
   @override
   String get bloomUsedDataLabel =>
-      'Vyla is a prediction application not a medical device';
+      'Vyla est une application de prédiction, pas un dispositif médical';
 
   @override
   String get bloomSavedToLogsTitle => 'Enregistré dans vos journaux';
@@ -8482,10 +8494,10 @@ class AppLocalizationsFrFr extends AppLocalizationsFr {
   String get choosePlanLabel => 'Choisir un forfait';
 
   @override
-  String get temperatureMethodOral => 'Oral';
+  String get temperatureMethodOral => 'Voie orale';
 
   @override
-  String get temperatureMethodVaginal => 'Vaginal';
+  String get temperatureMethodVaginal => 'Voie vaginale';
 
   @override
   String get temperatureMethodWearable => 'Dispositif portable';

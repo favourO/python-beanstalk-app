@@ -1,15 +1,14 @@
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
-    id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // The Flutter Gradle Plugin must be applied after the Android Gradle plugin.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
     namespace = "com.vyla.health"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -39,6 +38,10 @@ android {
                 "/META-INF/NOTICE*",
                 "/META-INF/*.kotlin_module",
             )
+        }
+        jniLibs {
+            // Store .so files uncompressed and page-aligned for 16 KB page size support
+            useLegacyPackaging = false
         }
     }
 
@@ -88,5 +91,8 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    implementation("androidx.activity:activity-ktx:1.11.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    // Force Material 1.12+ to get edge-to-edge-aware date picker (removes setStatusBarColor deprecation)
+    implementation("com.google.android.material:material:1.12.0")
 }

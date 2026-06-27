@@ -10,6 +10,8 @@ import 'package:phora/core/ui/app_dimensions.dart';
 import 'package:phora/core/ui/app_theme.dart';
 import 'package:phora/features/growth/data/growth_repository.dart';
 import 'package:phora/features/growth/domain/growth_models.dart';
+import 'package:phora/features/insights/domain/cycle_stats.dart';
+import 'package:phora/features/insights/insights_providers.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -52,7 +54,7 @@ class _HealthDataScreenState extends ConsumerState<HealthDataScreen> {
                 : _audience;
         _method =
             config.defaultMethod.isNotEmpty ? config.defaultMethod : _method;
-        if (<int>{1, 3, 6, 12}.contains(config.defaultCycleCount)) {
+        if (config.defaultCycleCount > 0) {
           _cycleCount = config.defaultCycleCount;
         }
       });
@@ -110,8 +112,17 @@ class _HealthDataScreenState extends ConsumerState<HealthDataScreen> {
   Widget _buildBody(BuildContext context) {
     final dims = context.dims;
     final l10n = context.l10n;
+    final cycleStatsAsync = ref.watch(cycleStatsProvider);
+    final reportCycleCount = _reportCycleCount(cycleStatsAsync.valueOrNull);
 
     if (_loadingConfig) {
+      return Padding(
+        padding: EdgeInsets.only(top: dims.scaleSpace(56)),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (cycleStatsAsync.isLoading && !cycleStatsAsync.hasValue) {
       return Padding(
         padding: EdgeInsets.only(top: dims.scaleSpace(56)),
         child: const Center(child: CircularProgressIndicator()),
@@ -166,19 +177,10 @@ class _HealthDataScreenState extends ConsumerState<HealthDataScreen> {
                   runSpacing: dims.scaleSpace(10),
                   children: [
                     _CycleChip(
-                      label: context.l10n.healthDataCycleCountLabel(3),
-                      selected: _cycleCount == 3,
-                      onTap: () => setState(() => _cycleCount = 3),
-                    ),
-                    _CycleChip(
-                      label: context.l10n.healthDataCycleCountLabel(6),
-                      selected: _cycleCount == 6,
-                      onTap: () => setState(() => _cycleCount = 6),
-                    ),
-                    _CycleChip(
-                      label: context.l10n.healthDataCycleCountLabel(12),
-                      selected: _cycleCount == 12,
-                      onTap: () => setState(() => _cycleCount = 12),
+                      label: context.l10n.healthDataCycleCountLabel(
+                        reportCycleCount,
+                      ),
+                      selected: true,
                     ),
                   ],
                 ),
@@ -217,7 +219,7 @@ class _HealthDataScreenState extends ConsumerState<HealthDataScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ..._buildIncludedItems(context),
+              ..._buildIncludedItems(context, reportCycleCount),
               SizedBox(height: dims.scaleSpace(12)),
               _PrivacyCallout(),
             ],
@@ -235,9 +237,21 @@ class _HealthDataScreenState extends ConsumerState<HealthDataScreen> {
     );
   }
 
-  List<Widget> _buildIncludedItems(BuildContext context) {
+  int _reportCycleCount(CycleStats? stats) {
+    final trackedCycles = stats?.trackedCycles ?? 0;
+    if (trackedCycles > 0) {
+      return trackedCycles;
+    }
+    final periodRangeCount = stats?.periodRanges.length ?? 0;
+    if (periodRangeCount > 0) {
+      return periodRangeCount;
+    }
+    return stats == null ? _cycleCount : 0;
+  }
+
+  List<Widget> _buildIncludedItems(BuildContext context, int cycleCount) {
     final items = <String>[
-      context.l10n.healthDataIncludedCycleLengths(_cycleCount),
+      context.l10n.healthDataIncludedCycleLengths(cycleCount),
       context.l10n.healthDataIncludedAverageCycleLength,
       if (_includeLhHistory) context.l10n.healthDataIncludedLhHistory,
       if (_includeTemperatureChart)
@@ -257,13 +271,16 @@ class _HealthDataScreenState extends ConsumerState<HealthDataScreen> {
   Future<void> _generateReport() async {
     setState(() => _submitting = true);
     try {
+      final cycleCount = _reportCycleCount(
+        ref.read(cycleStatsProvider).valueOrNull,
+      );
       final result = await ref
           .read(growthRepositoryProvider)
           .generateCycleReport(
             sectionIds: _selectedSectionIds(),
             audience: _audience,
             method: _method,
-            cycleCount: _cycleCount,
+            cycleCount: cycleCount,
           );
       if (!mounted) return;
       setState(() => _generatedResult = result);
@@ -644,15 +661,10 @@ class _ChoiceRow extends StatelessWidget {
 }
 
 class _CycleChip extends StatelessWidget {
-  const _CycleChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+  const _CycleChip({required this.label, required this.selected});
 
   final String label;
   final bool selected;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -666,7 +678,6 @@ class _CycleChip extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(dims.scaleRadius(16)),
-          onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
             curve: Curves.easeOut,

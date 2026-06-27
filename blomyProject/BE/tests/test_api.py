@@ -10,6 +10,7 @@ from phora.core.security import create_token
 from phora.db.session import get_session_factory
 from phora.models import (
     CycleRecord,
+    CycleForecastSuggestion,
     DailyLog,
     PredictionSnapshot,
     SensorReading,
@@ -984,6 +985,103 @@ def test_gtl1_watch_sync_saves_body_signal_readings(tmp_path, monkeypatch):
             "steps",
             "wrist_temp",
         }
+
+
+def test_forecast_suggestion_accept_updates_ovulation_prediction(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'forecast-suggestions.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+
+    app = create_app()
+    client = TestClient(app)
+
+    user_id = "01TESTFORECAST000000000000"
+    with get_session_factory()() as db:
+        db.add(
+            User(
+                id=user_id,
+                email="forecast@example.com",
+                password_hash="!phora-unusable-password$test",
+                email_verified=True,
+            )
+        )
+        cycle = CycleRecord(
+            user_id=user_id,
+            period_start_date=date(2026, 4, 1),
+            cycle_length_days=28,
+            is_active=True,
+        )
+        db.add(cycle)
+        db.flush()
+        prediction = PredictionSnapshot(
+            prediction_id="forecast-suggestion-prediction",
+            user_id=user_id,
+            cycle_id=cycle.id,
+            generated_at=datetime(2026, 4, 13, tzinfo=UTC),
+            current_phase="ovulatory",
+            ovulation_estimate={"date": "2026-04-14", "cycle_day": 14},
+            confidence=0.8,
+            confidence_explanation="test",
+            warning_flags=[],
+            models_used=[],
+            model_audits=[],
+            audit={},
+            fertile_window={"start": "2026-04-09", "end": "2026-04-15"},
+            next_period_estimate={"date": "2026-04-29"},
+            phase_distribution={},
+            contributing_signals=[],
+            source="test",
+        )
+        db.add(prediction)
+        suggestion = CycleForecastSuggestion(
+            user_id=user_id,
+            cycle_id=cycle.id,
+            suggestion_type="ovulation_shift",
+            current_value=date(2026, 4, 14),
+            suggested_value=date(2026, 4, 10),
+            evidence=[{"label": "Temperature shift", "summary": "Sustained BBT rise."}],
+            status="pending",
+            source="test",
+        )
+        db.add(suggestion)
+        db.commit()
+        suggestion_id = suggestion.id
+        cycle_id = cycle.id
+
+    headers = {"Authorization": f"Bearer {create_token(user_id, 'access', 30)}"}
+    pending = client.get(
+        "/api/v1/predictions/forecast-suggestions",
+        headers=headers,
+        params={"status": "pending"},
+    )
+    assert pending.status_code == 200
+    assert pending.json()["suggestions"][0]["id"] == suggestion_id
+
+    accepted = client.post(
+        f"/api/v1/predictions/forecast-suggestions/{suggestion_id}/accept",
+        headers=headers,
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "accepted"
+
+    with get_session_factory()() as db:
+        cycle = db.get(CycleRecord, cycle_id)
+        prediction = db.query(PredictionSnapshot).filter(PredictionSnapshot.user_id == user_id).one()
+        suggestion = db.get(CycleForecastSuggestion, suggestion_id)
+        assert cycle.ovulation_confirmed_date == date(2026, 4, 10)
+        assert cycle.ovulation_predicted_date == date(2026, 4, 10)
+        assert prediction.ovulation_estimate["date"] == "2026-04-10"
+        assert prediction.ovulation_estimate["range_start"] == "2026-04-09"
+        assert prediction.ovulation_estimate["range_end"] == "2026-04-11"
+        assert prediction.fertile_window["start"] == "2026-04-05"
+        assert prediction.fertile_window["end"] == "2026-04-11"
+        assert prediction.next_period_estimate["date"] == "2026-04-24"
+        assert prediction.next_period_estimate["range_start"] == "2026-04-22"
+        assert prediction.next_period_estimate["range_end"] == "2026-04-26"
+        assert prediction.next_period_estimate["source"] == "ovulation_plus_luteal_length"
+        assert cycle.cycle_length_days == 23
+        assert cycle.luteal_length_days == 14
+        assert suggestion.status == "accepted"
 
 
 def test_daily_log_section_save_and_fetch(tmp_path, monkeypatch):

@@ -225,6 +225,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Selecione sua data de nascimento para continuar.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'Você precisa ter pelo menos 16 anos para usar o Vyla.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Aceite os Termos de Serviço e a Política de Privacidade.';
 
@@ -756,7 +760,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get conditionIrregularCycle => 'Ciclo irregular';
 
   @override
-  String get conditionPcos => 'PCOS';
+  String get conditionPcos => 'SOP';
 
   @override
   String get conditionMiscarriageHistory => 'Histórico de aborto espontâneo';
@@ -2418,7 +2422,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get bloomUsedDataLabel =>
-      'Vyla is a prediction application not a medical device';
+      'Vyla é uma aplicação de previsão, não um dispositivo médico';
 
   @override
   String get bloomSavedToLogsTitle => 'Salvo nos seus registros';
@@ -2796,10 +2800,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get choosePlanLabel => 'Escolher um plano';
 
   @override
-  String get temperatureMethodOral => 'Oral';
+  String get temperatureMethodOral => 'Via oral';
 
   @override
-  String get temperatureMethodVaginal => 'Vaginal';
+  String get temperatureMethodVaginal => 'Via vaginal';
 
   @override
   String get temperatureMethodWearable => 'Dispositivo vestível';
@@ -3029,6 +3033,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Selecione sua data de nascimento para continuar.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'Você precisa ter pelo menos 16 anos para usar o Vyla.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Aceite os Termos de Serviço e a Política de Privacidade.';
 
@@ -3560,7 +3568,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get conditionIrregularCycle => 'Ciclo irregular';
 
   @override
-  String get conditionPcos => 'PCOS';
+  String get conditionPcos => 'SOP';
 
   @override
   String get conditionMiscarriageHistory => 'Histórico de aborto espontâneo';
@@ -5222,7 +5230,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get bloomUsedDataLabel =>
-      'Vyla is a prediction application not a medical device';
+      'Vyla é um aplicativo de previsão, não um dispositivo médico';
 
   @override
   String get bloomSavedToLogsTitle => 'Salvo nos seus registros';
@@ -5600,10 +5608,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get choosePlanLabel => 'Escolher um plano';
 
   @override
-  String get temperatureMethodOral => 'Oral';
+  String get temperatureMethodOral => 'Via oral';
 
   @override
-  String get temperatureMethodVaginal => 'Vaginal';
+  String get temperatureMethodVaginal => 'Via vaginal';
 
   @override
   String get temperatureMethodWearable => 'Dispositivo vestível';
@@ -5833,6 +5841,10 @@ class AppLocalizationsPtPt extends AppLocalizationsPt {
       'Selecione sua data de nascimento para continuar.';
 
   @override
+  String get signUpAgeRestrictionError =>
+      'Você precisa ter pelo menos 16 anos para usar o Vyla.';
+
+  @override
   String get signUpAcceptTermsError =>
       'Aceite os Termos de Serviço e a Política de Privacidade.';
 
@@ -6364,7 +6376,7 @@ class AppLocalizationsPtPt extends AppLocalizationsPt {
   String get conditionIrregularCycle => 'Ciclo irregular';
 
   @override
-  String get conditionPcos => 'PCOS';
+  String get conditionPcos => 'SOP';
 
   @override
   String get conditionMiscarriageHistory => 'Histórico de aborto espontâneo';
@@ -8026,7 +8038,7 @@ class AppLocalizationsPtPt extends AppLocalizationsPt {
 
   @override
   String get bloomUsedDataLabel =>
-      'Vyla is a prediction application not a medical device';
+      'Vyla é uma aplicação de previsão, não um dispositivo médico';
 
   @override
   String get bloomSavedToLogsTitle => 'Salvo nos seus registros';
@@ -8404,10 +8416,10 @@ class AppLocalizationsPtPt extends AppLocalizationsPt {
   String get choosePlanLabel => 'Escolher um plano';
 
   @override
-  String get temperatureMethodOral => 'Oral';
+  String get temperatureMethodOral => 'Via oral';
 
   @override
-  String get temperatureMethodVaginal => 'Vaginal';
+  String get temperatureMethodVaginal => 'Via vaginal';
 
   @override
   String get temperatureMethodWearable => 'Dispositivo vestível';

@@ -359,28 +359,50 @@ def _ensure_compat_columns(connection, *, sqlite: bool) -> None:
 
 
 def _ensure_pgvector_embedding(connection) -> None:
-    """Enable pgvector extension and add VECTOR(1536) column + HNSW index to ai_memory_documents."""
-    from phora.db.base import HEALTH_SCHEMA
+    """Enable pgvector and safely backfill vector search support for AI memory."""
+    schema = HEALTH_SCHEMA or "public"
     schema_prefix = f'"{HEALTH_SCHEMA}".' if HEALTH_SCHEMA else ""
     table = f'{schema_prefix}ai_memory_documents'
 
     connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
 
-    result = connection.execute(text(
-        "SELECT column_name FROM information_schema.columns "
-        "WHERE table_name = 'ai_memory_documents' AND column_name = 'embedding_vec'"
-    )).fetchone()
+    table_exists = connection.execute(
+        text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = :schema AND table_name = 'ai_memory_documents'"
+        ),
+        {"schema": schema},
+    ).fetchone()
+    if table_exists is None:
+        return
+
+    result = connection.execute(
+        text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = :schema "
+            "AND table_name = 'ai_memory_documents' "
+            "AND column_name = 'embedding_vec'"
+        ),
+        {"schema": schema},
+    ).fetchone()
     if result is None:
-        connection.execute(text(f"ALTER TABLE {table} ADD COLUMN embedding_vec VECTOR(1536)"))
+        connection.execute(text(f"ALTER TABLE {table} ADD COLUMN embedding_vec vector(1536)"))
 
     index_name = "ix_ai_memory_embedding_vec_hnsw"
-    existing = connection.execute(text(
-        "SELECT 1 FROM pg_indexes WHERE indexname = :name"
-    ), {"name": index_name}).fetchone()
+    existing = connection.execute(
+        text(
+            "SELECT 1 FROM pg_indexes "
+            "WHERE schemaname = :schema AND indexname = :name"
+        ),
+        {"schema": schema, "name": index_name},
+    ).fetchone()
     if existing is None:
-        connection.execute(text(
-            f"CREATE INDEX {index_name} ON {table} USING hnsw (embedding_vec vector_cosine_ops)"
-        ))
+        connection.execute(
+            text(
+                f"CREATE INDEX IF NOT EXISTS {index_name} ON {table} "
+                "USING hnsw (embedding_vec vector_cosine_ops)"
+            )
+        )
 
 
 def _ensure_wearable_metrics_composite_index(connection, *, sqlite: bool) -> None:

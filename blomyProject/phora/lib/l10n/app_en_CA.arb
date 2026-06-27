@@ -67,6 +67,7 @@
   "signUpNameRequiredError": "Enter your name to continue.",
   "signUpCountryRequiredError": "Tell us where you live to continue.",
   "signUpBirthDateRequiredError": "Select your birth date to continue.",
+  "signUpAgeRestrictionError": "You must be at least 16 years old to use Vyla.",
   "signUpAcceptTermsError": "Accept the Terms of Service and Privacy Policy.",
   "signUpCompleteProfileError": "Complete your profile details before continuing.",
   "signUpAppleError": "Unable to sign up with Apple.",

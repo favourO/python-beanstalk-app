@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:phora/core/i18n/l10n_extensions.dart';
+import 'package:phora/core/auth/age_gate.dart';
 import 'package:phora/core/auth/auth_providers.dart';
+import 'package:phora/core/i18n/l10n_extensions.dart';
 import 'package:phora/core/ui/app_dimensions.dart';
 import 'package:phora/core/ui/app_theme.dart';
 import 'package:phora/features/onboarding/data/onboarding_repository.dart';
@@ -263,6 +264,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     setState(() => _isSaving = true);
     try {
       final dateOfBirth = _selectedBirthday;
+      if (dateOfBirth != null &&
+          !isAtLeastMinimumRegistrationAge(dateOfBirth)) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.signUpAgeRestrictionError)));
+        return;
+      }
       await ref
           .read(onboardingRepositoryProvider)
           .submitProfile(
@@ -294,14 +302,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Future<void> _pickBirthday() async {
     final existing = _selectedBirthday;
     final now = DateTime.now();
+    final latestAllowedDate = latestAllowedBirthDate(now: now);
     final picked = await showDatePicker(
       context: context,
-      initialDate: existing ?? DateTime(now.year - 28, now.month, now.day),
+      initialDate: clampBirthDateToRegistrationAge(
+        existing ?? DateTime(now.year - 28, now.month, now.day),
+        now: now,
+      ),
       firstDate: DateTime(1900),
-      lastDate: now,
+      lastDate: latestAllowedDate,
       helpText: context.l10n.editProfileSelectDateOfBirth,
     );
     if (picked == null || !mounted) return;
+    if (!isAtLeastMinimumRegistrationAge(picked)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.signUpAgeRestrictionError)),
+      );
+      return;
+    }
     setState(() {
       _selectedBirthday = picked;
       _birthdayController.text = _formatDate(context, picked);

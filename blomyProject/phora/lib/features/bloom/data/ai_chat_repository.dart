@@ -23,28 +23,22 @@ class AiChatRepository {
         buildVersionedApiUrl(dio, '/api/v1/ai/chat/consent'),
       );
       final data = response.data ?? <String, dynamic>{};
-      return AiChatConsentStatus(
-        accepted: data['accepted'] == true,
-        acceptedAt: _stringValue(data['accepted_at']),
-      );
+      return AiChatConsentStatus.fromJson(data);
     } on DioException catch (exception) {
       throw mapDioError(exception);
     }
   }
 
   Future<AiChatConsentStatus> updateConsentStatus({
-    required bool accepted,
+    required AiChatConsentStatus consent,
   }) async {
     try {
       final response = await dio.post<Map<String, dynamic>>(
         buildVersionedApiUrl(dio, '/api/v1/ai/chat/consent'),
-        data: {'accepted': accepted},
+        data: consent.toJson(),
       );
       final data = response.data ?? <String, dynamic>{};
-      return AiChatConsentStatus(
-        accepted: data['accepted'] == true,
-        acceptedAt: _stringValue(data['accepted_at']),
-      );
+      return AiChatConsentStatus.fromJson(data);
     } on DioException catch (exception) {
       throw mapDioError(exception);
     }
@@ -72,6 +66,9 @@ class AiChatRepository {
         savedRecords: _stringList(data['saved_records']),
         missingData: _missingDataList(data['missing_data']),
         disclaimer: _stringValue(data['disclaimer']),
+        dataUseReceipt: _dataUseReceipt(data['data_use_receipt']),
+        auditEventId: _stringValue(data['audit_event_id']),
+        policyDecision: _stringValue(data['policy_decision']),
       );
     } on DioException catch (exception) {
       throw mapDioError(exception);
@@ -150,11 +147,16 @@ class AiChatRepository {
           sufficientData: data['sufficient_data'] != false,
           missingData: _missingDataList(data['missing_data']),
           savedRecords: _stringList(data['saved_records']),
+          usedUserData: _stringList(data['used_user_data']),
           disclaimer: _stringValue(data['disclaimer']),
+          dataUseReceipt: _dataUseReceipt(data['data_use_receipt']),
+          auditEventId: _stringValue(data['audit_event_id']),
+          policyDecision: _stringValue(data['policy_decision']),
         );
       case 'error':
         return AiChatStreamError(
-          message: _stringValue(data['message']) ?? 'An unexpected error occurred.',
+          message:
+              _stringValue(data['message']) ?? 'An unexpected error occurred.',
           code: _stringValue(data['code']),
         );
       default:
@@ -191,6 +193,9 @@ class AiChatRepository {
         savedRecords: _stringList(data['saved_records']),
         missingData: _missingDataList(data['missing_data']),
         disclaimer: _stringValue(data['disclaimer']),
+        dataUseReceipt: _dataUseReceipt(data['data_use_receipt']),
+        auditEventId: _stringValue(data['audit_event_id']),
+        policyDecision: _stringValue(data['policy_decision']),
       );
     } on DioException catch (exception) {
       throw mapDioError(exception);
@@ -221,21 +226,57 @@ class AiChatRepository {
     }
   }
 
-  Future<List<AiChatThreadSummary>> fetchThreads() async {
+  Future<AiChatThreadPage> fetchThreads({
+    String? before,
+    int limit = 20,
+  }) async {
     try {
       final response = await dio.get<Map<String, dynamic>>(
         buildVersionedApiUrl(dio, '/api/v1/ai/chat/threads'),
+        queryParameters: {
+          'limit': limit,
+          if (before != null && before.isNotEmpty) 'before': before,
+        },
       );
       final data = response.data ?? <String, dynamic>{};
       final rawThreads = data['threads'];
       if (rawThreads is! List) {
-        return const [];
+        return const AiChatThreadPage(threads: []);
       }
-      return rawThreads
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .map(AiChatThreadSummary.fromJson)
-          .toList();
+      final threads =
+          rawThreads
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .map(AiChatThreadSummary.fromJson)
+              .toList();
+      return AiChatThreadPage(
+        threads: threads,
+        hasMore: data['has_more'] == true,
+        nextBefore: _stringValue(data['next_before']),
+      );
+    } on DioException catch (exception) {
+      throw mapDioError(exception);
+    }
+  }
+
+  Future<AiDataUseReceipt> fetchDataUseReceipt({
+    required String threadId,
+  }) async {
+    try {
+      final response = await dio.get<Map<String, dynamic>>(
+        buildVersionedApiUrl(dio, '/api/v1/ai/chat/threads/$threadId/data-use'),
+      );
+      return AiDataUseReceipt.fromJson(response.data ?? <String, dynamic>{});
+    } on DioException catch (exception) {
+      throw mapDioError(exception);
+    }
+  }
+
+  Future<void> deleteAiMemory() async {
+    try {
+      await dio.delete<void>(
+        buildVersionedApiUrl(dio, '/api/v1/ai/chat/memory'),
+      );
     } on DioException catch (exception) {
       throw mapDioError(exception);
     }
@@ -317,6 +358,11 @@ class AiChatRepository {
         .toList();
   }
 
+  AiDataUseReceipt? _dataUseReceipt(dynamic value) {
+    if (value is! Map) return null;
+    return AiDataUseReceipt.fromJson(Map<String, dynamic>.from(value));
+  }
+
   String? _stringValue(dynamic value) {
     if (value is String && value.trim().isNotEmpty) {
       return value.trim();
@@ -338,6 +384,9 @@ class AiChatResponse {
     required this.savedRecords,
     required this.missingData,
     this.disclaimer,
+    this.dataUseReceipt,
+    this.auditEventId,
+    this.policyDecision,
   });
 
   final String threadId;
@@ -348,13 +397,95 @@ class AiChatResponse {
   final List<String> savedRecords;
   final List<AiMissingDataPrompt> missingData;
   final String? disclaimer;
+  final AiDataUseReceipt? dataUseReceipt;
+  final String? auditEventId;
+  final String? policyDecision;
 }
 
 class AiChatConsentStatus {
-  const AiChatConsentStatus({required this.accepted, this.acceptedAt});
+  const AiChatConsentStatus({
+    required this.accepted,
+    this.canUseAIInsights = false,
+    this.canUseCycleLogs = false,
+    this.canUseSymptoms = false,
+    this.canUseWearableData = false,
+    this.canUseIntimacyData = false,
+    this.acceptedAt,
+  });
+
+  factory AiChatConsentStatus.fromJson(Map<String, dynamic> json) {
+    final accepted =
+        json['accepted'] == true || json['can_use_ai_insights'] == true;
+    return AiChatConsentStatus(
+      accepted: accepted,
+      canUseAIInsights: json['can_use_ai_insights'] == true || accepted,
+      canUseCycleLogs: json['can_use_cycle_logs'] == true || accepted,
+      canUseSymptoms: json['can_use_symptoms'] == true || accepted,
+      canUseWearableData: json['can_use_wearable_data'] == true,
+      canUseIntimacyData: json['can_use_intimacy_data'] == true,
+      acceptedAt: _stringJsonValue(json['accepted_at']),
+    );
+  }
+
+  factory AiChatConsentStatus.fullConsent() {
+    return const AiChatConsentStatus(
+      accepted: true,
+      canUseAIInsights: true,
+      canUseCycleLogs: true,
+      canUseSymptoms: true,
+      canUseWearableData: true,
+      canUseIntimacyData: true,
+    );
+  }
+
+  AiChatConsentStatus copyWith({
+    bool? accepted,
+    bool? canUseAIInsights,
+    bool? canUseCycleLogs,
+    bool? canUseSymptoms,
+    bool? canUseWearableData,
+    bool? canUseIntimacyData,
+    String? acceptedAt,
+  }) {
+    return AiChatConsentStatus(
+      accepted: accepted ?? this.accepted,
+      canUseAIInsights: canUseAIInsights ?? this.canUseAIInsights,
+      canUseCycleLogs: canUseCycleLogs ?? this.canUseCycleLogs,
+      canUseSymptoms: canUseSymptoms ?? this.canUseSymptoms,
+      canUseWearableData: canUseWearableData ?? this.canUseWearableData,
+      canUseIntimacyData: canUseIntimacyData ?? this.canUseIntimacyData,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'accepted': accepted,
+      'can_use_ai_insights': canUseAIInsights,
+      'can_use_cycle_logs': canUseCycleLogs,
+      'can_use_symptoms': canUseSymptoms,
+      'can_use_wearable_data': canUseWearableData,
+      'can_use_intimacy_data': canUseIntimacyData,
+    };
+  }
 
   final bool accepted;
+  final bool canUseAIInsights;
+  final bool canUseCycleLogs;
+  final bool canUseSymptoms;
+  final bool canUseWearableData;
+  final bool canUseIntimacyData;
   final String? acceptedAt;
+}
+
+String? _stringJsonValue(dynamic value) {
+  if (value is String && value.trim().isNotEmpty) {
+    return value.trim();
+  }
+  if (value is num) {
+    return value.toString();
+  }
+  return null;
 }
 
 class AiChatHistoryResponse {
@@ -419,6 +550,18 @@ class AiChatThreadSummary {
   final int messageCount;
 }
 
+class AiChatThreadPage {
+  const AiChatThreadPage({
+    required this.threads,
+    this.hasMore = false,
+    this.nextBefore,
+  });
+
+  final List<AiChatThreadSummary> threads;
+  final bool hasMore;
+  final String? nextBefore;
+}
+
 class AiMissingDataPrompt {
   const AiMissingDataPrompt({
     required this.action,
@@ -433,6 +576,37 @@ class AiMissingDataPrompt {
   final String reason;
   final String prompt;
   final Map<String, dynamic> payloadTemplate;
+}
+
+class AiDataUseReceipt {
+  const AiDataUseReceipt({
+    required this.usedData,
+    required this.sensitivityLabels,
+    this.policyDecision,
+    this.auditEventId,
+    this.retention,
+  });
+
+  factory AiDataUseReceipt.fromJson(Map<String, dynamic> json) {
+    return AiDataUseReceipt(
+      usedData: _stringListJson(json['used_data']),
+      sensitivityLabels: _stringListJson(json['sensitivity_labels']),
+      policyDecision: _stringJsonValue(json['policy_decision']),
+      auditEventId: _stringJsonValue(json['audit_event_id']),
+      retention: _stringJsonValue(json['retention']),
+    );
+  }
+
+  final List<String> usedData;
+  final List<String> sensitivityLabels;
+  final String? policyDecision;
+  final String? auditEventId;
+  final String? retention;
+}
+
+List<String> _stringListJson(dynamic value) {
+  if (value is! List) return const [];
+  return value.map(_stringJsonValue).whereType<String>().toList();
 }
 
 sealed class AiChatStreamEvent {}
@@ -464,13 +638,21 @@ class AiChatStreamDone extends AiChatStreamEvent {
     required this.sufficientData,
     required this.missingData,
     required this.savedRecords,
+    required this.usedUserData,
     this.disclaimer,
+    this.dataUseReceipt,
+    this.auditEventId,
+    this.policyDecision,
   });
 
   final bool sufficientData;
   final List<AiMissingDataPrompt> missingData;
   final List<String> savedRecords;
+  final List<String> usedUserData;
   final String? disclaimer;
+  final AiDataUseReceipt? dataUseReceipt;
+  final String? auditEventId;
+  final String? policyDecision;
 }
 
 class AiChatStreamError extends AiChatStreamEvent {

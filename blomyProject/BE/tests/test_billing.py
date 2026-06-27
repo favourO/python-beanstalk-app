@@ -4,6 +4,7 @@ import hmac
 import json
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -67,8 +68,8 @@ def test_plan_offers_use_live_stripe_catalog_when_live_keys_are_configured(tmp_p
     monkeypatch.setenv("PHORA_ENVIRONMENT", "stage")
     monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_live_123")
     monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_live_123")
-    monkeypatch.setenv("PHORA_STRIPE_PREMIUM_GBP_MONTH_PRICE_ID", "price_live_gbp_month_399")
-    monkeypatch.setenv("PHORA_STRIPE_PREMIUM_GBP_YEAR_PRICE_ID", "price_live_gbp_year_3500")
+    monkeypatch.setenv("PHORA_STRIPE_PRICE_GB_MONTH", "price_live_gbp_month_399")
+    monkeypatch.setenv("PHORA_STRIPE_PRICE_GB_YEAR", "price_live_gbp_year_3500")
 
     app = create_app()
     client = TestClient(app)
@@ -81,6 +82,45 @@ def test_plan_offers_use_live_stripe_catalog_when_live_keys_are_configured(tmp_p
     assert body["plans"][1]["provider_product_id"] == "prod_UHVBHeX529Udc0"
     assert body["plans"][1]["provider_price_id"] == "price_live_gbp_month_399"
     assert body["plans"][1]["price_options"][1]["provider_price_id"] == "price_live_gbp_year_3500"
+
+
+def test_live_stripe_catalog_requires_live_price_overrides_for_every_country_currency(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-live-price-overrides.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_live_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_live_123")
+
+    missing_names = billing_catalog.required_live_stripe_price_env_vars()
+    assert len(missing_names) == len(billing_catalog.stripe_supported_country_codes()) * 2
+    assert "PHORA_STRIPE_PRICE_US_YEAR" in missing_names
+
+    app = create_app()
+    client = TestClient(app)
+
+    with pytest.raises(RuntimeError, match="No live Stripe price configured for US USD month"):
+        client.get("/api/v1/billing/plan-offers", params={"country": "United States"})
+
+
+def test_live_stripe_catalog_uses_live_price_overrides_for_all_country_prices(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHORA_DATABASE_URL", f"sqlite:///{tmp_path / 'billing-all-live-prices.db'}")
+    monkeypatch.setenv("PHORA_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("PHORA_AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("PHORA_STRIPE_SECRET_KEY", "sk_live_123")
+    monkeypatch.setenv("PHORA_STRIPE_PUBLISHABLE_KEY", "pk_live_123")
+    for env_name in billing_catalog.required_live_stripe_price_env_vars():
+        monkeypatch.setenv(env_name, f"price_live_{env_name.removeprefix('PHORA_STRIPE_PRICE_').lower()}")
+
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get("/api/v1/billing/plan-offers", params={"country": "United States"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider_configured"] is True
+    assert body["plans"][1]["provider_price_id"] == "price_live_us_month"
+    assert body["plans"][1]["price_options"][1]["provider_price_id"] == "price_live_us_year"
 
 
 def test_plan_offers_uses_flutterwave_for_nigeria(tmp_path, monkeypatch):

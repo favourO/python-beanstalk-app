@@ -67,6 +67,7 @@
   "signUpNameRequiredError": "Entrez votre nom pour continuer.",
   "signUpCountryRequiredError": "Indiquez où vous habitez pour continuer.",
   "signUpBirthDateRequiredError": "Sélectionnez votre date de naissance pour continuer.",
+  "signUpAgeRestrictionError": "Vous devez avoir au moins 16 ans pour utiliser Vyla.",
   "signUpAcceptTermsError": "Acceptez les Conditions d'utilisation et la Politique de confidentialité.",
   "signUpCompleteProfileError": "Complétez les détails de votre profil avant de continuer.",
   "signUpAppleError": "Impossible de s'inscrire avec Apple.",
@@ -291,7 +292,7 @@
   "goalPregnancySubtitle": "Restez informée de l’historique de votre cycle pendant le début de la grossesse.",
   "conditionHormoneImbalance": "Déséquilibre hormonal",
   "conditionIrregularCycle": "Cycle irrégulier",
-  "conditionPcos": "PCOS",
+  "conditionPcos": "SOPK",
   "conditionMiscarriageHistory": "Antécédents de fausse couche",
   "conditionBirthControl": "Je viens d’arrêter la contraception",
   "conditionNone": "Aucun",
@@ -576,7 +577,7 @@
       }
     }
   },
-  "logLhRatioLabel": "Ratio {value}",
+  "logLhRatioLabel": "Rapport {value}",
   "@logLhRatioLabel": {
     "placeholders": {
       "value": {
@@ -941,7 +942,7 @@
   "bloomSuggestionLhTesting": "Quand dois-je commencer les tests LH ?",
   "bloomSuggestionEggWhiteMucus": "Que signifie la glaire cervicale en blanc d'œuf ?",
   "bloomConversationHelper": "Commencez une conversation et Vyla AI gardera le même fil pour les questions de suivi.",
-  "bloomUsedDataLabel": "Vyla is a prediction application not a medical device",
+  "bloomUsedDataLabel": "Vyla est une application de prédiction, pas un dispositif médical",
   "bloomSavedToLogsTitle": "Enregistré dans vos journaux",
   "bloomThinkingLabel": "Réflexion en cours...",
   "bloomMedicalDisclaimer": "Ce n’est pas un avis médical — consultez votre médecin pour des questions cliniques",
@@ -1104,8 +1105,8 @@
   "subscriptionRenewalRestarted": "Renouvellement d'abonnement redémarré.",
   "backToHomeLabel": "Retour à l'accueil",
   "choosePlanLabel": "Choisir un forfait",
-  "temperatureMethodOral": "Oral",
-  "temperatureMethodVaginal": "Vaginal",
+  "temperatureMethodOral": "Voie orale",
+  "temperatureMethodVaginal": "Voie vaginale",
   "temperatureMethodWearable": "Dispositif portable",
   "temperatureMethodUnknown": "Inconnu"
 }

@@ -507,7 +507,7 @@ class _ConnectedDevicesScreenState
     final hasConnectedDevice = _isConnected || connectedProvider != null;
     final connectedDeviceName =
         _connectedDevice != null
-            ? _deviceName(_connectedDevice)
+            ? _displayDeviceName(_connectedDevice)
             : connectedProvider?.name ?? 'Connected device';
     final connectedStatus =
         providerStatuses
@@ -3953,14 +3953,20 @@ bool _isGtl1Device(Gtl1WatchDevice device) {
   return name.contains('gtl1');
 }
 
-String _deviceName(Gtl1WatchDevice? device) {
+String _displayDeviceName(Gtl1WatchDevice? device) {
   final name = _rawDeviceName(device);
-  return name.trim().isEmpty ? 'Vyla Wear' : name;
+  if (name.trim().isEmpty) {
+    return 'Vyla Wearable';
+  }
+  if (_isGtl1RawName(name)) {
+    return 'Vyla Wearable';
+  }
+  return name;
 }
 
 String _rawDeviceName(Gtl1WatchDevice? device) {
   if (device == null) {
-    return 'Vyla Wear';
+    return 'Vyla Wearable';
   }
   final metadataName = device.metadata['deviceName'];
   if (metadataName is String && metadataName.trim().isNotEmpty) {
@@ -3969,7 +3975,12 @@ String _rawDeviceName(Gtl1WatchDevice? device) {
   if (device.name.trim().isNotEmpty) {
     return device.name.trim();
   }
-  return 'Vyla Wear';
+  return 'Vyla Wearable';
+}
+
+bool _isGtl1RawName(String name) {
+  final normalized = name.trim().toLowerCase();
+  return normalized.startsWith('gtl1') || normalized.contains('gtl1-');
 }
 
 String _friendlyBluetoothError(Object error) {

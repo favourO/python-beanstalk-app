@@ -1,5 +1,15 @@
 enum PredictionPhase { menstrual, follicular, ovulatory, luteal, unknown }
 
+enum CycleForecastSuggestionType { ovulationShift, periodShift, unknown }
+
+enum CycleForecastSuggestionStatus {
+  pending,
+  accepted,
+  rejected,
+  expired,
+  unknown,
+}
+
 class CurrentPrediction {
   const CurrentPrediction({
     required this.phase,
@@ -92,4 +102,52 @@ class PredictionCalendarDay {
   final bool isOvulation;
   final bool isFertile;
   final bool isPeriod;
+}
+
+class CycleForecastSuggestion {
+  const CycleForecastSuggestion({
+    required this.id,
+    required this.type,
+    required this.status,
+    required this.evidence,
+    this.cycleId,
+    this.currentValue,
+    this.suggestedValue,
+    this.createdAt,
+    this.decidedAt,
+  });
+
+  final String id;
+  final CycleForecastSuggestionType type;
+  final CycleForecastSuggestionStatus status;
+  final String? cycleId;
+  final DateTime? currentValue;
+  final DateTime? suggestedValue;
+  final List<CycleForecastEvidence> evidence;
+  final DateTime? createdAt;
+  final DateTime? decidedAt;
+
+  bool get isPending => status == CycleForecastSuggestionStatus.pending;
+
+  String get typeLabel {
+    return switch (type) {
+      CycleForecastSuggestionType.ovulationShift => 'Ovulation update',
+      CycleForecastSuggestionType.periodShift => 'Period update',
+      CycleForecastSuggestionType.unknown => 'Forecast update',
+    };
+  }
+}
+
+class CycleForecastEvidence {
+  const CycleForecastEvidence({
+    required this.label,
+    required this.summary,
+    this.sourceType,
+    this.confidence,
+  });
+
+  final String label;
+  final String summary;
+  final String? sourceType;
+  final double? confidence;
 }

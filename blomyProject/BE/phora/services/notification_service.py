@@ -4,10 +4,11 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from phora.core.config import Settings, get_settings
-from phora.models import CycleRecord, NotificationDevice, NotificationHistory, NotificationPreference, UserProfile
+from phora.models import CycleForecastSuggestion, CycleRecord, NotificationDevice, NotificationHistory, NotificationPreference, UserProfile, WearableMetric
 from phora.models.enums import Goal, WearableType
 from phora.repositories.core import (
     AuditRepository,
@@ -61,6 +62,7 @@ NOTIFICATION_RULES: dict[str, NotificationRule] = {
     "daily_symptom_reminder": NotificationRule("reminders", "low", "daily_symptom_reminder", "Vyla reminder"),
     "bangle_sync_reminder": NotificationRule("reminders", "low", "bangle_sync_reminder", "Vyla Bangle"),
     "temperature_logging_reminder": NotificationRule("reminders", "low", "temperature_logging_reminder", "Temperature reminder"),
+    "bbt_ovulation_shift_suggestion": NotificationRule("predictions", "high", "wearable_ovulation_reminder", "Cycle forecast update"),
     "lh_test_reminder": NotificationRule("reminders", "low", "lh_test_reminder", "Fertility reminder"),
     "weekly_summary": NotificationRule("app_engagement", "low", "weekly_summary", "Vyla weekly summary"),
     "feature_tips": NotificationRule("app_engagement", "low", "feature_tips", "Vyla tip"),
@@ -208,6 +210,22 @@ class NotificationService:
         self.db.commit()
         return updated
 
+    def delete_notification(self, user_id: str, notification_id: str) -> int:
+        deleted = self.history.delete_for_user(user_id, notification_id)
+        self.audit.log(
+            user_id,
+            "notification.deleted",
+            {"deleted": deleted, "notification_id": notification_id},
+        )
+        self.db.commit()
+        return deleted
+
+    def delete_all_notifications(self, user_id: str) -> int:
+        deleted = self.history.delete_all_for_user(user_id)
+        self.audit.log(user_id, "notification.deleted_all", {"deleted": deleted})
+        self.db.commit()
+        return deleted
+
     def trigger_notification(self, user_id: str, payload: NotificationTriggerRequest) -> NotificationDispatchResponse:
         record = self._create_notification(
             user_id=user_id,
@@ -223,6 +241,7 @@ class NotificationService:
             lock_screen_title=payload.lock_screen_title,
             lock_screen_body=payload.lock_screen_body,
             force_delivery=payload.force_delivery,
+            bypass_frequency_cap=payload.bypass_frequency_cap,
         )
         dispatched = self.dispatch_pending(user_id=user_id, now=payload.send_at)
         return NotificationDispatchResponse(
@@ -245,6 +264,7 @@ class NotificationService:
         today = moment.date()
         next_period = snapshot.next_period_estimate.get("date")
         fertile_start = snapshot.fertile_window.get("start")
+        fertile_end = snapshot.fertile_window.get("end")
         ovulation_date = snapshot.ovulation_estimate.get("date")
 
         if next_period:
@@ -302,7 +322,6 @@ class NotificationService:
             fertile_start_date = date.fromisoformat(fertile_start)
             if fertile_start_date - today == timedelta(days=1):
                 locale = self._user_locale(user_id)
-                fertile_end = snapshot.fertile_window.get("end")
                 body = self._format_month_day(fertile_start_date, locale)
                 if fertile_end:
                     body = (
@@ -323,30 +342,79 @@ class NotificationService:
                     payload_data={"fertile_window": snapshot.fertile_window},
                     send_at=moment,
                     dedupe_key=f"fertile_window_open:{fertile_start}",
+                    bypass_frequency_cap=True,
                 )
                 if created_item:
                     created.append(created_item)
 
-        if ovulation_date and date.fromisoformat(ovulation_date) - today == timedelta(days=1):
+        if ovulation_date:
+            ovulation_day = date.fromisoformat(ovulation_date)
+            days_until_ovulation = (ovulation_day - today).days
+        else:
+            days_until_ovulation = None
+
+        if fertile_start and fertile_end:
+            fertile_start_date = date.fromisoformat(fertile_start)
+            fertile_end_date = date.fromisoformat(fertile_end)
+            if fertile_start_date <= today <= fertile_end_date and days_until_ovulation not in {0, 1, 2}:
+                locale = self._user_locale(user_id)
+                created_item = self._create_notification(
+                    user_id=user_id,
+                    notification_type="fertile_window_open",
+                    title=translate(locale, "fertile_window_active_title"),
+                    body=translate(
+                        locale,
+                        "fertile_window_active_body",
+                        date=self._format_month_day(today, locale),
+                    ),
+                    action_url="/calendar",
+                    action_labels=[
+                        translate(locale, "track_symptoms"),
+                        translate(locale, "log_lh_test"),
+                    ],
+                    payload_data={"fertile_window": snapshot.fertile_window, "window_date": today.isoformat()},
+                    send_at=moment,
+                    dedupe_key=f"fertile_window_active:{today.isoformat()}",
+                    bypass_frequency_cap=True,
+                )
+                if created_item:
+                    created.append(created_item)
+
+        if days_until_ovulation in {0, 1, 2}:
             locale = self._user_locale(user_id)
             confidence_pct = int(round(snapshot.confidence * 100))
+            title_key = {
+                2: "ovulation_two_days_title",
+                1: "ovulation_tomorrow_title",
+                0: "ovulation_today_title",
+            }[days_until_ovulation]
+            body_key = {
+                2: "ovulation_two_days_body",
+                1: "ovulation_tomorrow_body",
+                0: "ovulation_today_body",
+            }[days_until_ovulation]
             created_item = self._create_notification(
                 user_id=user_id,
                 notification_type="ovulation_confirmed",
-                title=translate(locale, "ovulation_title"),
+                title=translate(locale, title_key),
                 body=translate(
                     locale,
-                    "ovulation_body",
+                    body_key,
                     confidence_pct=confidence_pct,
                 ),
-                action_url="/cycle/lh",
+                action_url="/calendar",
                 action_labels=[
                     translate(locale, "log_lh_test"),
                     translate(locale, "track_symptoms"),
                 ],
-                payload_data={"ovulation_estimate": snapshot.ovulation_estimate, "confidence": snapshot.confidence},
+                payload_data={
+                    "ovulation_estimate": snapshot.ovulation_estimate,
+                    "confidence": snapshot.confidence,
+                    "days_until_ovulation": days_until_ovulation,
+                },
                 send_at=moment,
-                dedupe_key=f"ovulation_confirmed:{ovulation_date}",
+                dedupe_key=f"ovulation_confirmed:{ovulation_date}:{days_until_ovulation}",
+                bypass_frequency_cap=True,
             )
             if created_item:
                 created.append(created_item)
@@ -440,6 +508,83 @@ class NotificationService:
         dispatched.created = len(created)
         return dispatched
 
+    def evaluate_wearable_cycle_reminders(self, user_id: str, *, now: datetime | None = None) -> NotificationDispatchResponse:
+        moment = now or datetime.now(UTC)
+        created: list[NotificationHistory] = []
+        dispatched = 0
+        snapshot = self.predictions.latest_for_user(user_id)
+        cycle = self.cycles.active_for_user(user_id)
+        if not snapshot or not cycle:
+            return NotificationDispatchResponse(skipped=1)
+
+        profile = self.users.ensure_profile(user_id)
+        if profile.wearable_type != WearableType.GTL1:
+            return NotificationDispatchResponse(skipped=1)
+        if self._has_recent_wearable_metric(user_id, since=moment - timedelta(days=3)):
+            shift_item = self._create_bbt_shift_notification_if_detected(
+                user_id=user_id,
+                snapshot=snapshot,
+                cycle=cycle,
+                now=moment,
+            )
+            if shift_item:
+                created.append(shift_item)
+            persisted = self.dispatch_pending(user_id=user_id, now=moment)
+            persisted.created = len(created)
+            if not created and persisted.dispatched == 0:
+                persisted.skipped = 1
+            return persisted
+
+        local_today = moment.astimezone(self._tz(profile)).date()
+        next_period = self._parse_iso_date(snapshot.next_period_estimate.get("date"))
+        if next_period:
+            period_length = max(1, min(cycle.menses_length or 5, 10))
+            period_window_start = next_period - timedelta(days=2)
+            period_end = next_period + timedelta(days=period_length - 1)
+            if period_window_start <= local_today <= period_end:
+                sent = self._send_ephemeral_push(
+                    user_id=user_id,
+                    notification_type="wearable_period_reminder",
+                    title="Period check-in",
+                    body="You may be on your period. Please wear your Vyla wearable tonight to keep your cycle data up to date.",
+                    action_url="/you/connected-devices",
+                    now=moment,
+                    payload_data={
+                        "predicted_period_date": next_period.isoformat(),
+                        "period_window_start_date": period_window_start.isoformat(),
+                        "period_window_date": local_today.isoformat(),
+                        "period_end_date": period_end.isoformat(),
+                    },
+                )
+                dispatched += sent
+
+        ovulation_date = self._parse_iso_date(snapshot.ovulation_estimate.get("date"))
+        ovulation_window_start = ovulation_date - timedelta(days=2) if ovulation_date else None
+        in_ovulation_wearable_window = (
+            ovulation_window_start is not None
+            and ovulation_date is not None
+            and ovulation_window_start <= local_today <= ovulation_date
+        )
+        if in_ovulation_wearable_window:
+            sent = self._send_ephemeral_push(
+                user_id=user_id,
+                notification_type="wearable_ovulation_reminder",
+                title="Ovulation window",
+                body="Your data suggests you may be in your ovulation window. Please wear your Vyla wearable tonight to help confirm your temperature pattern.",
+                action_url="/you/connected-devices",
+                now=moment,
+                payload_data={
+                    "fertile_window": snapshot.fertile_window,
+                    "ovulation_estimate": snapshot.ovulation_estimate,
+                    "ovulation_window_start_date": ovulation_window_start.isoformat(),
+                    "window_date": local_today.isoformat(),
+                },
+            )
+            dispatched += sent
+
+        self.db.commit()
+        return NotificationDispatchResponse(dispatched=dispatched)
+
     @staticmethod
     def _current_period_end_date(cycle: CycleRecord, today: date) -> date | None:
         if cycle.period_end_date is not None:
@@ -500,6 +645,7 @@ class NotificationService:
         lock_screen_body: str | None = None,
         force_delivery: bool = False,
         dedupe_key: str | None = None,
+        bypass_frequency_cap: bool = False,
     ) -> NotificationHistory | None:
         profile = self.users.ensure_profile(user_id)
         prefs = self._ensure_preferences(user_id)
@@ -515,7 +661,7 @@ class NotificationService:
             return None
         if not force_delivery and not self._is_enabled(prefs, notification_type):
             return None
-        if not force_delivery and self._exceeds_frequency_cap(user_id, resolved_category, scheduled_for):
+        if not force_delivery and not bypass_frequency_cap and self._exceeds_frequency_cap(user_id, resolved_category, scheduled_for):
             return None
         if not force_delivery and self._is_in_quiet_hours(profile, prefs, scheduled_for, critical=bool(rule and rule.critical)):
             scheduled_for = self._next_quiet_hour_end(profile, prefs, scheduled_for)
@@ -551,6 +697,188 @@ class NotificationService:
         self.history.save(item)
         self.db.flush()
         return item
+
+    def _send_ephemeral_push(
+        self,
+        *,
+        user_id: str,
+        notification_type: str,
+        title: str,
+        body: str,
+        action_url: str,
+        now: datetime,
+        payload_data: dict | None = None,
+    ) -> int:
+        prefs = self._ensure_preferences(user_id)
+        profile = self.users.ensure_profile(user_id)
+        if not prefs.all_notifications or not prefs.push_enabled:
+            return 0
+        if not bool(getattr(prefs, "wearable_ovulation_reminder", True)):
+            return 0
+        if self._is_in_quiet_hours(profile, prefs, now, critical=False):
+            return 0
+
+        devices = self.devices.active_for_user(user_id)
+        tokens = [device.fcm_token for device in devices]
+        if not tokens:
+            return 0
+
+        result = self.push_service.send_notification(
+            tokens=tokens,
+            title=title,
+            body=body,
+            data={
+                "notification_type": notification_type,
+                "action_url": action_url,
+                **{str(key): str(value) for key, value in (payload_data or {}).items()},
+            },
+        )
+        self._invalidate_tokens(result.invalid_tokens, now)
+        return len(result.delivered_tokens)
+
+    def _create_bbt_shift_notification_if_detected(
+        self,
+        *,
+        user_id: str,
+        snapshot,
+        cycle: CycleRecord,
+        now: datetime,
+    ) -> NotificationHistory | None:
+        since = datetime.combine(cycle.period_start_date, time.min, tzinfo=UTC)
+        metrics = list(
+            self.db.scalars(
+                select(WearableMetric)
+                .where(
+                    WearableMetric.user_id == user_id,
+                    WearableMetric.metric_type == "basal_body_temperature",
+                    WearableMetric.measured_at >= since,
+                    WearableMetric.is_morning_bbt_window.is_(True),
+                    WearableMetric.excluded_from_ovulation_prediction.is_(False),
+                )
+                .order_by(WearableMetric.measured_at.asc())
+            )
+        )
+        if len(metrics) < 9:
+            return None
+
+        baseline = metrics[-9:-3]
+        recent = metrics[-3:]
+        baseline_avg = sum(metric.value for metric in baseline) / len(baseline)
+        recent_avg = sum(metric.value for metric in recent) / len(recent)
+        if any(metric.value < baseline_avg + 0.18 for metric in recent):
+            return None
+
+        detected_ovulation = recent[0].measured_at.date() - timedelta(days=1)
+        predicted_ovulation = self._parse_iso_date(snapshot.ovulation_estimate.get("date"))
+        if predicted_ovulation is not None and abs((detected_ovulation - predicted_ovulation).days) < 2:
+            return None
+        luteal_length = cycle.luteal_length_days if cycle.luteal_length_days and 8 <= cycle.luteal_length_days <= 18 else 14
+        suggested_period = detected_ovulation + timedelta(days=luteal_length)
+        period_range_start = suggested_period - timedelta(days=2)
+        period_range_end = suggested_period + timedelta(days=2)
+
+        suggestion = self._create_or_get_forecast_suggestion(
+            user_id=user_id,
+            cycle=cycle,
+            current_value=predicted_ovulation,
+            suggested_value=detected_ovulation,
+            evidence=[
+                {
+                    "label": "Temperature shift",
+                    "summary": (
+                        "Your last 3 eligible morning BBT readings stayed at least 0.18 C "
+                        "above the previous 6-reading baseline."
+                    ),
+                    "source_type": "basal_body_temperature",
+                    "confidence": 0.74,
+                },
+                {
+                    "label": "Predicted vs detected",
+                    "summary": (
+                        f"Current prediction: {predicted_ovulation.isoformat() if predicted_ovulation else 'not set'}. "
+                        f"Temperature pattern suggests: {detected_ovulation.isoformat()}."
+                    ),
+                    "source_type": "prediction_delta",
+                    "confidence": 0.68,
+                },
+                {
+                    "label": "Period window impact",
+                    "summary": (
+                        f"If accepted, Vyla will estimate your next period around {suggested_period.isoformat()} "
+                        f"with a window of {period_range_start.isoformat()} to {period_range_end.isoformat()}."
+                    ),
+                    "source_type": "period_recalculation",
+                    "confidence": 0.62,
+                },
+            ],
+            source="bbt_sustained_shift",
+        )
+
+        locale = self._user_locale(user_id)
+        return self._create_notification(
+            user_id=user_id,
+            notification_type="bbt_ovulation_shift_suggestion",
+            title=translate(locale, "bbt_shift_title"),
+            body=translate(locale, "bbt_shift_body"),
+            category="predictions",
+            priority="high",
+            action_url="/calendar",
+            action_labels=[
+                translate(locale, "review_update"),
+                translate(locale, "got_it"),
+            ],
+            payload_data={
+                "detected_ovulation_date": detected_ovulation.isoformat(),
+                "predicted_ovulation_date": predicted_ovulation.isoformat() if predicted_ovulation else None,
+                "baseline_temperature_c": round(baseline_avg, 3),
+                "recent_temperature_c": round(recent_avg, 3),
+                "source": "bbt_sustained_shift",
+                "suggestion_id": suggestion.id,
+                "suggested_next_period_date": suggested_period.isoformat(),
+                "suggested_next_period_range_start": period_range_start.isoformat(),
+                "suggested_next_period_range_end": period_range_end.isoformat(),
+            },
+            send_at=now,
+            dedupe_key=f"bbt_ovulation_shift_suggestion:{detected_ovulation.isoformat()}",
+            bypass_frequency_cap=True,
+        )
+
+    def _create_or_get_forecast_suggestion(
+        self,
+        *,
+        user_id: str,
+        cycle: CycleRecord,
+        current_value: date | None,
+        suggested_value: date,
+        evidence: list[dict],
+        source: str,
+    ) -> CycleForecastSuggestion:
+        existing = (
+            self.db.query(CycleForecastSuggestion)
+            .filter(
+                CycleForecastSuggestion.user_id == user_id,
+                CycleForecastSuggestion.cycle_id == cycle.id,
+                CycleForecastSuggestion.suggestion_type == "ovulation_shift",
+                CycleForecastSuggestion.suggested_value == suggested_value,
+                CycleForecastSuggestion.status == "pending",
+            )
+            .one_or_none()
+        )
+        if existing:
+            return existing
+        suggestion = CycleForecastSuggestion(
+            user_id=user_id,
+            cycle_id=cycle.id,
+            suggestion_type="ovulation_shift",
+            current_value=current_value,
+            suggested_value=suggested_value,
+            evidence=evidence,
+            status="pending",
+            source=source,
+        )
+        self.db.add(suggestion)
+        self.db.flush()
+        return suggestion
 
     def _apply_batching(self, user_id: str, now: datetime) -> int:
         candidates = self.history.pending_batch_candidates(user_id, now=now, since=now - timedelta(hours=1))
@@ -872,6 +1200,26 @@ class NotificationService:
 
     def _format_month_day(self, value: date, locale: str | None) -> str:
         return format_month_day(value, locale)
+
+    def _parse_iso_date(self, value: object) -> date | None:
+        if not isinstance(value, str) or not value:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+
+    def _has_recent_wearable_metric(self, user_id: str, *, since: datetime) -> bool:
+        return bool(
+            self.db.scalar(
+                select(WearableMetric.id)
+                .where(
+                    WearableMetric.user_id == user_id,
+                    WearableMetric.measured_at >= since,
+                )
+                .limit(1)
+            )
+        )
 
     def _normalize_phase(self, value: str | None) -> str | None:
         return "ovulation" if value == "ovulatory" else value

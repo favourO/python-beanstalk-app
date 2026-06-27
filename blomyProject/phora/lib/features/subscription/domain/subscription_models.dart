@@ -263,6 +263,8 @@ class SubscriptionState {
   final bool redirectToHome;
   final bool contributorEnrolled;
 
+  bool get isAppleSubscription => processor == 'apple_iap';
+
   bool get hasPaidAccess =>
       tier != SubscriptionTier.free &&
       (redirectToHome ||

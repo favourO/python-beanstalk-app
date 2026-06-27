@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 from fastapi.responses import RedirectResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -32,6 +33,7 @@ from phora.schemas.billing import (
     StripePaymentSheetSyncRequest,
     StripeWebhookResponse,
 )
+from phora.services.apple_billing import APPLE_PRODUCT_INTERVAL, AppleBillingError, AppleBillingService
 from phora.services.billing_catalog import PRICING_STRATEGY, build_plan_offers, resolve_billing_price
 from phora.services.premium_access import PremiumAccessService
 from phora.services.pricing_eligibility import PricingEligibilityDecision, PricingEligibilityService
@@ -42,7 +44,7 @@ admin_router = APIRouter(prefix="/admin/billing", tags=["admin-billing"])
 _log = logging.getLogger(__name__)
 
 _ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing"}
-_ACTIVE_BILLING_PROVIDERS = {"stripe", "africa_free_launch"}
+_ACTIVE_BILLING_PROVIDERS = {"stripe", "africa_free_launch", "apple_iap"}
 
 
 def _provider_checkout_details(settings: Settings, provider: str | None) -> tuple[bool, str | None, str | None]:
@@ -1051,6 +1053,77 @@ def sync_stripe_payment_sheet_subscription(
         cancel_at_period_end=subscription.cancel_at_period_end,
         **_pending_change_fields(subscription),
     )
+
+
+class _AppleVerifyReceiptRequest(BaseModel):
+    receipt_data: str
+    product_id: str
+
+
+@router.post("/apple/verify-receipt", response_model=BillingSubscriptionStatusResponse)
+def verify_apple_receipt(
+    payload: _AppleVerifyReceiptRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_dep),
+) -> BillingSubscriptionStatusResponse:
+    service = AppleBillingService(
+        shared_secret=settings.apple_iap_shared_secret,
+        bundle_id=settings.apple_bundle_id or "com.vyla.health",
+    )
+    try:
+        info = service.verify_receipt(
+            receipt_data=payload.receipt_data,
+            product_id=payload.product_id,
+        )
+    except AppleBillingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    interval = APPLE_PRODUCT_INTERVAL.get(info["product_id"], "month")
+
+    subscription = _latest_subscription(db, user_id)
+    if not subscription:
+        subscription = Subscription(user_id=user_id)
+        db.add(subscription)
+
+    subscription.tier = "premium_plus"
+    subscription.provider = "apple_iap"
+    subscription.status = "active"
+    subscription.billing_interval = interval
+    subscription.provider_price_id = info["product_id"]
+    subscription.provider_subscription_id = info.get("original_transaction_id")
+    subscription.current_period_end = info.get("expires_date")
+    subscription.cancel_at_period_end = False
+    subscription.currency = None
+    subscription.amount = None
+    subscription.pending_billing_interval = None
+    subscription.pending_provider_price_id = None
+    subscription.pending_amount = None
+    subscription.pending_currency = None
+    subscription.pending_change_effective_at = None
+    db.commit()
+
+    existing_started = (
+        db.query(BillingActivity)
+        .filter(
+            BillingActivity.subscription_id == subscription.id,
+            BillingActivity.event_type == "subscription_started",
+        )
+        .first()
+    )
+    if not existing_started:
+        _record_billing_activity_best_effort(
+            db,
+            subscription,
+            event_type="subscription_started",
+            title="Subscription started",
+            subtitle=f"{'Premium Annual' if interval == 'year' else 'Premium Monthly'} is active via Apple.",
+        )
+
+    return _subscription_status_response(settings=settings, subscription=subscription)
 
 
 @router.get("/stripe/return/success", include_in_schema=False, name="stripe_checkout_return_success")

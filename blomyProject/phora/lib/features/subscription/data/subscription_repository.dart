@@ -605,6 +605,23 @@ class SubscriptionRepository {
     }
   }
 
+  Future<SubscriptionState> verifyAppleReceipt({
+    required String receiptData,
+    required String productId,
+  }) async {
+    try {
+      final response = await dio.post<Map<String, dynamic>>(
+        _versionedApiUrl('/api/v1/billing/apple/verify-receipt'),
+        data: {'receipt_data': receiptData, 'product_id': productId},
+      );
+      return _subscriptionStateFromResponse(
+        response.data ?? <String, dynamic>{},
+      );
+    } on DioException catch (exception) {
+      throw mapDioError(exception);
+    }
+  }
+
   Future<SubscriptionState> cancelSubscription() async {
     try {
       final response = await dio.post<Map<String, dynamic>>(

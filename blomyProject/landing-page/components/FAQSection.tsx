@@ -38,6 +38,10 @@ export const FAQ_ITEMS = [
     q: "Is Vyla available on iPhone and Android?",
     a: "Yes. Vyla is available on both iOS (App Store) and Android (Google Play Store). Downloading is free.",
   },
+  {
+    q: "Why use Vyla instead of asking a general AI like ChatGPT?",
+    a: "General AI assistants are powerful, but they are not built for your health. When you share cycle data, symptoms, or intimate health details with a public AI chatbot, that information may be stored, used for model training, or visible to third parties. Vyla is purpose-built for women's health — your data is encrypted, stored securely, never sold, and never used to train external AI models. Vyla AI also has continuous context of your cycle history, so its insights are grounded in your body's actual patterns, not generic responses.",
+  },
 ];
 
 interface FAQSectionProps {

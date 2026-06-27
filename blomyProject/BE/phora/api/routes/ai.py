@@ -217,12 +217,18 @@ def latest_medical_chat(
 
 @router.get("/chat/threads", response_model=MedicalChatThreadListResponse)
 def list_medical_chat_threads(
+    before: str | None = None,
+    limit: int = 20,
     user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_dep),
 ) -> MedicalChatThreadListResponse:
     service = MedicalChatService(db, settings)
-    return service.list_threads(user_id=user_id)
+    return service.list_threads(
+        user_id=user_id,
+        limit=limit,
+        before=_parse_history_cursor(before),
+    )
 
 
 @router.get("/chat/threads/{thread_id}", response_model=MedicalChatHistoryResponse)

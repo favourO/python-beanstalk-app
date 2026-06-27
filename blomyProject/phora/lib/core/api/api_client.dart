@@ -38,6 +38,10 @@ final dioProvider = Provider<Dio>((ref) {
     ApiErrorInterceptor(
       onUnauthorized: (error) async {
         final request = error.requestOptions;
+        if (_isTokenRevokedError(error)) {
+          await _clearLocalAuthSession(ref);
+          return null;
+        }
         if (request.extra[kSkipAuthRefreshKey] == true ||
             request.extra[kRetriedAfterAuthRefreshKey] == true) {
           return null;
@@ -61,7 +65,10 @@ final dioProvider = Provider<Dio>((ref) {
               },
             ),
           );
-        } on DioException {
+        } on DioException catch (refreshError) {
+          if (_isTokenRevokedError(refreshError)) {
+            await _clearLocalAuthSession(ref);
+          }
           return null;
         }
         final payload = refreshResponse.data ?? <String, dynamic>{};
@@ -115,6 +122,38 @@ final dioProvider = Provider<Dio>((ref) {
 
   return dio;
 });
+
+Future<void> _clearLocalAuthSession(Ref ref) async {
+  await ref.read(sessionCleanupProvider).clearLocalSession();
+  ref.read(authSessionProvider.notifier).setSession(null);
+}
+
+bool _isTokenRevokedError(DioException error) {
+  if (error.response?.statusCode != 401) return false;
+  final message = _errorMessage(error.response?.data).toLowerCase();
+  return message.contains('token revoked') ||
+      message.contains('revoked token') ||
+      (message.contains('revoked') && message.contains('token'));
+}
+
+String _errorMessage(dynamic data) {
+  if (data is String) return data;
+  if (data is Map) {
+    final detail = data['detail'];
+    if (detail is String) return detail;
+    if (detail is Map) {
+      final message = detail['message'];
+      if (message is String) return message;
+      final error = detail['error'];
+      if (error is String) return error;
+    }
+    final message = data['message'];
+    if (message is String) return message;
+    final error = data['error'];
+    if (error is String) return error;
+  }
+  return '';
+}
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(ref.watch(dioProvider));

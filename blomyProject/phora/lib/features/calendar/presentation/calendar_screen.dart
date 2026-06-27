@@ -76,6 +76,10 @@ class _CycleScreenState extends ConsumerState<CycleScreen> {
     final calendarDays =
         ref.watch(predictionCalendarProvider).valueOrNull ?? const [];
     final currentPrediction = ref.watch(currentPredictionProvider).valueOrNull;
+    final forecastSuggestions =
+        ref.watch(cycleForecastSuggestionsProvider).valueOrNull ?? const [];
+    final pendingSuggestion =
+        forecastSuggestions.where((suggestion) => suggestion.isPending).firstOrNull;
     final cycleStats = ref.watch(cycleStatsProvider).valueOrNull;
     final calendarStartDate = _calendarHistoryStartDate(
       currentPrediction: currentPrediction,
@@ -118,6 +122,14 @@ class _CycleScreenState extends ConsumerState<CycleScreen> {
                   ),
                   child: Column(
                     children: [
+                      if (pendingSuggestion != null) ...[
+                        _ForecastSuggestionCard(
+                          suggestion: pendingSuggestion,
+                          onAccept: () => _acceptSuggestion(pendingSuggestion),
+                          onReject: () => _rejectSuggestion(pendingSuggestion),
+                        ),
+                        SizedBox(height: dims.scaleSpace(16)),
+                      ],
                       const _PhaseLegendCard(),
                       SizedBox(height: dims.scaleSpace(16)),
                       for (final month in visibleMonths) ...[
@@ -154,6 +166,208 @@ class _CycleScreenState extends ConsumerState<CycleScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _acceptSuggestion(CycleForecastSuggestion suggestion) async {
+    try {
+      await ref.read(cycleForecastSuggestionsProvider.notifier).accept(
+        suggestion.id,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cycle forecast updated.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update this forecast.')),
+      );
+    }
+  }
+
+  Future<void> _rejectSuggestion(CycleForecastSuggestion suggestion) async {
+    try {
+      await ref.read(cycleForecastSuggestionsProvider.notifier).reject(
+        suggestion.id,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Suggested update dismissed.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not dismiss this update.')),
+      );
+    }
+  }
+}
+
+class _ForecastSuggestionCard extends StatelessWidget {
+  const _ForecastSuggestionCard({
+    required this.suggestion,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  final CycleForecastSuggestion suggestion;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    final isOvulation =
+        suggestion.type == CycleForecastSuggestionType.ovulationShift;
+    final currentLabel =
+        suggestion.currentValue == null
+            ? 'Current estimate unavailable'
+            : _shortDateLabel(context, suggestion.currentValue!);
+    final suggestedLabel =
+        suggestion.suggestedValue == null
+            ? 'Suggested date unavailable'
+            : _shortDateLabel(context, suggestion.suggestedValue!);
+    final evidence = suggestion.evidence.take(3).toList();
+
+    return _CalendarCard(
+      radius: 10,
+      padding: EdgeInsets.all(dims.scaleWidth(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: dims.scaleWidth(38),
+                height: dims.scaleWidth(38),
+                decoration: BoxDecoration(
+                  color: (isOvulation
+                          ? colors.phaseOvulatory
+                          : colors.phaseMenstrual)
+                      .withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isOvulation
+                      ? Icons.wb_sunny_rounded
+                      : Icons.water_drop_rounded,
+                  color:
+                      isOvulation
+                          ? colors.phaseOvulatory
+                          : colors.phaseMenstrual,
+                  size: dims.scaleText(20),
+                ),
+              ),
+              SizedBox(width: dims.scaleWidth(10)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      suggestion.typeLabel,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: colors.textPrimary,
+                        fontSize: dims.scaleText(14),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: dims.scaleSpace(2)),
+                    Text(
+                      '$currentLabel -> $suggestedLabel',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.textSecondary,
+                        fontSize: dims.scaleText(12.2),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: dims.scaleSpace(12)),
+          Text(
+            'Vyla found a pattern that may make this cycle forecast more accurate. Applying it can update your ovulation timing, fertile window, and next period estimate.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colors.textSecondary,
+              fontSize: dims.scaleText(12.3),
+              height: 1.35,
+            ),
+          ),
+          if (evidence.isNotEmpty) ...[
+            SizedBox(height: dims.scaleSpace(10)),
+            for (final item in evidence) ...[
+              _ForecastEvidenceRow(evidence: item),
+              SizedBox(height: dims.scaleSpace(7)),
+            ],
+          ],
+          SizedBox(height: dims.scaleSpace(8)),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onReject,
+                  child: const Text('Dismiss'),
+                ),
+              ),
+              SizedBox(width: dims.scaleWidth(10)),
+              Expanded(
+                child: FilledButton(
+                  onPressed: onAccept,
+                  child: const Text('Apply update'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ForecastEvidenceRow extends StatelessWidget {
+  const _ForecastEvidenceRow({required this.evidence});
+
+  final CycleForecastEvidence evidence;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.check_circle_outline_rounded,
+          color: colors.accentPrimary,
+          size: dims.scaleText(16),
+        ),
+        SizedBox(width: dims.scaleWidth(7)),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colors.textSecondary,
+                fontSize: dims.scaleText(11.7),
+                height: 1.25,
+              ),
+              children: [
+                TextSpan(
+                  text: '${evidence.label}: ',
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                TextSpan(text: evidence.summary),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1200,6 +1414,13 @@ String _dateOnly(DateTime value) {
 
 String _monthYearLabel(BuildContext context, DateTime date) {
   return AppFormatters.formatMonthYear(
+    date,
+    localeTag: Localizations.localeOf(context).toLanguageTag(),
+  );
+}
+
+String _shortDateLabel(BuildContext context, DateTime date) {
+  return AppFormatters.formatDateMedium(
     date,
     localeTag: Localizations.localeOf(context).toLanguageTag(),
   );

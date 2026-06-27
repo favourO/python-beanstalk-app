@@ -60,6 +60,7 @@ def _dispatch_blog_notifications(post_id: str, title: str, excerpt: str, slug: s
                         priority="low",
                         action_url=f"/blog?post={slug}",
                         force_delivery=False,
+                        bypass_frequency_cap=True,
                     ),
                 )
             except Exception:

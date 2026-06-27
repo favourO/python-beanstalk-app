@@ -20,6 +20,33 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final Set<String> _selectedIds = <String>{};
+  bool _isDeleting = false;
+
+  bool get _selectionMode => _selectedIds.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_maybeLoadMore);
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_maybeLoadMore)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _maybeLoadMore() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.pixels < position.maxScrollExtent - 480) return;
+    ref.read(notificationHistoryProvider.notifier).loadMore();
+  }
+
   Future<void> _refresh() async {
     await ref.read(notificationHistoryProvider.notifier).refresh();
   }
@@ -30,6 +57,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   void _openNotification(AppNotification notification) {
+    if (_selectionMode) {
+      _toggleSelection(notification);
+      return;
+    }
     _markRead(notification);
     final destination = notificationDestinationFromData({
       'notification_type': notification.notificationType,
@@ -37,8 +68,187 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       if (notification.payload != null) ...notification.payload!,
     });
     if (destination != '/notifications') {
-      context.go(destination);
+      context.push(destination);
     }
+  }
+
+  void _toggleSelection(AppNotification notification) {
+    setState(() {
+      if (!_selectedIds.remove(notification.id)) {
+        _selectedIds.add(notification.id);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    if (!_selectionMode) return;
+    setState(_selectedIds.clear);
+  }
+
+  Future<void> _markAllRead() async {
+    try {
+      await ref.read(notificationHistoryProvider.notifier).markAllRead();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
+  Future<void> _deleteSelected() async {
+    final selected = _selectedIds.toSet();
+    if (selected.isEmpty || _isDeleting) return;
+    final confirmed = await _confirmDelete(
+      selected.length == 1 ? 'Delete notification?' : 'Delete notifications?',
+      selected.length == 1
+          ? 'This notification will be removed from your history.'
+          : '${selected.length} notifications will be removed from your history.',
+    );
+    if (!confirmed) return;
+    setState(() => _isDeleting = true);
+    try {
+      if (selected.length == 1) {
+        await ref
+            .read(notificationHistoryProvider.notifier)
+            .deleteNotification(selected.first);
+      } else {
+        await ref
+            .read(notificationHistoryProvider.notifier)
+            .deleteNotifications(selected);
+      }
+      if (mounted) setState(_selectedIds.clear);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  Future<void> _deleteAll() async {
+    if (_isDeleting) return;
+    final confirmed = await _confirmDelete(
+      'Delete all notifications?',
+      'Your notification history will be cleared.',
+    );
+    if (!confirmed) return;
+    setState(() => _isDeleting = true);
+    try {
+      await ref
+          .read(notificationHistoryProvider.notifier)
+          .deleteAllNotifications();
+      if (mounted) setState(_selectedIds.clear);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  Future<bool> _confirmDelete(String title, String body) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            final colors = context.phora.colors;
+            final dims = context.dims;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
+            return AlertDialog(
+              backgroundColor: colors.bgCard,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(dims.scaleRadius(24)),
+                side: BorderSide(color: colors.border),
+              ),
+              icon: Container(
+                width: dims.scaleWidth(48),
+                height: dims.scaleWidth(48),
+                decoration: BoxDecoration(
+                  color: colors.accentDanger.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  color: colors.accentDanger,
+                  size: dims.scaleText(24),
+                ),
+              ),
+              title: Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              content: Text(
+                body,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.textSecondary,
+                  height: 1.45,
+                ),
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actionsPadding: EdgeInsets.fromLTRB(
+                dims.scaleWidth(20),
+                0,
+                dims.scaleWidth(20),
+                dims.scaleSpace(20),
+              ),
+              actions: [
+                SizedBox(
+                  width: dims.scaleWidth(118),
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: colors.textSecondary,
+                      side: BorderSide(
+                        color:
+                            isDark
+                                ? colors.borderStrong
+                                : const Color(0xFFF0E1D7),
+                      ),
+                      minimumSize: Size.fromHeight(dims.scaleSpace(48)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          dims.scaleRadius(16),
+                        ),
+                      ),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                SizedBox(width: dims.scaleWidth(8)),
+                SizedBox(
+                  width: dims.scaleWidth(118),
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.accentDanger,
+                      foregroundColor: Colors.white,
+                      minimumSize: Size.fromHeight(dims.scaleSpace(48)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          dims.scaleRadius(16),
+                        ),
+                      ),
+                    ),
+                    child: const Text('Delete'),
+                  ),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
   }
 
   @override
@@ -58,25 +268,32 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         child: Stack(
           children: [
             if (!isDark) const _NotificationsBackdrop(),
-            RefreshIndicator(
-              onRefresh: _refresh,
-              color: colors.accentPrimary,
-              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  SliverToBoxAdapter(child: _buildHeader(context, dims)),
-                  SliverToBoxAdapter(
-                    child: _buildHistoryView(
-                      context,
-                      dims,
-                      colors,
-                      isDark,
-                      historyAsync,
-                      filtered,
+            Column(
+              children: [
+                _buildHeader(context, dims, filtered),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _refresh,
+                    color: colors.accentPrimary,
+                    child: CustomScrollView(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: _buildHistoryView(
+                            context,
+                            dims,
+                            colors,
+                            isDark,
+                            historyAsync,
+                            filtered,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
@@ -84,9 +301,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, AppDimensions dims) {
+  Widget _buildHeader(
+    BuildContext context,
+    AppDimensions dims,
+    List<AppNotification> notifications,
+  ) {
     final colors = context.phora.colors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedCount = _selectedIds.length;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -99,8 +321,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CircleIconButton(
-            icon: Icons.arrow_back_ios_new_rounded,
-            onTap: () => context.pop(),
+            icon:
+                _selectionMode
+                    ? Icons.close_rounded
+                    : Icons.arrow_back_ios_new_rounded,
+            onTap: _selectionMode ? _clearSelection : () => context.pop(),
           ),
           SizedBox(width: dims.scaleWidth(12)),
           Expanded(
@@ -109,7 +334,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               child: Column(
                 children: [
                   Text(
-                    context.l10n.notificationsTitle,
+                    _selectionMode
+                        ? '$selectedCount selected'
+                        : context.l10n.notificationsTitle,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.displaySmall?.copyWith(
                       fontSize: dims.scaleText(32),
@@ -120,28 +347,48 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                           isDark ? colors.textPrimary : const Color(0xFF2D170F),
                     ),
                   ),
-                  SizedBox(height: dims.scaleSpace(10)),
-                  Text(
-                    context.l10n.notificationsSubtitle,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: dims.scaleText(13),
-                      height: 1.45,
-                      color:
-                          isDark
-                              ? colors.textSecondary
-                              : const Color(0xFF7F6357),
+                  if (!_selectionMode) ...[
+                    SizedBox(height: dims.scaleSpace(10)),
+                    Text(
+                      context.l10n.notificationsSubtitle,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontSize: dims.scaleText(13),
+                        height: 1.45,
+                        color:
+                            isDark
+                                ? colors.textSecondary
+                                : const Color(0xFF7F6357),
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
           ),
           SizedBox(width: dims.scaleWidth(12)),
-          _CircleIconButton(
-            icon: Icons.settings_outlined,
-            onTap: () => context.go('/you/manage-notifications'),
-          ),
+          if (_selectionMode) ...[
+            _CircleIconButton(
+              icon: Icons.select_all_rounded,
+              onTap:
+                  () => setState(() {
+                    _selectedIds
+                      ..clear()
+                      ..addAll(notifications.map((item) => item.id));
+                  }),
+            ),
+            SizedBox(width: dims.scaleWidth(8)),
+            _CircleIconButton(
+              icon: Icons.delete_outline_rounded,
+              onTap: _deleteSelected,
+            ),
+          ] else
+            _NotificationsMenuButton(
+              onSettings: () => context.go('/you/manage-notifications'),
+              onMarkAllRead: _markAllRead,
+              onDeleteAll:
+                  notifications.isEmpty || _isDeleting ? null : _deleteAll,
+            ),
         ],
       ),
     );
@@ -152,12 +399,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     AppDimensions dims,
     AppColors colors,
     bool isDark,
-    AsyncValue<NotificationHistory?> historyAsync,
+    AsyncValue<NotificationHistory> historyAsync,
     List<AppNotification> filtered,
   ) {
     return historyAsync.when(
       data:
-          (_) =>
+          (history) =>
               filtered.isEmpty
                   ? Padding(
                     padding: EdgeInsets.fromLTRB(
@@ -168,7 +415,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     ),
                     child: const _EmptyHistoryCard(),
                   )
-                  : _buildGroupedList(context, dims, colors, isDark, filtered),
+                  : _buildGroupedList(
+                    context,
+                    dims,
+                    colors,
+                    isDark,
+                    filtered,
+                    isLoadingMore: history.isLoadingMore,
+                  ),
       loading:
           () => Padding(
             padding: EdgeInsets.symmetric(vertical: dims.scaleSpace(48)),
@@ -200,8 +454,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     AppDimensions dims,
     AppColors colors,
     bool isDark,
-    List<AppNotification> notifications,
-  ) {
+    List<AppNotification> notifications, {
+    required bool isLoadingMore,
+  }) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final todayItems = <AppNotification>[];
@@ -254,72 +509,80 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children:
-            sections.map((section) {
-              final (label, items) = section;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: dims.scaleSpace(18)),
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontSize: dims.scaleText(12),
-                      fontWeight: FontWeight.w600,
-                      color: colors.textTertiary,
-                      letterSpacing: 0.4,
-                    ),
+        children: [
+          ...sections.map((section) {
+            final (label, items) = section;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: dims.scaleSpace(18)),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontSize: dims.scaleText(12),
+                    fontWeight: FontWeight.w600,
+                    color: colors.textTertiary,
+                    letterSpacing: 0.4,
                   ),
-                  SizedBox(height: dims.scaleSpace(8)),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(dims.scaleRadius(28)),
-                      border: Border.all(
-                        color: isDark ? colors.border : const Color(0xFFF0E1D7),
-                      ),
-                      boxShadow:
-                          isDark
-                              ? null
-                              : const [
-                                BoxShadow(
-                                  color: Color(0x08C78862),
-                                  blurRadius: 24,
-                                  offset: Offset(0, 12),
-                                ),
-                              ],
+                ),
+                SizedBox(height: dims.scaleSpace(8)),
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(dims.scaleRadius(28)),
+                    border: Border.all(
+                      color: isDark ? colors.border : const Color(0xFFF0E1D7),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(
-                        dims.scaleRadius(28) - 1,
-                      ),
-                      child: Material(
-                        color: cardColor,
-                        child: Column(
-                          children: List.generate(items.length * 2 - 1, (i) {
-                            if (i.isOdd) {
-                              return Divider(
-                                height: 1,
-                                thickness: 1,
-                                color:
-                                    isDark
-                                        ? colors.border.withValues(alpha: 0.8)
-                                        : const Color(0xFFF0E1D7),
-                                indent: dims.scaleWidth(74),
-                              );
-                            }
-                            final n = items[i ~/ 2];
-                            return _NotificationRow(
-                              notification: n,
-                              onTap: () => _openNotification(n),
+                    boxShadow:
+                        isDark
+                            ? null
+                            : const [
+                              BoxShadow(
+                                color: Color(0x08C78862),
+                                blurRadius: 24,
+                                offset: Offset(0, 12),
+                              ),
+                            ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      dims.scaleRadius(28) - 1,
+                    ),
+                    child: Material(
+                      color: cardColor,
+                      child: Column(
+                        children: List.generate(items.length * 2 - 1, (i) {
+                          if (i.isOdd) {
+                            return Divider(
+                              height: 1,
+                              thickness: 1,
+                              color:
+                                  isDark
+                                      ? colors.border.withValues(alpha: 0.8)
+                                      : const Color(0xFFF0E1D7),
+                              indent: dims.scaleWidth(74),
                             );
-                          }),
-                        ),
+                          }
+                          final n = items[i ~/ 2];
+                          return _NotificationRow(
+                            notification: n,
+                            selected: _selectedIds.contains(n.id),
+                            selectionMode: _selectionMode,
+                            onTap: () => _openNotification(n),
+                            onLongPress: () => _toggleSelection(n),
+                          );
+                        }),
                       ),
                     ),
                   ),
-                ],
-              );
-            }).toList(),
+                ),
+              ],
+            );
+          }),
+          if (isLoadingMore) ...[
+            SizedBox(height: dims.scaleSpace(18)),
+            _NotificationSkeletonCard(isDark: isDark),
+          ],
+        ],
       ),
     );
   }
@@ -352,6 +615,204 @@ class _CircleIconButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _NotificationsMenuButton extends StatelessWidget {
+  const _NotificationsMenuButton({
+    required this.onSettings,
+    required this.onMarkAllRead,
+    required this.onDeleteAll,
+  });
+
+  final VoidCallback onSettings;
+  final VoidCallback onMarkAllRead;
+  final VoidCallback? onDeleteAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: isDark ? colors.bgElevated : const Color(0xFFFFF4ED),
+      shape: const CircleBorder(),
+      child: PopupMenuButton<_NotificationMenuAction>(
+        tooltip: 'Notification actions',
+        icon: Icon(
+          Icons.more_horiz_rounded,
+          size: dims.scaleText(22),
+          color: isDark ? colors.textPrimary : const Color(0xFF5A2A18),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(dims.scaleRadius(16)),
+        ),
+        onSelected: (action) {
+          switch (action) {
+            case _NotificationMenuAction.settings:
+              onSettings();
+            case _NotificationMenuAction.markAllRead:
+              onMarkAllRead();
+            case _NotificationMenuAction.deleteAll:
+              onDeleteAll?.call();
+          }
+        },
+        itemBuilder:
+            (context) => [
+              const PopupMenuItem(
+                value: _NotificationMenuAction.settings,
+                child: _MenuItemContent(
+                  icon: Icons.settings_outlined,
+                  label: 'Settings',
+                ),
+              ),
+              const PopupMenuItem(
+                value: _NotificationMenuAction.markAllRead,
+                child: _MenuItemContent(
+                  icon: Icons.done_all_rounded,
+                  label: 'Mark all as read',
+                ),
+              ),
+              PopupMenuItem(
+                value: _NotificationMenuAction.deleteAll,
+                enabled: onDeleteAll != null,
+                child: const _MenuItemContent(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Delete all',
+                  destructive: true,
+                ),
+              ),
+            ],
+      ),
+    );
+  }
+}
+
+enum _NotificationMenuAction { settings, markAllRead, deleteAll }
+
+class _NotificationSkeletonCard extends StatelessWidget {
+  const _NotificationSkeletonCard({required this.isDark});
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    final fillColor =
+        isDark
+            ? colors.bgSurface
+            : const Color(0xFFFFF7F2).withValues(alpha: 0.92);
+    final shimmerColor =
+        isDark
+            ? colors.borderStrong.withValues(alpha: 0.45)
+            : const Color(0xFFF4E5DC);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: fillColor,
+        borderRadius: BorderRadius.circular(dims.scaleRadius(28)),
+        border: Border.all(color: isDark ? colors.border : shimmerColor),
+      ),
+      child: Column(
+        children: List.generate(5, (index) {
+          if (index.isOdd) {
+            return Divider(
+              height: 1,
+              thickness: 1,
+              color:
+                  isDark ? colors.border.withValues(alpha: 0.8) : shimmerColor,
+              indent: dims.scaleWidth(74),
+            );
+          }
+          return const _NotificationSkeletonRow();
+        }),
+      ),
+    );
+  }
+}
+
+class _NotificationSkeletonRow extends StatelessWidget {
+  const _NotificationSkeletonRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final colors = context.phora.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final blockColor =
+        isDark
+            ? colors.borderStrong.withValues(alpha: 0.5)
+            : const Color(0xFFF0E1D7);
+
+    Widget block({required double width, required double height}) {
+      return Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: blockColor,
+          borderRadius: BorderRadius.circular(dims.scaleRadius(999)),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: dims.scaleWidth(16),
+        vertical: dims.scaleSpace(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: dims.scaleWidth(42),
+            height: dims.scaleWidth(42),
+            decoration: BoxDecoration(
+              color: blockColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          SizedBox(width: dims.scaleWidth(14)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                block(width: dims.scaleWidth(150), height: dims.scaleSpace(12)),
+                SizedBox(height: dims.scaleSpace(10)),
+                block(width: double.infinity, height: dims.scaleSpace(10)),
+                SizedBox(height: dims.scaleSpace(7)),
+                block(width: dims.scaleWidth(190), height: dims.scaleSpace(10)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuItemContent extends StatelessWidget {
+  const _MenuItemContent({
+    required this.icon,
+    required this.label,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = context.dims;
+    final color = destructive ? Colors.redAccent : null;
+    return Row(
+      children: [
+        Icon(icon, size: dims.scaleText(18), color: color),
+        SizedBox(width: dims.scaleWidth(10)),
+        Text(label, style: TextStyle(color: color)),
+      ],
     );
   }
 }
@@ -500,10 +961,19 @@ class _NotificationFloralAccentPainter extends CustomPainter {
 // ── Notification row ────────────────────────────────────────────────────────
 
 class _NotificationRow extends StatelessWidget {
-  const _NotificationRow({required this.notification, required this.onTap});
+  const _NotificationRow({
+    required this.notification,
+    required this.selected,
+    required this.selectionMode,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   final AppNotification notification;
+  final bool selected;
+  final bool selectionMode;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -514,6 +984,7 @@ class _NotificationRow extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: dims.scaleWidth(16),
@@ -538,7 +1009,7 @@ class _NotificationRow extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: Icon(
-                    style.icon,
+                    selected ? Icons.check_rounded : style.icon,
                     color: style.accent,
                     size: dims.scaleText(20),
                   ),
@@ -604,6 +1075,16 @@ class _NotificationRow extends StatelessWidget {
                 ],
               ),
             ),
+            if (selectionMode) ...[
+              SizedBox(width: dims.scaleWidth(10)),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: selected ? style.accent : colors.textTertiary,
+                size: dims.scaleText(20),
+              ),
+            ],
           ],
         ),
       ),

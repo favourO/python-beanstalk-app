@@ -1,7 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:phora/core/auth/auth_providers.dart';
-import 'package:phora/core/notifications/mobile_notification_service.dart';
-import 'package:phora/core/preferences/app_preferences.dart';
 import 'package:phora/features/home/domain/home_dashboard.dart';
 import 'package:phora/features/wearables/domain/wearable_models.dart';
 import 'package:phora/features/wearables/insights/bbt_collection_window_service.dart';
@@ -9,8 +6,6 @@ import 'package:phora/features/wearables/repositories/wearable_repository.dart';
 
 final bbtReminderServiceProvider = Provider<BBTReminderService>((ref) {
   return BBTReminderService(
-    preferences: ref.watch(appPreferencesProvider),
-    notifications: ref.watch(mobileNotificationServiceProvider),
     wearableRepository: ref.watch(wearableRepositoryProvider),
   );
 });
@@ -36,60 +31,12 @@ class BBTCollectionHomeState {
 }
 
 class BBTReminderService {
-  BBTReminderService({
-    required AppPreferences preferences,
-    required MobileNotificationService notifications,
-    required WearableRepository wearableRepository,
-  }) : _preferences = preferences,
-       _notifications = notifications,
-       _wearableRepository = wearableRepository;
+  BBTReminderService({required WearableRepository wearableRepository})
+    : _wearableRepository = wearableRepository;
 
-  final AppPreferences _preferences;
-  final MobileNotificationService _notifications;
   final WearableRepository _wearableRepository;
   final BBTCollectionWindowService _windowService =
       const BBTCollectionWindowService();
-
-  Future<void> updateSchedule(HomeDashboard dashboard) async {
-    final window = _windowService.fromHomeDashboard(dashboard);
-    if (window == null || !window.isTodayInCollectionWindow) {
-      await _notifications.cancelBbtReminders();
-      return;
-    }
-
-    final dismissedUntil = await _preferences.getBbtReminderDismissedUntil();
-    if (dismissedUntil != null && dismissedUntil.isAfter(DateTime.now())) {
-      await _notifications.cancelBbtReminders();
-      return;
-    }
-
-    final statuses = await _wearableRepository.connectionStatuses();
-    final connected = statuses.where((status) => status.isConnected).toList();
-
-    if (connected.isEmpty) {
-      final time = await _preferences.getBbtManualReminderTime();
-      await _notifications.scheduleDailyBbtReminder(
-        time: time,
-        title: 'Log your morning temperature',
-        body:
-            'Connect a wearable or log your morning temperature to improve ovulation predictions.',
-        route: '/log',
-        wearableReminder: false,
-      );
-      return;
-    }
-
-    final provider = connected.first;
-    final descriptor = _wearableRepository.descriptorFor(provider.providerId);
-    final time = await _preferences.getBbtWearableReminderTime();
-    await _notifications.scheduleDailyBbtReminder(
-      time: time,
-      title: 'Wear your device tonight',
-      body: _wearableReminderBody(descriptor.id),
-      route: '/you/connected-devices',
-      wearableReminder: true,
-    );
-  }
 
   Future<BBTCollectionHomeState?> homeState(HomeDashboard dashboard) async {
     final window = _windowService.fromHomeDashboard(dashboard);
@@ -131,15 +78,6 @@ class BBTReminderService {
       needsPermission: status.syncHealth == WearableSyncHealth.needsAttention,
       syncNeeded: syncNeeded,
     );
-  }
-
-  String _wearableReminderBody(String providerId) {
-    return switch (providerId) {
-      WearableProviderIds.fitbit =>
-        'Wear your Fitbit tonight so Vyla can collect sleep and temperature trends for better ovulation insights.',
-      _ =>
-        'Wear your Vyla wearable tonight so we can collect your overnight temperature trend.',
-    };
   }
 
   String _relative(DateTime value) {

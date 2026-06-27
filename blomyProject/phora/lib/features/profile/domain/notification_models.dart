@@ -149,7 +149,8 @@ class NotificationSettings {
       bangleSyncReminder: bangleSyncReminder ?? this.bangleSyncReminder,
       lhTestReminder: lhTestReminder ?? this.lhTestReminder,
       blogPosts: blogPosts ?? this.blogPosts,
-      wearableOvulationReminder: wearableOvulationReminder ?? this.wearableOvulationReminder,
+      wearableOvulationReminder:
+          wearableOvulationReminder ?? this.wearableOvulationReminder,
       updateReminders: updateReminders ?? this.updateReminders,
       quietHours: quietHours ?? this.quietHours,
     );
@@ -216,12 +217,37 @@ class AppNotification {
 
 @immutable
 class NotificationHistory {
-  const NotificationHistory({required this.items, required this.unreadCount});
+  const NotificationHistory({
+    required this.items,
+    required this.unreadCount,
+    this.hasMore = false,
+    this.isLoadingMore = false,
+  });
 
-  const NotificationHistory.empty() : items = const [], unreadCount = 0;
+  const NotificationHistory.empty()
+    : items = const [],
+      unreadCount = 0,
+      hasMore = false,
+      isLoadingMore = false;
 
   final List<AppNotification> items;
   final int unreadCount;
+  final bool hasMore;
+  final bool isLoadingMore;
+
+  NotificationHistory copyWith({
+    List<AppNotification>? items,
+    int? unreadCount,
+    bool? hasMore,
+    bool? isLoadingMore,
+  }) {
+    return NotificationHistory(
+      items: items ?? this.items,
+      unreadCount: unreadCount ?? this.unreadCount,
+      hasMore: hasMore ?? this.hasMore,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+    );
+  }
 }
 
 String? _readString(dynamic value) {

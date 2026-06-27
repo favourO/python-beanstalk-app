@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.orm import Session
 
 from phora.models import (
@@ -357,6 +357,23 @@ class NotificationHistoryRepository:
         item.read_at = now
         self.db.flush()
         return 1
+
+    def delete_for_user(self, user_id: str, notification_id: str) -> int:
+        result = self.db.execute(
+            delete(NotificationHistory).where(
+                NotificationHistory.user_id == user_id,
+                NotificationHistory.id == notification_id,
+            )
+        )
+        self.db.flush()
+        return int(result.rowcount or 0)
+
+    def delete_all_for_user(self, user_id: str) -> int:
+        result = self.db.execute(
+            delete(NotificationHistory).where(NotificationHistory.user_id == user_id)
+        )
+        self.db.flush()
+        return int(result.rowcount or 0)
 
 
 class SensorRepository:

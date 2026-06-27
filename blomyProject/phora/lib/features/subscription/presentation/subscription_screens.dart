@@ -1,13 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:intl/intl.dart';
 import 'package:phora/core/api/api_error_mapper.dart';
 import 'package:phora/core/auth/auth_providers.dart';
 import 'package:phora/core/i18n/l10n_extensions.dart';
 import 'package:phora/core/location/device_location_country_service.dart';
+import 'package:phora/core/payments/apple_iap_service.dart';
 import 'package:phora/core/payments/payment_country_catalog.dart';
 import 'package:phora/core/payments/stripe_wallet_config.dart';
 import 'package:phora/core/ui/app_dimensions.dart';
@@ -150,21 +153,21 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                             ? null
                             : () => _restartSubscription(context),
                     onSwitchToMonthly:
-                        _isSwitchingInterval
+                        subscription.isAppleSubscription || _isSwitchingInterval
                             ? null
                             : () => _switchSubscriptionInterval(
                               context,
                               targetInterval: 'month',
                             ),
                     onSwitchToAnnual:
-                        _isSwitchingInterval
+                        subscription.isAppleSubscription || _isSwitchingInterval
                             ? null
                             : () => _switchSubscriptionInterval(
                               context,
                               targetInterval: 'year',
                             ),
                     onCancelScheduledChange:
-                        _isSwitchingInterval
+                        subscription.isAppleSubscription || _isSwitchingInterval
                             ? null
                             : () => _cancelScheduledSubscriptionIntervalChange(
                               context,
@@ -173,7 +176,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     onSubscriptionHelp:
                         () => _showSubscriptionHelpSheet(context),
                     onManageSubscription:
-                        _isCancelingSubscription
+                        subscription.isAppleSubscription
+                            ? () => _openAppleSubscriptionManagement(context)
+                            : _isCancelingSubscription
                             ? null
                             : () => _showCancelSubscriptionDialog(context),
                   )
@@ -261,6 +266,15 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     required Plan plan,
     required bool addWearable,
   }) async {
+    if (Platform.isIOS && plan.tier == SubscriptionTier.premium) {
+      await _startAppleIAPCheckout(
+        context,
+        plan: plan,
+        interval: _selectedIntervalForPlan(plan),
+      );
+      return;
+    }
+
     final repository = ref.read(subscriptionRepositoryProvider);
     setState(() {
       _isLaunchingCheckout = true;
@@ -375,6 +389,66 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         context.go('/sign-in');
         return;
       }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error is ApiFailure ? error.message : error.toString()),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLaunchingCheckout = false;
+          _launchingPlanId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _startAppleIAPCheckout(
+    BuildContext context, {
+    required Plan plan,
+    required String interval,
+  }) async {
+    final service = AppleIAPService.instance;
+    final product = service.productForInterval(interval);
+    if (product == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to load subscription from the App Store. Please try again.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _isLaunchingCheckout = true;
+      _launchingPlanId = plan.id;
+    });
+    try {
+      final purchase = await service.purchase(product);
+      final receiptData = purchase.verificationData.serverVerificationData;
+      final nextState = await ref
+          .read(subscriptionRepositoryProvider)
+          .verifyAppleReceipt(
+            receiptData: receiptData,
+            productId: product.id,
+          );
+      ref
+          .read(currentSubscriptionProvider.notifier)
+          .setSubscriptionState(nextState);
+      if (!context.mounted) return;
+      context.go('/billing/success');
+    } on AppleIAPCanceledException {
+      // user canceled — do nothing
+    } on IAPError catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -588,6 +662,12 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     BillingPlanOffers offers,
     Map<SubscriptionTier, Plan> plansByTier,
   ) {
+    // On iOS use App Store prices; fall back to backend prices if products
+    // haven't loaded yet.
+    final appleProducts = Platform.isIOS
+        ? {for (final p in AppleIAPService.instance.products) p.id: p}
+        : <String, ProductDetails>{};
+
     final choices = <_PlanChoice>[];
     final freePlan = plansByTier[SubscriptionTier.free];
     final premiumPlan = plansByTier[SubscriptionTier.premium];
@@ -618,6 +698,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               ? premiumPlan.priceOptions.first
               : null);
       final yearly = _priceOptionFor(premiumPlan, 'year');
+      final appleMonthly = appleProducts[kAppleProductMonthly];
+      final appleYearly = appleProducts[kAppleProductAnnual];
 
       if (monthly != null) {
         choices.add(
@@ -626,7 +708,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             interval: monthly.interval.isEmpty ? 'month' : monthly.interval,
             title: '1 Month',
             description: 'Flexible and cancel anytime.',
-            price: _priceLabelFor(premiumPlan, monthly),
+            price: appleMonthly?.price ?? _priceLabelFor(premiumPlan, monthly),
             cadence: '/ month',
             icon: Icons.workspace_premium_outlined,
             iconBackground: _planAccentSoft,
@@ -642,7 +724,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             interval: yearly.interval,
             title: '12 Months',
             description: 'Best value for your long-term health.',
-            price: _priceLabelFor(premiumPlan, yearly),
+            price: appleYearly?.price ?? _priceLabelFor(premiumPlan, yearly),
             cadence: '/ year',
             icon: Icons.emoji_events_outlined,
             iconBackground: _planAccentSoft,
@@ -769,6 +851,13 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     }
     final matchedLocation = GoRouterState.of(context).matchedLocation;
     context.go(matchedLocation.startsWith('/you') ? '/you' : '/today');
+  }
+
+  void _openAppleSubscriptionManagement(BuildContext context) {
+    launchUrl(
+      Uri.parse('https://apps.apple.com/account/subscriptions'),
+      mode: LaunchMode.externalApplication,
+    );
   }
 
   bool _isAuthTokenFailure(Object error) {
@@ -1206,12 +1295,14 @@ class _PremiumManagementContent extends StatelessWidget {
               SizedBox(height: dims.scaleSpace(14)),
               _NeedHelpCard(
                 isLoading: isCancelingSubscription,
+                isAppleSubscription: subscription.isAppleSubscription,
                 onBillingHistory: onBillingHistory,
                 onSubscriptionHelp: onSubscriptionHelp,
                 onCancelSubscription:
-                    subscription.cancelAtPeriodEnd
-                        ? null
-                        : onManageSubscription,
+                    subscription.isAppleSubscription ||
+                            !subscription.cancelAtPeriodEnd
+                        ? onManageSubscription
+                        : null,
               ),
               SizedBox(height: dims.scaleSpace(20)),
               const _ManagementSafetyBadges(),
@@ -1449,13 +1540,15 @@ class _CurrentPremiumPlanCard extends StatelessWidget {
                   '${_managementPlanLabelForInterval(subscription.pendingBillingInterval)} starts $pendingDate',
             ),
           ],
-          const _PremiumInsetDivider(fullWidth: true),
-          const _BillingDetailTile(
-            icon: Icons.credit_card_rounded,
-            title: 'Payment method',
-            trailing: 'Visa •••• 4242',
-            hasChevron: true,
-          ),
+          if (!subscription.isAppleSubscription) ...[
+            const _PremiumInsetDivider(fullWidth: true),
+            const _BillingDetailTile(
+              icon: Icons.credit_card_rounded,
+              title: 'Payment method',
+              trailing: 'Visa •••• 4242',
+              hasChevron: true,
+            ),
+          ],
         ],
       ),
     );
@@ -2172,12 +2265,14 @@ class _BillingDetailTile extends StatelessWidget {
 class _NeedHelpCard extends StatelessWidget {
   const _NeedHelpCard({
     required this.isLoading,
+    required this.isAppleSubscription,
     required this.onBillingHistory,
     required this.onSubscriptionHelp,
     required this.onCancelSubscription,
   });
 
   final bool isLoading;
+  final bool isAppleSubscription;
   final VoidCallback onBillingHistory;
   final VoidCallback onSubscriptionHelp;
   final VoidCallback? onCancelSubscription;
@@ -2221,14 +2316,23 @@ class _NeedHelpCard extends StatelessWidget {
             onTap: onSubscriptionHelp,
           ),
           const _PremiumInsetDivider(),
-          _ManagementActionRow(
-            icon: Icons.logout_rounded,
-            title: isLoading ? 'Canceling subscription' : 'Cancel subscription',
-            subtitle:
-                'Cancel your subscription at the end of your billing period',
-            destructive: true,
-            onTap: isLoading ? null : onCancelSubscription,
-          ),
+          if (isAppleSubscription)
+            _ManagementActionRow(
+              icon: Icons.open_in_new_rounded,
+              title: 'Manage in App Store',
+              subtitle: 'Cancel or change your plan in Apple subscriptions',
+              onTap: onCancelSubscription,
+            )
+          else
+            _ManagementActionRow(
+              icon: Icons.logout_rounded,
+              title:
+                  isLoading ? 'Canceling subscription' : 'Cancel subscription',
+              subtitle:
+                  'Cancel your subscription at the end of your billing period',
+              destructive: true,
+              onTap: isLoading ? null : onCancelSubscription,
+            ),
         ],
       ),
     );

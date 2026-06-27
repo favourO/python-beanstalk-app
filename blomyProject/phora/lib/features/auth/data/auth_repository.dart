@@ -1,6 +1,7 @@
 import 'package:phora/core/api/api_client.dart';
 import 'package:phora/core/api/api_error_mapper.dart';
 import 'package:phora/core/api/api_interceptors.dart';
+import 'package:phora/core/auth/age_gate.dart';
 import 'package:phora/core/auth/token_store.dart';
 import 'package:phora/features/auth/domain/app_session.dart';
 import 'package:phora/features/onboarding/domain/onboarding_status.dart';
@@ -60,6 +61,7 @@ class AuthRepository {
     String registrationClient = 'mobile',
     String registrationAppVersion = '1.0.0',
   }) async {
+    _validateRegistrationAge(birthDate);
     try {
       await apiClient.postJson(
         '/auth/signup',
@@ -269,6 +271,7 @@ class AuthRepository {
     String registrationClient = 'flutter',
     String? registrationPlatform,
   }) async {
+    _validateRegistrationAge(birthDate);
     try {
       final response = await apiClient.postJson(
         '/auth/google-signup',
@@ -364,6 +367,7 @@ class AuthRepository {
     String registrationClient = 'flutter',
     String? registrationPlatform,
   }) async {
+    _validateRegistrationAge(birthDate);
     try {
       final response = await apiClient.postJson(
         '/auth/apple-signup',
@@ -615,6 +619,17 @@ class AuthRepository {
           if (registrationPlatform != null) 'platform': registrationPlatform,
         },
     };
+  }
+
+  void _validateRegistrationAge(DateTime? birthDate) {
+    if (birthDate == null) {
+      return;
+    }
+    if (!isAtLeastMinimumRegistrationAge(birthDate)) {
+      throw const MessageApiFailure(
+        'You must be at least 16 years old to use Vyla.',
+      );
+    }
   }
 
   AppSession? _sessionFromResponse(

@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:phora/app/env.dart';
 import 'package:phora/core/api/api_client.dart';
+import 'package:phora/core/auth/auth_providers.dart';
 import 'package:phora/core/i18n/locale_controller.dart';
 import 'package:phora/core/api/versioned_api_url.dart';
 import 'package:phora/core/utils/logger.dart';
@@ -28,6 +29,7 @@ class PushNotificationRegistrar {
   final Ref ref;
   bool _tokenRefreshListenerAttached = false;
   String? _lastRegisteredToken;
+  String? _lastRegisteredUserId;
 
   Future<void> registerCurrentDevice() async {
     if (!_isSupportedPlatform) {
@@ -61,6 +63,10 @@ class PushNotificationRegistrar {
     }
   }
 
+  void clearRegisteredUser() {
+    _lastRegisteredUserId = null;
+  }
+
   bool get _isSupportedPlatform =>
       !kIsWeb && (Platform.isIOS || Platform.isAndroid);
 
@@ -78,7 +84,14 @@ class PushNotificationRegistrar {
   }
 
   Future<void> _registerToken(String token) async {
-    if (_lastRegisteredToken == token) {
+    final session = ref.read(authSessionProvider).valueOrNull;
+    final userId = session?.isAuthenticated == true ? session!.userId : null;
+    if (userId == null || userId.isEmpty) {
+      logInfo('Push notification registration skipped: no authenticated user.');
+      return;
+    }
+
+    if (_lastRegisteredToken == token && _lastRegisteredUserId == userId) {
       return;
     }
 
@@ -104,6 +117,7 @@ class PushNotificationRegistrar {
     );
 
     _lastRegisteredToken = token;
+    _lastRegisteredUserId = userId;
   }
 
   Future<String> _deviceId(SharedPreferences preferences) async {

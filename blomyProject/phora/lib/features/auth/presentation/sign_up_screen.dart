@@ -1,4 +1,5 @@
 import 'package:phora/core/auth/auth_providers.dart';
+import 'package:phora/core/auth/age_gate.dart';
 import 'package:phora/core/i18n/l10n_extensions.dart';
 import 'package:phora/core/payments/payment_country_catalog.dart';
 import 'package:phora/core/ui/app_dimensions.dart';
@@ -17,11 +18,13 @@ import 'package:url_launcher/url_launcher.dart';
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({
     super.key,
+    this.initialEmail,
     this.initialReferralCode,
     this.referralSource,
     this.referralDeepLinkId,
   });
 
+  final String? initialEmail;
   final String? initialReferralCode;
   final String? referralSource;
   final String? referralDeepLinkId;
@@ -60,6 +63,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   @override
   void initState() {
     super.initState();
+    final initialEmail = widget.initialEmail?.trim();
+    if (initialEmail != null && initialEmail.isNotEmpty) {
+      _emailController.text = initialEmail;
+    }
     final referralCode = widget.initialReferralCode?.trim();
     if (referralCode != null && referralCode.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -117,8 +124,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     }
 
     if (_currentStep == 2) {
-      if (_birthDate == null) {
-        showAuthError(context, context.l10n.signUpBirthDateRequiredError);
+      if (!_validateBirthDate()) {
         return;
       }
       await _goToStep(3);
@@ -145,6 +151,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     }
     if (fullName.isEmpty || country.isEmpty) {
       showAuthError(context, context.l10n.signUpCompleteProfileError);
+      return;
+    }
+    if (!_validateBirthDate()) {
       return;
     }
 
@@ -193,6 +202,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     final country = _selectedCountry?.trim() ?? '';
     if (fullName.isEmpty || country.isEmpty) {
       showAuthError(context, context.l10n.signUpCompleteProfileError);
+      return;
+    }
+    if (!_validateBirthDate()) {
       return;
     }
 
@@ -251,6 +263,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
     if (fullName.isEmpty || country.isEmpty) {
       showAuthError(context, context.l10n.signUpCompleteProfileFirstError);
+      return;
+    }
+    if (!_validateBirthDate()) {
       return;
     }
     if (email.isEmpty) {
@@ -320,7 +335,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   Future<void> _pickBirthDate() async {
     final dims = context.dims;
     final colors = context.phora.colors;
-    final initialDate = _birthDate ?? DateTime(2000, 1, 1);
+    final latestAllowedDate = latestAllowedBirthDate();
+    final initialDate = clampBirthDateToRegistrationAge(
+      _birthDate ?? DateTime(2000, 1, 1),
+    );
     var draftDate = initialDate;
 
     await showModalBottomSheet<void>(
@@ -354,6 +372,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       const Spacer(),
                       TextButton(
                         onPressed: () {
+                          if (!isAtLeastMinimumRegistrationAge(draftDate)) {
+                            showAuthError(
+                              context,
+                              context.l10n.signUpAgeRestrictionError,
+                            );
+                            return;
+                          }
                           setState(() => _birthDate = draftDate);
                           context.pop();
                         },
@@ -370,7 +395,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     child: CupertinoDatePicker(
                       mode: CupertinoDatePickerMode.date,
                       initialDateTime: initialDate,
-                      maximumDate: DateTime.now(),
+                      maximumDate: latestAllowedDate,
                       minimumDate: DateTime(1940, 1, 1),
                       onDateTimeChanged: (value) => draftDate = value,
                     ),
@@ -409,6 +434,19 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     final value = _birthDate;
     if (value == null) return null;
     return MaterialLocalizations.of(context).formatMediumDate(value);
+  }
+
+  bool _validateBirthDate() {
+    final birthDate = _birthDate;
+    if (birthDate == null) {
+      showAuthError(context, context.l10n.signUpBirthDateRequiredError);
+      return false;
+    }
+    if (!isAtLeastMinimumRegistrationAge(birthDate)) {
+      showAuthError(context, context.l10n.signUpAgeRestrictionError);
+      return false;
+    }
+    return true;
   }
 
   @override

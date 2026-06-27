@@ -42,3 +42,21 @@ class AgeContextResponse(BaseModel):
     perimenopause_mode_active: bool = False
     how_age_affects_predictions: str
     population_priors_for_band: dict = Field(default_factory=dict)
+
+
+class CycleForecastSuggestionResponse(BaseModel):
+    id: str
+    user_id: str
+    cycle_id: str | None = None
+    suggestion_type: str
+    current_value: date | None = None
+    suggested_value: date
+    evidence: list[dict] = Field(default_factory=list)
+    status: str
+    source: str
+    created_at: datetime
+    decided_at: datetime | None = None
+
+
+class CycleForecastSuggestionListResponse(BaseModel):
+    suggestions: list[CycleForecastSuggestionResponse] = Field(default_factory=list)
